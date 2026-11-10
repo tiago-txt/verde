@@ -77,7 +77,7 @@ function seedFirstAdmin(db: DatabaseInstance): void {
   const admin = getAdminSeed();
   if (!admin) {
     throw new Error(
-      "Nenhum usuário cadastrado. Defina ADMIN_EMAIL e ADMIN_PASSWORD no .env para criar o primeiro usuário.",
+      "Nenhum usuário cadastrado. Defina ADMIN_EMAIL e ADMIN_PASSWORD nas variáveis de ambiente (.env ou verde.env) para criar o primeiro usuário.",
     );
   }
 

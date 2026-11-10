@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Verde — stack para o plugin Compose do OMV (Web UI).
+#
+# Só consome a imagem publicada no GHCR pelo GitHub Actions
+# (.github/workflows/docker-publish.yml). Nenhum arquivo do projeto e nenhum
+# Dockerfile precisam existir na pasta do stack: aqui só o YAML + env file.
+#
+# Antes do primeiro "Up":
+#   docker login ghcr.io -u tiago-txt -p <PAT com read:packages>
+#   (ou torne o pacote público: GitHub > Packages > verde > Package settings)
+# ---------------------------------------------------------------------------
+services:
+  verde:
+    image: ghcr.io/tiago-txt/verde:latest
+    container_name: verde
+    restart: unless-stopped
+    # Sempre busca o digest mais novo ao subir — é o que faz a atualização valer.
+    pull_policy: always
+    # Gerado/gerenciado pela aba "Environment Files" do plugin (verde.env).
+    # Se você configurar as variáveis de outra forma, remova este bloco.
+    env_file:
+      - verde.env
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      HOSTNAME: 0.0.0.0
+      TZ: ${TZ:-America/Sao_Paulo}
+      DATABASE_PATH: /app/data/verde.db
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      # SQLite, backups e futuros anexos. `./data` = caminho relativo à pasta
+      # do stack (ex.: /apps/data/verde/data). Para apontar para outro lugar,
+      # defina VERDE_DATA_DIR no env file (ex.: /srv/dev-disk-by-uuid-XXX/apps/data/verde).
+      - ${VERDE_DATA_DIR:-./data}:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:$${PORT:-3000}/api/health >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      # O watchtower só mexe em containers com este label.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # -------------------------------------------------------------------------
+  # Atualização automática: quando o Actions publica uma imagem nova, o
+  # watchtower puxa e recria o container. Remova este serviço se preferir
+  # atualizar no botão "Up" / `docker compose pull`.
+  #
+  # Montar o docker.sock dá poder de root ao container — é o preço de
+  # auto-update. Para autenticar no GHCR (pacote privado), faça o
+  # `docker login ghcr.io` como root no host: as credenciais em
+  # /root/.docker/config.json são montadas abaixo.
+  # -------------------------------------------------------------------------
+  watchtower:
+    image: containrrr/watchtower:1.7.1
+    container_name: verde-watchtower
+    restart: unless-stopped
+    command: --label-enable --cleanup --rolling-restart --interval 900
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Diretório (e não o arquivo): se config.json não existir ainda, o Docker
+      # criaria uma pasta vazia no lugar dele e o watchtower quebraria.
+      - /root/.docker:/root/.docker:ro
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

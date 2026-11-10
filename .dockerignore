@@ -5,6 +5,7 @@ node_modules
 data
 .env
 .env.*
+verde.env
 !.env.example
 coverage
 .vscode
