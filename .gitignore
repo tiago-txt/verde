@@ -1,0 +1,32 @@
+# dependências
+node_modules/
+.pnpm-store/
+
+# build
+.next/
+out/
+build/
+
+# ambiente e dados locais
+.env
+.env.local
+.env.*.local
+data/*
+!data/.gitkeep
+*.db
+*.db-shm
+*.db-wal
+
+# testes e logs
+coverage/
+*.log
+*.tsbuildinfo
+npm-debug.log*
+
+# sistema
+.DS_Store
+Thumbs.db
+
+# editor
+.vscode/
+.idea/

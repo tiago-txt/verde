@@ -1,0 +1,103 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Tema claro: papel levemente esverdeado */
+    --background: 40 20% 97%;
+    --foreground: 155 18% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 155 18% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 155 18% 10%;
+    --primary: 152 55% 30%;
+    --primary-foreground: 140 40% 98%;
+    --secondary: 140 12% 92%;
+    --secondary-foreground: 155 18% 14%;
+    --muted: 140 12% 93%;
+    --muted-foreground: 150 6% 42%;
+    --accent: 30 18% 92%;
+    --accent-foreground: 155 18% 14%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 55% 30%;
+    --success-foreground: 140 40% 98%;
+    --warning: 35 85% 38%;
+    --warning-foreground: 40 60% 98%;
+    --border: 140 10% 86%;
+    --input: 140 10% 82%;
+    --ring: 152 50% 35%;
+    --sidebar: 40 18% 94%;
+    --sidebar-foreground: 155 18% 12%;
+    --radius: 0.75rem;
+  }
+
+  .dark {
+    /* Tema escuro padrão: quase preto com verde/marrom profundo */
+    --background: 150 12% 4%;
+    --foreground: 40 14% 92%;
+    --card: 150 10% 6.5%;
+    --card-foreground: 40 14% 92%;
+    --popover: 150 10% 7.5%;
+    --popover-foreground: 40 14% 92%;
+    --primary: 152 52% 46%;
+    --primary-foreground: 150 30% 5%;
+    --secondary: 150 7% 13%;
+    --secondary-foreground: 40 14% 92%;
+    --muted: 150 7% 13%;
+    --muted-foreground: 140 6% 62%;
+    --accent: 30 10% 16%;
+    --accent-foreground: 40 18% 92%;
+    --destructive: 0 62% 55%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 52% 48%;
+    --success-foreground: 150 30% 5%;
+    --warning: 38 88% 58%;
+    --warning-foreground: 30 40% 8%;
+    --border: 150 8% 15%;
+    --input: 150 8% 18%;
+    --ring: 152 48% 42%;
+    --sidebar: 150 12% 3.5%;
+    --sidebar-foreground: 40 12% 88%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Foco visível e consistente */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Rolagem discreta */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-border;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+@layer utilities {
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

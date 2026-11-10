@@ -1,0 +1,36 @@
+services:
+  verde:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: verde:latest
+    container_name: verde
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT:-3000}
+      HOSTNAME: 0.0.0.0
+      TZ: ${TZ:-America/Sao_Paulo}
+      DATABASE_PATH: /app/data/verde.db
+    ports:
+      - "${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      # SQLite, backups e futuros anexos ficam aqui — facilita o backup do OMV.
+      - ./data:/app/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:$${PORT:-3000}/api/health >/dev/null || exit 1",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
