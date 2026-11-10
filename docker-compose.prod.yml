@@ -1,23 +1,27 @@
 # ---------------------------------------------------------------------------
 # Verde — stack para o plugin Compose do OMV (Web UI).
 #
-# Só consome a imagem publicada no GHCR pelo GitHub Actions
-# (.github/workflows/docker-publish.yml). Nenhum arquivo do projeto e nenhum
-# Dockerfile precisam existir na pasta do stack: aqui só o YAML + env file.
+# Pasta do stack: \\ORANGEPI3B\apps\compose\verde
+# (= /srv/<disco>/apps/compose/verde no servidor)
 #
-# Antes do primeiro "Up":
+# Aqui NÃO existe build: a imagem é construída no GitHub Actions
+# (.github/workflows/docker-publish.yml) e publicada no GHCR. Esta pasta só
+# guarda este YAML e o verde.env — por isso o erro
+# "failed to read dockerfile: open Dockerfile" deixa de acontecer.
+#
+# No servidor (como root, uma vez), se o pacote do GHCR ficar privado:
 #   docker login ghcr.io -u tiago-txt -p <PAT com read:packages>
-#   (ou torne o pacote público: GitHub > Packages > verde > Package settings)
 # ---------------------------------------------------------------------------
 services:
   verde:
     image: ghcr.io/tiago-txt/verde:latest
     container_name: verde
     restart: unless-stopped
-    # Sempre busca o digest mais novo ao subir — é o que faz a atualização valer.
+    # Sempre busca o digest mais novo ao subir.
     pull_policy: always
-    # Gerado/gerenciado pela aba "Environment Files" do plugin (verde.env).
-    # Se você configurar as variáveis de outra forma, remova este bloco.
+    # Arquivo criado na aba "Environment Files" do plugin, dentro desta mesma
+    # pasta (SESSION_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, PORT, TZ...).
+    # Se o seu tiver outro nome, ajuste aqui (ex.: `.env`).
     env_file:
       - verde.env
     environment:
@@ -29,10 +33,10 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
-      # SQLite, backups e futuros anexos. `./data` = caminho relativo à pasta
-      # do stack (ex.: /apps/data/verde/data). Para apontar para outro lugar,
-      # defina VERDE_DATA_DIR no env file (ex.: /srv/dev-disk-by-uuid-XXX/apps/data/verde).
-      - ${VERDE_DATA_DIR:-./data}:/app/data
+      # SQLite + backups em \\ORANGEPI3B\apps\data\verde
+      # (`../../data/verde` é relativo a esta pasta: apps/compose/verde).
+      # Quer os dados ao lado do YAML? Troque por ./data
+      - ../../data/verde:/app/data
     healthcheck:
       test:
         [
@@ -54,13 +58,11 @@ services:
 
   # -------------------------------------------------------------------------
   # Atualização automática: quando o Actions publica uma imagem nova, o
-  # watchtower puxa e recria o container. Remova este serviço se preferir
-  # atualizar no botão "Up" / `docker compose pull`.
+  # watchtower (a cada 15 min) puxa e recria o container.
+  # Se não quiser, apague este serviço e atualize no botão Up / "Pull".
   #
-  # Montar o docker.sock dá poder de root ao container — é o preço de
-  # auto-update. Para autenticar no GHCR (pacote privado), faça o
-  # `docker login ghcr.io` como root no host: as credenciais em
-  # /root/.docker/config.json são montadas abaixo.
+  # Montar o docker.sock dá poder de root ao container — é o preço da
+  # auto-atualização.
   # -------------------------------------------------------------------------
   watchtower:
     image: containrrr/watchtower:1.7.1
@@ -69,7 +71,7 @@ services:
     command: --label-enable --cleanup --rolling-restart --interval 900
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      # Diretório (e não o arquivo): se config.json não existir ainda, o Docker
+      # Diretório (e não o arquivo): se config.json não existir, o Docker
       # criaria uma pasta vazia no lugar dele e o watchtower quebraria.
       - /root/.docker:/root/.docker:ro
     environment:

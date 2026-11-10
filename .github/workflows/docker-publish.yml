@@ -16,12 +16,17 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: write
 
     steps:
       - uses: actions/checkout@v4
+
+      # O servidor é um Orange Pi 3B (ARM64/aarch64). Como o runner do GitHub é
+      # x86_64, o QEMU emula o arm64 durante o build (~10-20 min).
+      - uses: docker/setup-qemu-action@v3
 
       - uses: docker/setup-buildx-action@v3
 
@@ -46,8 +51,8 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          # OMV em x86_64 (amd64). Se `uname -m` no servidor disser aarch64,
-          # troque por: platforms: linux/amd64,linux/arm64
-          platforms: linux/amd64
+          # Orange Pi 3B (RK3566) = arm64. Para também rodar em PC x86_64,
+          # troque por: platforms: linux/arm64,linux/amd64
+          platforms: linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max

@@ -137,8 +137,8 @@ O entrypoint ajusta o dono do bind mount e executa o processo como usuário
 ### Build automático (GitHub Actions → GHCR)
 
 A imagem é construída no GitHub a cada push na `main` e publicada em
-`ghcr.io/tiago-txt/verde:latest`. O servidor só faz `pull`: nenhum arquivo do
-projeto precisa existir na pasta do stack do OMV.
+`ghcr.io/tiago-txt/verde:latest` (linux/arm64 — Orange Pi 3B). O servidor só
+faz `pull`: nenhum arquivo do projeto precisa existir na pasta do stack do OMV.
 
 1. O workflow já está em `.github/workflows/docker-publish.yml` (tags `latest`,
    `sha-<commit>` e `v*`).
@@ -147,12 +147,13 @@ projeto precisa existir na pasta do stack do OMV.
      settings* → *Change visibility*; ou
    - autenticar no host (como root, para o plugin usar a mesma credencial):
      `docker login ghcr.io -u tiago-txt -p <PAT com read:packages>`.
-3. No plugin Compose, crie o stack `verde` em `/apps/data/verde` usando o
-   `docker-compose.prod.yml` deste repositório (aba *Files* → cole o conteúdo)
-   e clique em **Up**.
-   - Ajuste o `env_file` para o nome que o plugin usa (padrão `verde.env`).
-   - Os dados ficam em `./data` relativo à pasta do stack
-     (`/apps/data/verde/data`); para outro caminho, defina `VERDE_DATA_DIR`.
+3. No plugin Compose do OMV, use o stack `verde`
+   (`\\ORANGEPI3B\apps\compose\verde`): aba *Files* → cole o conteúdo de
+   `docker-compose.prod.yml` → **Save** → **Up**.
+   - O `env_file` é o `verde.env` da aba *Environment Files* (mesma pasta);
+     ajuste o nome no YAML se o seu for outro.
+   - Os dados vão para `../../data/verde` relativo à pasta do stack, ou seja
+     `\\ORANGEPI3B\apps\data\verde`. Para manter ao lado do YAML, use `./data`.
 4. Atualização: o serviço `watchtower` do mesmo YAML verifica o registry a cada
    15 min e recria o container quando há digest novo. Sem ele, basta clicar em
    **Up** (o `pull_policy: always` garante que a imagem nova seja baixada).
