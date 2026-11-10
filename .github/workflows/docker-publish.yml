@@ -7,6 +7,12 @@ on:
   push:
     branches: [main]
     tags: ["v*"]
+    # Documentação e YAML de deploy não mudam a imagem: não gasta build.
+    paths-ignore:
+      - "**/*.md"
+      - "docker-compose*.yml"
+      - ".gitattributes"
+      - ".github/workflows/**"
   workflow_dispatch:
 
 concurrency:

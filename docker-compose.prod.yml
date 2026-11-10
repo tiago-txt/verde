@@ -66,7 +66,9 @@ services:
   # auto-atualização.
   # -------------------------------------------------------------------------
   watchtower:
-    image: containrrr/watchtower:1.7.1
+    # Fork mantido do containrrr/watchtower (o 1.7.1 original fala API Docker
+    # 1.25 e o daemon atual recusa: "client version 1.25 is too old").
+    image: nickfedor/watchtower:1.24.0
     container_name: verde-watchtower
     restart: unless-stopped
     command: --label-enable --cleanup --rolling-restart --interval 900
