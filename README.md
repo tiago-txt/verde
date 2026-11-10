@@ -152,6 +152,9 @@ faz `pull`: nenhum arquivo do projeto precisa existir na pasta do stack do OMV.
    `docker-compose.prod.yml` → **Save** → **Up**.
    - O `env_file` é o `verde.env` da aba *Environment Files* (mesma pasta);
      ajuste o nome no YAML se o seu for outro.
+   - Neste servidor a porta é **3200** (`PORT=3200` no `verde.env`), e o
+     `DATABASE_PATH` é sempre `/app/data/verde.db` (caminho **dentro** do
+     container — não use o caminho do host ali).
    - Os dados vão para `../../data/verde` relativo à pasta do stack, ou seja
      `\\ORANGEPI3B\apps\data\verde`. Para manter ao lado do YAML, use `./data`.
 4. Atualização: o serviço `watchtower` do mesmo YAML verifica o registry a cada
