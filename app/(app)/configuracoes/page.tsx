@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Database, LogOut, Users } from "lucide-react";
+import Link from "next/link";
+import { Database, LogOut, Tags, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -70,6 +71,32 @@ export default async function ConfiguracoesPage() {
           </CardHeader>
           <CardContent>
             <ThemeToggle withLabel />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center gap-3 space-y-0">
+            <span className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
+              <Tags className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <CardTitle>Categorias e tags</CardTitle>
+              <CardDescription>
+                Organize despesas, receitas e marcadores.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Crie subcategorias, arquive categorias antigas e gerencie as tags
+              usadas nos lançamentos.
+            </p>
+            <Button asChild variant="outline">
+              <Link href="/configuracoes/categorias">
+                <Tags className="h-4 w-4" />
+                Gerenciar categorias e tags
+              </Link>
+            </Button>
           </CardContent>
         </Card>
 

@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { Leaf, Server, ShieldCheck, Smartphone } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { LoginForm } from "@/components/auth/login-form";
+import { getCurrentUser } from "@/lib/auth/current-user";
 
 export const metadata: Metadata = {
   title: "Entrar",
@@ -32,6 +34,11 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
+
+  // Só redireciona se o usuário do token ainda existir no banco. Isso evita
+  // loop / ↔ /login quando o cookie é de outro banco/usuário removido.
+  const user = await getCurrentUser();
+  if (user) redirect("/");
 
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">

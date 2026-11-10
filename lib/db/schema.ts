@@ -166,6 +166,8 @@ export const transactions = sqliteTable(
     }),
     parcelaAtual: integer("parcela_atual"),
     parcelaTotal: integer("parcela_total"),
+    /** Agrupa as parcelas de uma mesma compra. */
+    parcelaGrupoId: text("parcela_grupo_id"),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -175,6 +177,12 @@ export const transactions = sqliteTable(
     index("transactions_cartao_idx").on(table.cartaoId),
     index("transactions_categoria_idx").on(table.categoriaId),
     index("transactions_recorrencia_idx").on(table.recorrenciaId),
+    index("transactions_parcela_grupo_idx").on(table.parcelaGrupoId),
+    // Garante idempotência da geração de recorrências (inclusive após soft delete).
+    uniqueIndex("transactions_recorrencia_data_unique").on(
+      table.recorrenciaId,
+      table.data,
+    ),
     check("transactions_valor_check", sql`${table.valor} >= 0`),
   ],
 );

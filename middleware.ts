@@ -20,10 +20,6 @@ export async function middleware(request: NextRequest) {
   const token = request.cookies.get(SESSION_COOKIE)?.value;
   const session = token ? await verifySessionToken(token) : null;
 
-  if (session && pathname === "/login") {
-    return NextResponse.redirect(new URL("/", request.url));
-  }
-
   if (!session && !isPublic(pathname)) {
     if (pathname.startsWith("/api/")) {
       return NextResponse.json(

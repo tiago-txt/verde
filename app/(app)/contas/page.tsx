@@ -1,22 +1,13 @@
 import type { Metadata } from "next";
-import { Wallet } from "lucide-react";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { AccountsView } from "@/components/accounts/accounts-view";
+import { requireUser } from "@/lib/auth/current-user";
+import { listAccountsWithBalances } from "@/lib/db/queries/accounts";
 
 export const metadata: Metadata = { title: "Contas" };
 
-export default function ContasPage() {
-  return (
-    <PlaceholderPage
-      title="Contas"
-      description="Onde o seu dinheiro está agora."
-      stage="Etapa 2"
-      icon={Wallet}
-      items={[
-        "Cadastro de contas correntes, poupança, dinheiro e investimentos",
-        "Saldo atual calculado a partir do saldo inicial e dos lançamentos pagos",
-        "Saldo previsto incluindo lançamentos ainda não pagos",
-        "Cores, ícones e arquivamento de contas antigas",
-      ]}
-    />
-  );
+export default async function ContasPage() {
+  await requireUser();
+  const accounts = listAccountsWithBalances();
+
+  return <AccountsView accounts={accounts} />;
 }

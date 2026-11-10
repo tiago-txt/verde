@@ -4,10 +4,10 @@ Finanças pessoais e familiares, em português do Brasil, com valores em **BRL**
 valores armazenados sempre em **centavos**. Interface responsiva (PWA no celular
 e dashboard no computador), self-hosted em um único container Docker, com SQLite.
 
-> **Status:** etapa 1 concluída — scaffold, Docker, banco com migrations, seed,
-> autenticação e shell da aplicação. As telas de Contas, Cartões, Lançamentos,
-> Relatórios e Limites estão com placeholders e serão implementadas nas próximas
-> etapas (veja o [roteiro](#roteiro)).
+> **Status:** etapas 1 e 2 concluídas — autenticação, contas, categorias/tags,
+> lançamentos com recorrência e parcelamento, lista mensal e seed de demonstração.
+> Cartões, relatórios, limites e PWA entram nas próximas etapas (veja o
+> [roteiro](#roteiro)).
 
 ---
 
@@ -27,24 +27,49 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 
 ---
 
+## Funcionalidades atuais
+
+- **Contas** (`/contas`): CRUD, saldo atual (pagos) e previsto (inclui não pagos),
+  transferências, arquivamento e exclusão bloqueada quando há lançamentos.
+- **Categorias e tags** (`/configuracoes/categorias`): despesa/receita, um nível
+  de subcategoria, arquivamento, exclusão com movimentação de lançamentos e tags.
+- **Lançamentos** (`/lancamentos`): despesa, receita e transferência; lista mensal
+  agrupada por dia; valor em centavos; pagamento otimista; duplicar e excluir.
+- **Recorrência fixa** (mensal/semanal/anual): geração idempotente sob demanda,
+  inclusive 12 meses à frente; meses curtos e anos bissextos tratados.
+- **Parcelamento** (2–60x): total dividido com resto na primeira parcela ou valor
+  por parcela; todas as parcelas geradas na criação.
+- **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
+- **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
+  parcelas e transferências.
+
+Ainda são placeholders: cartões/faturas (etapa 4), dashboard completo,
+relatórios, limites e PWA (etapas 5–6).
+
+---
+
 ## Estrutura
 
 ```
 app/
   (app)/                 # área autenticada (layout com sidebar/bottom nav)
-    page.tsx             # visão geral
-    lancamentos/         # etapa 2/3
-    contas/              # etapa 2
+    page.tsx             # visão geral (dashboard completo na etapa 5)
+    lancamentos/         # lista mensal + CRUD completo (etapa 2)
+    contas/              # CRUD de contas e saldos
     cartoes/             # etapa 4
     relatorios/          # etapa 5
     limites/             # etapa 5
     configuracoes/       # perfil, tema, logout
+      categorias/        # categorias, subcategorias e tags
   login/                 # login (fora do shell)
   api/health/            # healthcheck do Docker
   layout.tsx             # tema escuro padrão + metadados
   globals.css
 components/
-  ui/                    # Button, Input, Card, Dropdown, etc.
+  ui/                    # Button, Input, Card, Dialog, Dropdown, etc.
+  accounts/              # cards e formulário de contas
+  categories/            # categorias, subcategorias e tags
+  transactions/          # lista, formulário, escopos e pagamento otimista
   app-shell.tsx          # sidebar desktop + bottom nav + FAB mobile
   auth/login-form.tsx
   ...
@@ -54,11 +79,15 @@ lib/
     init.ts              # migrations + seed idempotente
     index.ts             # conexão única por processo
     seed-data.ts         # categorias/tags padrão
+    seed-demo.ts         # dados de exemplo (SEED_DEMO=true)
+    queries/             # leituras (saldos, categorias, lançamentos)
+  finance/               # lógica pura testável: saldos, recorrência, parcelas, escopos
+  validation/            # schemas Zod compartilhados
   auth/
     jwt.ts               # assinatura/verificação (Edge-safe)
     session.ts           # cookie httpOnly
     current-user.ts      # requireUser()
-  actions/auth.ts        # login/logout (Server Actions)
+  actions/               # Server Actions (auth, contas, categorias, tags, lançamentos)
   env.ts                 # variáveis e validações
   format.ts              # BRL, datas, meses em pt-BR
   dates.ts               # utilitários de mês/dia (sem fuso surpresa)
@@ -93,6 +122,10 @@ Acesse `http://localhost:3000`. No primeiro boot, o usuário definido em
 > `admin@verde.local` / `verde12345` apenas para desenvolvimento. **Troque em
 > produção.**
 
+Para visualizar o app populado, defina `SEED_DEMO=true` no `.env` antes do
+primeiro boot (ou apague `data/verde.db` e suba de novo). O seed é idempotente e
+cria 3 meses de contas, recorrências, parcelas e transferências.
+
 ### Scripts
 
 | Comando                | O que faz                                              |
@@ -110,56 +143,88 @@ As migrations são aplicadas **automaticamente no boot** (via
 
 ---
 
-## Docker Compose (OpenMediaVault)
+## Docker e deploy
+
+O repositório tem dois caminhos:
+
+- **Produção (recomendado):** `docker-compose.yml` usa a imagem publicada no
+  GHCR (`VERDE_IMAGE`) e não faz build no servidor.
+- **Build local:** `docker-compose.dev.yml` constrói a imagem a partir do
+  `Dockerfile`.
+
+### Produção com GHCR
+
+A imagem é construída no GitHub Actions a cada push na `main`/tag e publicada
+como `ghcr.io/tiago-txt/verde:latest` (linux/amd64 + linux/arm64). No servidor:
 
 ```bash
-# no servidor, ex.: /srv/verde
 cp .env.example .env
 nano .env                    # SESSION_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, PORT, TZ
 mkdir -p data
 
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 docker compose logs -f verde
 ```
 
 Acesse `http://IP-DO-SERVIDOR:3000` (ou a porta definida em `PORT`).
 
-O `docker-compose.yml` tem **um único serviço**, `restart: unless-stopped`,
-healthcheck em `/api/health`, volume bind `./data:/app/data` e limites de log.
-O entrypoint ajusta o dono do bind mount e executa o processo como usuário
-`nextjs` (não-root).
+O compose tem o serviço `verde` (healthcheck em `/api/health`,
+`restart: unless-stopped`, volume `${VERDE_DATA_DIR:-./data}:/app/data`) e um
+`watchtower` opcional. O entrypoint ajusta o dono do bind mount e executa o
+processo como usuário `nextjs` (não-root).
 
-> Esse fluxo exige o repositório (inclusive o `Dockerfile`) na pasta onde o
-> build roda. No **plugin Compose do OMV** a pasta só contém o YAML, então o
-> build falha com `failed to read dockerfile: open Dockerfile: no such file or
-> directory`. Nesse caso use o build automático abaixo.
+### Build local (dev)
 
-### Build automático (GitHub Actions → GHCR)
+```bash
+cp .env.example .env
+docker compose -f docker-compose.dev.yml up -d --build
+```
 
-A imagem é construída no GitHub a cada push na `main` e publicada em
-`ghcr.io/tiago-txt/verde:latest` (linux/arm64 — Orange Pi 3B). O servidor só
-faz `pull`: nenhum arquivo do projeto precisa existir na pasta do stack do OMV.
+Use esse modo para testar mudanças de código antes de publicar uma imagem.
 
-1. O workflow já está em `.github/workflows/docker-publish.yml` (tags `latest`,
-   `sha-<commit>` e `v*`).
-2. Dê permissão de leitura ao servidor — escolha **uma** opção:
-   - tornar o pacote público: GitHub → **Packages** → `verde` → *Package
-     settings* → *Change visibility*; ou
-   - autenticar no host (como root, para o plugin usar a mesma credencial):
-     `docker login ghcr.io -u tiago-txt -p <PAT com read:packages>`.
-3. No plugin Compose do OMV, use o stack `verde`
-   (`\\ORANGEPI3B\apps\compose\verde`): aba *Files* → cole o conteúdo de
-   `docker-compose.prod.yml` → **Save** → **Up**.
-   - O `env_file` é o `verde.env` da aba *Environment Files* (mesma pasta);
-     ajuste o nome no YAML se o seu for outro.
-   - Neste servidor a porta é **3200** (`PORT=3200` no `verde.env`), e o
-     `DATABASE_PATH` é sempre `/app/data/verde.db` (caminho **dentro** do
-     container — não use o caminho do host ali).
-   - Os dados vão para `../../data/verde` relativo à pasta do stack, ou seja
-     `\\ORANGEPI3B\apps\data\verde`. Para manter ao lado do YAML, use `./data`.
-4. Atualização: o serviço `watchtower` do mesmo YAML verifica o registry a cada
-   15 min e recria o container quando há digest novo. Sem ele, basta clicar em
-   **Up** (o `pull_policy: always` garante que a imagem nova seja baixada).
+### GHCR: pacote público ou privado
+
+Escolha **uma** opção no servidor:
+
+- **Público:** GitHub → **Packages** → `verde` → *Package settings* →
+  *Change visibility* → Public. Não precisa de login.
+- **Privado:** crie um Personal Access Token (classic) com `read:packages` e
+  faça login como root no host (o plugin Compose e o watchtower usam a mesma
+  credencial):
+
+  ```bash
+  docker login ghcr.io -u tiago-txt -p <PAT com read:packages>
+  ```
+
+### Atualizar
+
+```bash
+# backup antes
+docker compose exec -u nextjs -T verde node scripts/backup.mjs
+
+docker compose pull
+docker compose up -d
+```
+
+O `pull_policy: always` também faz o `up -d` buscar a imagem nova. As migrations
+pendentes rodam no boot.
+
+### Watchtower (opcional)
+
+O `docker-compose.yml` inclui um `watchtower` com `--label-enable`, que atualiza
+apenas containers com o label `com.centurylinklabs.watchtower.enable=true`
+(a cada 15 min). Se não quiser auto-update, remova o serviço e use os comandos
+acima. Montar `/var/run/docker.sock` dá poder de root ao container — avalie o
+risco no seu servidor.
+
+### Stack do OMV (esta instalação)
+
+- Pasta: `\\ORANGEPI3B\apps\compose\verde` (no Pi, confirme o caminho local).
+- Arquivos: `verde.yml` + `verde.env` (padrão do plugin Compose do OMV).
+- Porta: **3200**; dados em `apps/data/verde`.
+- A imagem é `VERDE_IMAGE=ghcr.io/tiago-txt/verde:latest` no `verde.env`.
+- O plugin pode regenerar o YAML; se isso acontecer, confira a linha `image:`.
 
 ### Variáveis de ambiente
 
@@ -173,6 +238,9 @@ faz `pull`: nenhum arquivo do projeto precisa existir na pasta do stack do OMV.
 | `TZ`             | não         | Fuso para “hoje”, faturas e recorrências (padrão: `America/Sao_Paulo`).    |
 | `COOKIE_SECURE`  | não         | Força o cookie `Secure`. Em geral o app detecta HTTPS via `x-forwarded-proto`. |
 | `DATABASE_PATH`  | não         | Caminho do SQLite. No Docker o compose fixa `/app/data/verde.db`.          |
+| `VERDE_IMAGE`    | não         | Imagem de produção (default: `ghcr.io/tiago-txt/verde:latest`).            |
+| `VERDE_DATA_DIR` | não         | Pasta de dados no host (default: `./data`).                                |
+| `SEED_DEMO`      | não         | `true` popula dados de exemplo no primeiro boot (idempotente).             |
 | `BACKUP_KEEP`    | não         | Quantos backups manter (padrão: 14).                                       |
 
 > `ADMIN_EMAIL`/`ADMIN_PASSWORD` só são usados quando **não existe nenhum
@@ -261,26 +329,6 @@ Para backup “frio” de tudo, pare o container e copie a pasta `./data` inteir
 
 ---
 
-## Atualizar
-
-```bash
-# sempre faça um backup antes
-docker compose exec -u nextjs -T verde node scripts/backup.mjs
-
-git pull
-docker compose up -d --build
-```
-
-As migrations pendentes rodam no boot. Se algo falhar, o healthcheck fica
-`unhealthy` e os logs mostram o erro:
-
-```bash
-docker compose ps
-docker compose logs --tail=200 verde
-```
-
----
-
 ## Qualidade
 
 ```bash
@@ -289,16 +337,18 @@ npm test
 npm run build
 ```
 
-Testes atuais (etapa 1): formatação/parse de BRL, utilitários de data/mês,
-limites de fim de mês e assinatura/verificação do cookie de sessão.
-Nas próximas etapas entram os testes de cálculo de saldo, geração de
-recorrências, parcelamento e fechamento de fatura.
+Testes atuais (69): formatação/parse de BRL, datas/meses, sessão assinada,
+cálculo de saldo atual/previsto (incluindo transferências e cartão), geração de
+recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e idempotência),
+parcelamento (resto de centavos e soma), escopos de edição/exclusão e validações
+Zod (valor, transferência, parcelas). Na etapa 4 entram os testes de fechamento
+de fatura.
 
 Decisões de segurança já aplicadas:
 
 - senha com **bcrypt** (custo 12), sem cadastro público;
-- cookie de sessão `httpOnly`, `SameSite=Lax`, `Secure` em produção, assinado
-  com HS256;
+- cookie de sessão `httpOnly`, `SameSite=Lax`, `Secure` quando HTTPS (detectado
+  via `x-forwarded-proto` ou `COOKIE_SECURE=true`), assinado com HS256;
 - middleware protege todas as rotas (exceto login/health) e a sessão é
   reconferida no banco a cada request;
 - validação com **Zod** em toda entrada;
@@ -310,8 +360,8 @@ Decisões de segurança já aplicadas:
 ## Roteiro
 
 - [x] **Etapa 1** — scaffold, Docker, banco + migrations, auth, shell responsivo
-- [ ] **Etapa 2** — contas, categorias e CRUD de lançamentos (recorrência e parcelas)
-- [ ] **Etapa 3** — tela de Lançamentos completa (mês, dias, filtros, painel lateral)
+- [x] **Etapa 2** — contas, categorias, tags e CRUD de lançamentos (recorrência e parcelas)
+- [ ] **Etapa 3** — tela de Lançamentos completa (filtros, painel lateral, saldo do dia, ações em lote)
 - [ ] **Etapa 4** — cartões e faturas
 - [ ] **Etapa 5** — dashboard, relatórios e limite de gastos
 - [ ] **Etapa 6** — PWA, exportação/importação, backup e gestão de usuários

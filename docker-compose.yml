@@ -1,11 +1,20 @@
+# ---------------------------------------------------------------------------
+# Verde — stack de produção (imagem publicada no GHCR pelo GitHub Actions).
+#
+# Uso:
+#   cp .env.example .env     # ajuste SESSION_SECRET, ADMIN_*, PORT...
+#   docker compose pull
+#   docker compose up -d
+#
+# Para build local da imagem, use docker-compose.dev.yml.
+# ---------------------------------------------------------------------------
 services:
   verde:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: verde:latest
+    image: ${VERDE_IMAGE:-ghcr.io/tiago-txt/verde:latest}
     container_name: verde
     restart: unless-stopped
+    # `docker compose up -d` já busca a imagem mais nova; `pull` também funciona.
+    pull_policy: always
     env_file:
       - .env
     environment:
@@ -17,8 +26,8 @@ services:
     ports:
       - "${PORT:-3000}:${PORT:-3000}"
     volumes:
-      # SQLite, backups e futuros anexos ficam aqui — facilita o backup do OMV.
-      - ./data:/app/data
+      # SQLite, backups e futuros anexos. Default: ./data ao lado do compose.
+      - ${VERDE_DATA_DIR:-./data}:/app/data
     healthcheck:
       test:
         [
@@ -34,3 +43,31 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    labels:
+      # O watchtower só mexe em containers com este label.
+      com.centurylinklabs.watchtower.enable: "true"
+
+  # -------------------------------------------------------------------------
+  # Atualização automática opcional. Remove este serviço se preferir atualizar
+  # manualmente com `docker compose pull && docker compose up -d`.
+  #
+  # Montar o docker.sock dá poder de root ao container — é o preço de
+  # auto-update. Para pacote privado no GHCR, faça o `docker login ghcr.io`
+  # como root no host para o watchtower herdar a credencial.
+  # -------------------------------------------------------------------------
+  watchtower:
+    # Fork mantido do containrrr/watchtower (o 1.7.1 usa API Docker antiga).
+    image: nickfedor/watchtower:1.24.0
+    container_name: verde-watchtower
+    restart: unless-stopped
+    command: --label-enable --cleanup --rolling-restart --interval 900
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/.docker:/root/.docker:ro
+    environment:
+      TZ: ${TZ:-America/Sao_Paulo}
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"

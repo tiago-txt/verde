@@ -50,6 +50,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/contas": "Contas",
   "/cartoes": "Cartões",
   "/configuracoes": "Configurações",
+  "/configuracoes/categorias": "Categorias e tags",
 };
 
 function isActive(pathname: string, href: string): boolean {
@@ -100,7 +101,7 @@ export function AppShell({ user, children }: AppShellProps) {
             href="/configuracoes"
             className={cn(
               "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
-              pathname === "/configuracoes"
+              pathname.startsWith("/configuracoes")
                 ? "bg-primary/10 text-primary"
                 : "text-sidebar-foreground/75 hover:bg-accent hover:text-sidebar-foreground",
             )}

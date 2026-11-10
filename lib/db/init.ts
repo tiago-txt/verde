@@ -10,6 +10,7 @@ import {
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getAdminSeed, getSessionSecret } from "@/lib/env";
 import { getDatabasePath } from "./path";
+import { seedDemoData } from "./seed-demo";
 import { DEFAULT_CATEGORIES, DEFAULT_TAGS } from "./seed-data";
 import * as schema from "./schema";
 
@@ -64,6 +65,10 @@ function seed(db: DatabaseInstance): void {
   seedFirstAdmin(db);
   seedCategories(db);
   seedTags(db);
+
+  if (process.env.SEED_DEMO === "true") {
+    seedDemoData(db);
+  }
 }
 
 function seedFirstAdmin(db: DatabaseInstance): void {

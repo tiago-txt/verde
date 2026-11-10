@@ -16,7 +16,7 @@
 # ---------------------------------------------------------------------------
 services:
   verde:
-    image: ghcr.io/tiago-txt/verde:latest
+    image: ${VERDE_IMAGE:-ghcr.io/tiago-txt/verde:latest}
     container_name: verde
     restart: unless-stopped
     # Sempre busca a imagem mais nova ao subir (botão Up).
