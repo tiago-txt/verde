@@ -22,6 +22,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormError } from "@/components/form-feedback";
+import { CategoryPicker } from "./category-picker";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 
 export function BulkActionsBar({
@@ -307,6 +308,49 @@ export function BulkDeleteDialog({
             Excluir
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function QuickCategoryDialog({
+  open,
+  onOpenChange,
+  categories,
+  tipo,
+  currentCategoryId,
+  onConfirm,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  categories: TransactionFormData["categories"];
+  tipo: "despesa" | "receita";
+  currentCategoryId: string | null;
+  onConfirm: (categoryId: string) => void;
+}) {
+  const options = categories.filter(
+    (category) =>
+      !category.deletedAt ||
+      category.id === currentCategoryId,
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4 sm:max-w-lg">
+        <DialogHeader className="pr-10">
+          <DialogTitle>Trocar categoria</DialogTitle>
+          <DialogDescription>
+            Escolha a nova categoria deste lançamento.
+          </DialogDescription>
+        </DialogHeader>
+        <CategoryPicker
+          options={options.filter((category) => category.tipo === tipo)}
+          value={currentCategoryId}
+          autoFocusSearch={false}
+          onChange={(categoryId) => {
+            if (categoryId) onConfirm(categoryId);
+          }}
+        />
       </DialogContent>
     </Dialog>
   );

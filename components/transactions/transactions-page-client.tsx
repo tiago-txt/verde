@@ -49,6 +49,7 @@ import {
   BulkCategoryDialog,
   BulkDeleteDialog,
   BulkTagDialog,
+  QuickCategoryDialog,
 } from "./bulk-actions";
 import { FilterBar } from "./filter-bar";
 import { ScopeDialog } from "./scope-dialog";
@@ -215,6 +216,8 @@ export function TransactionsPageClient({
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
+  const [categoryTarget, setCategoryTarget] =
+    useState<TransactionListItem | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersSearchFocus, setFiltersSearchFocus] = useState(false);
@@ -644,6 +647,45 @@ export function TransactionsPageClient({
     });
   }
 
+  function changeCategoryOf(target: TransactionListItem, categoryId: string) {
+    const category = formData.categories.find(
+      (item) => item.id === categoryId,
+    );
+    if (!category) {
+      setFlash("Categoria não encontrada.");
+      return;
+    }
+
+    setCategoryTarget(null);
+    startBulkTransition(async () => {
+      applyOptimistic({
+        type: "category",
+        ids: [target.id],
+        category: {
+          id: category.id,
+          nome: category.nome,
+          icone: category.icone,
+          cor: category.cor,
+          tipo: category.tipo,
+        },
+      });
+      const result = await bulkChangeCategoryAction({
+        ids: [target.id],
+        categoriaId: category.id,
+      });
+
+      if (!result.ok) {
+        setFlash(result.error);
+      } else if (result.budgetNotice) {
+        toast({
+          description: result.budgetNotice.message,
+          tone: result.budgetNotice.tone,
+        });
+      }
+      router.refresh();
+    });
+  }
+
   function bulkAddTag(tagId: string) {
     const tag = formData.tags.find((item) => item.id === tagId);
     if (!tag) {
@@ -1024,6 +1066,10 @@ export function TransactionsPageClient({
                       onDuplicate={(item) => void handleDuplicate(item)}
                       onLongPress={handleLongPress}
                       onTogglePaid={handleTogglePaid}
+                      onChangeCategory={(item) => {
+                        setCategoryTarget(item);
+                        setFlash(null);
+                      }}
                     />
                   ))}
 
@@ -1230,6 +1276,19 @@ export function TransactionsPageClient({
         onConfirm={bulkDelete}
         pending={isBulkPending}
         error={bulkError}
+      />
+
+      <QuickCategoryDialog
+        open={Boolean(categoryTarget)}
+        onOpenChange={(open) => {
+          if (!open) setCategoryTarget(null);
+        }}
+        categories={formData.categories}
+        tipo={categoryTarget?.tipo === "receita" ? "receita" : "despesa"}
+        currentCategoryId={categoryTarget?.categoriaId ?? null}
+        onConfirm={(categoryId) => {
+          if (categoryTarget) changeCategoryOf(categoryTarget, categoryId);
+        }}
       />
     </div>
   );

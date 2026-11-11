@@ -32,7 +32,16 @@ type TransactionRowProps = {
   onDuplicate: (transaction: TransactionListItem) => void;
   onLongPress?: (transaction: TransactionListItem) => void;
   onTogglePaid: (transaction: TransactionListItem, pago: boolean) => void;
+  onChangeCategory?: (transaction: TransactionListItem) => void;
 };
+
+/** Hover "de verdade" (mouse/trackpad). Em toque, mantém o toque na linha. */
+function canHover(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    window.matchMedia("(hover: hover) and (pointer: fine)").matches
+  );
+}
 
 function AccountBadge({
   nome,
@@ -67,6 +76,7 @@ export function TransactionRow({
   onDuplicate,
   onLongPress,
   onTogglePaid,
+  onChangeCategory,
 }: TransactionRowProps) {
   const longPressTimer = useRef<number | null>(null);
   const longPressTriggered = useRef(false);
@@ -111,7 +121,7 @@ export function TransactionRow({
     else onOpenDetails(transaction);
   }
 
-  function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+  function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
     if (selectionMode || !onLongPress) return;
     pointerStart.current = { x: event.clientX, y: event.clientY };
     longPressTimer.current = window.setTimeout(() => {
@@ -120,7 +130,7 @@ export function TransactionRow({
     }, 500);
   }
 
-  function handlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+  function handlePointerMove(event: React.PointerEvent<HTMLElement>) {
     const start = pointerStart.current;
     if (!start) return;
     if (
@@ -241,32 +251,89 @@ export function TransactionRow({
             <CreditCard className="h-5 w-5" aria-hidden="true" />
           </span>
         ) : (
-          <CategoryIcon
-            icon={transaction.categoriaIcone}
-            color={transaction.categoriaCor}
-            className="h-11 w-11 rounded-xl"
-          />
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              if (selectionMode) {
+                onToggleSelected?.(transaction.id);
+                return;
+              }
+              if (!canHover()) {
+                onOpenDetails(transaction);
+                return;
+              }
+              onChangeCategory?.(transaction);
+            }}
+            onPointerDown={(event) => event.stopPropagation()}
+            aria-label={`Trocar categoria de ${transaction.descricao}`}
+            title="Trocar categoria"
+            className="hover-action group/cat relative shrink-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <CategoryIcon
+              icon={transaction.categoriaIcone}
+              color={transaction.categoriaCor}
+              className="h-11 w-11 rounded-xl transition-transform group-hover/cat:scale-105"
+            />
+            <span
+              className="pointer-events-none absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-foreground opacity-0 shadow-sm transition-opacity group-hover/cat:opacity-100 group-focus-visible/cat:opacity-100"
+              aria-hidden="true"
+            >
+              <Pencil className="h-3 w-3" />
+            </span>
+          </button>
         )}
 
-        <button
-          type="button"
+        <div
+          role="button"
+          tabIndex={0}
+          aria-label={`Abrir detalhes de ${transaction.descricao}`}
           onClick={handleMainClick}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            handleMainClick();
+          }}
           onPointerDown={handlePointerDown}
           onPointerUp={clearLongPress}
           onPointerMove={handlePointerMove}
           onPointerLeave={clearLongPress}
           onPointerCancel={clearLongPress}
-          className="min-w-0 flex-1 rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-0 flex-1 cursor-pointer rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "truncate text-[15px] font-semibold",
-                !transaction.pago && !isCardPurchase && "text-foreground/80",
-              )}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (selectionMode) {
+                  onToggleSelected?.(transaction.id);
+                  return;
+                }
+                if (!canHover() || transaction.faturaChave) {
+                  onOpenDetails(transaction);
+                  return;
+                }
+                onEdit(transaction);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-label={`Editar ${transaction.descricao}`}
+              title="Editar lançamento"
+              className="hover-action group/name flex min-w-0 max-w-full items-center gap-1 rounded text-left outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {transaction.descricao}
-            </span>
+              <span
+                className={cn(
+                  "truncate text-[15px] font-semibold underline-offset-4 group-hover/name:underline",
+                  !transaction.pago && !isCardPurchase && "text-foreground/80",
+                )}
+              >
+                {transaction.descricao}
+              </span>
+              <Pencil
+                className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+                aria-hidden="true"
+              />
+            </button>
             {transaction.recorrenciaId && (
               <Repeat
                 className="h-3.5 w-3.5 shrink-0 text-primary"
@@ -346,7 +413,7 @@ export function TransactionRow({
               </>
             )}
           </span>
-        </button>
+        </div>
 
         <div className="flex shrink-0 items-center gap-1">
           <span className={cn("tabular text-base font-bold sm:text-lg", valueColor)}>

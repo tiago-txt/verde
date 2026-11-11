@@ -129,6 +129,12 @@
   .pressable:active {
     transform: scale(0.98);
   }
+  /* Ações de hover não interceptam o toque: no mobile o toque na linha abre detalhes. */
+  @media (hover: none) {
+    .hover-action {
+      pointer-events: none;
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
