@@ -18,6 +18,7 @@ import { getDb } from "@/lib/db";
 import {
   accounts,
   categories,
+  creditCards,
   recurrences,
   tags,
   transactionTags,
@@ -35,6 +36,7 @@ import {
   recurrenceHorizon,
 } from "@/lib/finance/recurrence";
 import { listAllAccounts } from "./accounts";
+import { listCardsForFilter, type CardOption } from "./cards";
 import {
   getSystemCategoryIds,
   listAllCategories,
@@ -59,6 +61,16 @@ export type TransactionListItem = {
   contaDestinoCor: string | null;
   contaDestinoIcone: string | null;
   cartaoId: string | null;
+  cartaoNome: string | null;
+  cartaoCor: string | null;
+  cartaoIcone: string | null;
+  cartaoDestinoId: string | null;
+  cartaoDestinoNome: string | null;
+  cartaoDestinoCor: string | null;
+  cartaoDestinoIcone: string | null;
+  faturaChave: string | null;
+  cartaoDiaFechamento: number | null;
+  cartaoDiaVencimento: number | null;
   categoriaId: string | null;
   categoriaNome: string | null;
   categoriaCor: string | null;
@@ -91,14 +103,18 @@ export type RecentDescription = {
 
 export type TransactionFormData = {
   accounts: ReturnType<typeof listAllAccounts>;
+  cards: CardOption[];
   categories: ReturnType<typeof listAllCategories>;
   tags: ReturnType<typeof listTags>;
   lastAccountId: string | null;
+  lastCardId: string | null;
   recentDescriptions: RecentDescription[];
 };
 
 const conta = alias(accounts, "conta");
 const contaDestino = alias(accounts, "conta_destino");
+const cartao = alias(creditCards, "cartao");
+const cartaoDestino = alias(creditCards, "cartao_destino");
 
 function selectTransactionFields() {
   return {
@@ -117,6 +133,16 @@ function selectTransactionFields() {
     contaDestinoCor: contaDestino.cor,
     contaDestinoIcone: contaDestino.icone,
     cartaoId: transactions.cartaoId,
+    cartaoNome: cartao.nome,
+    cartaoCor: cartao.cor,
+    cartaoIcone: cartao.icone,
+    cartaoDestinoId: transactions.cartaoDestinoId,
+    cartaoDestinoNome: cartaoDestino.nome,
+    cartaoDestinoCor: cartaoDestino.cor,
+    cartaoDestinoIcone: cartaoDestino.icone,
+    faturaChave: transactions.faturaChave,
+    cartaoDiaFechamento: cartao.diaFechamento,
+    cartaoDiaVencimento: cartao.diaVencimento,
     categoriaId: transactions.categoriaId,
     categoriaNome: categories.nome,
     categoriaCor: categories.cor,
@@ -176,12 +202,34 @@ export function listMonthTransactions(
   if (filters.status === "nao_pagos")
     conditions.push(eq(transactions.pago, false));
 
-  if (filters.contas.length > 0) {
-    const accountFilter = or(
-      inArray(transactions.contaId, filters.contas),
-      inArray(transactions.contaDestinoId, filters.contas),
-    );
-    if (accountFilter) conditions.push(accountFilter);
+  if (filters.status !== "todos") {
+    // Compras no cartão têm "pago" derivado da fatura e não entram no filtro.
+    conditions.push(isNull(transactions.cartaoId));
+  }
+
+  if (filters.contas.length > 0 || filters.cartoes.length > 0) {
+    const originFilters = [];
+    if (filters.contas.length > 0) {
+      const accountFilter = or(
+        inArray(transactions.contaId, filters.contas),
+        inArray(transactions.contaDestinoId, filters.contas),
+      );
+      if (accountFilter) originFilters.push(accountFilter);
+    }
+    if (filters.cartoes.length > 0) {
+      const cardFilter = or(
+        inArray(transactions.cartaoId, filters.cartoes),
+        inArray(transactions.cartaoDestinoId, filters.cartoes),
+      );
+      if (cardFilter) originFilters.push(cardFilter);
+    }
+    const originFilter = or(...originFilters);
+    if (originFilter) conditions.push(originFilter);
+  }
+
+  if (filters.cartoes.length === 0 && !filters.comprasCartao) {
+    // Por padrão a lista mostra apenas faturas/pagamentos, não as compras.
+    conditions.push(isNull(transactions.cartaoId));
   }
 
   if (filters.categorias.length > 0) {
@@ -218,6 +266,11 @@ export function listMonthTransactions(
     .from(transactions)
     .leftJoin(conta, eq(transactions.contaId, conta.id))
     .leftJoin(contaDestino, eq(transactions.contaDestinoId, contaDestino.id))
+    .leftJoin(cartao, eq(transactions.cartaoId, cartao.id))
+    .leftJoin(
+      cartaoDestino,
+      eq(transactions.cartaoDestinoId, cartaoDestino.id),
+    )
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
     .where(and(...conditions))
     .orderBy(asc(transactions.data), asc(transactions.createdAt))
@@ -237,6 +290,11 @@ export function getTransactionById(id: string): TransactionListItem | null {
     .from(transactions)
     .leftJoin(conta, eq(transactions.contaId, conta.id))
     .leftJoin(contaDestino, eq(transactions.contaDestinoId, contaDestino.id))
+    .leftJoin(cartao, eq(transactions.cartaoId, cartao.id))
+    .leftJoin(
+      cartaoDestino,
+      eq(transactions.cartaoDestinoId, cartaoDestino.id),
+    )
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
     .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
     .get();
@@ -328,15 +386,13 @@ export function getTransactionRaw(id: string) {
 export function getTransactionFormData(): TransactionFormData {
   const db = getDb();
 
-  const lastAccount = db
-    .select({ contaId: transactions.contaId })
+  const lastTransaction = db
+    .select({
+      contaId: transactions.contaId,
+      cartaoId: transactions.cartaoId,
+    })
     .from(transactions)
-    .where(
-      and(
-        isNull(transactions.deletedAt),
-        isNotNull(transactions.contaId),
-      ),
-    )
+    .where(isNull(transactions.deletedAt))
     .orderBy(desc(transactions.createdAt))
     .limit(1)
     .get();
@@ -371,9 +427,11 @@ export function getTransactionFormData(): TransactionFormData {
 
   return {
     accounts: listAllAccounts(),
+    cards: listCardsForFilter(),
     categories: listAllCategories(),
     tags: listTags(),
-    lastAccountId: lastAccount?.contaId ?? null,
+    lastAccountId: lastTransaction?.contaId ?? null,
+    lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,
   };
 }
@@ -398,7 +456,7 @@ export function getDayBalances(monthKey: string): Record<string, number> {
   const deltas = db
     .select({
       data: transactions.data,
-      delta: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'receita' then ${transactions.valor} when ${transactions.tipo} = 'despesa' then -${transactions.valor} else 0 end), 0)`,
+      delta: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'receita' then ${transactions.valor} when ${transactions.tipo} = 'despesa' then -${transactions.valor} when ${transactions.tipo} = 'transferencia' and ${transactions.cartaoDestinoId} is not null and ${transactions.pago} = 1 then -${transactions.valor} else 0 end), 0)`,
     })
     .from(transactions)
     .where(
@@ -442,6 +500,14 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
       .filter((account) => !account.arquivada)
       .map((account) => account.id),
   );
+  const cardIds = new Set(
+    db
+      .select({ id: creditCards.id })
+      .from(creditCards)
+      .where(and(isNull(creditCards.deletedAt), eq(creditCards.arquivado, false)))
+      .all()
+      .map((card) => card.id),
+  );
   const categoryById = new Map(
     listAllCategories().map((category) => [category.id, category]),
   );
@@ -451,7 +517,11 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
     for (const recurrence of activeRecurrences) {
       const template = recurrence.template as RecurrenceTemplate;
 
-      if (!template.contaId || !accountIds.has(template.contaId)) continue;
+      if (template.cartaoId) {
+        if (!cardIds.has(template.cartaoId)) continue;
+      } else if (!template.contaId || !accountIds.has(template.contaId)) {
+        continue;
+      }
       if (
         template.tipo === "transferencia" &&
         (!template.contaDestinoId || !accountIds.has(template.contaDestinoId))
@@ -495,7 +565,7 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
             valor: template.valor,
             data,
             pago: false,
-            contaId: template.contaId,
+            contaId: template.cartaoId ? null : template.contaId,
             cartaoId: template.cartaoId,
             contaDestinoId:
               template.tipo === "transferencia"

@@ -10,6 +10,7 @@ import {
 
 const contaId = crypto.randomUUID();
 const contaDestinoId = crypto.randomUUID();
+const cartaoId = crypto.randomUUID();
 const categoriaId = crypto.randomUUID();
 
 function validTransaction(
@@ -22,6 +23,7 @@ function validTransaction(
     data: "2026-11-10",
     pago: true,
     contaId,
+    cartaoId: null,
     contaDestinoId: null,
     categoriaId,
     tagIds: [],
@@ -89,6 +91,39 @@ describe("validação de lançamentos", () => {
     );
 
     expect(result.success).toBe(true);
+  });
+
+  it("aceita compra no cartão sem conta", () => {
+    const result = createTransactionSchema.safeParse(
+      validTransaction({ contaId: null, cartaoId }),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejeita conta e cartão simultâneos, ou nenhum", () => {
+    expect(
+      createTransactionSchema.safeParse(
+        validTransaction({ cartaoId }),
+      ).success,
+    ).toBe(false);
+    expect(
+      createTransactionSchema.safeParse(
+        validTransaction({ contaId: null, cartaoId: null }),
+      ).success,
+    ).toBe(false);
+  });
+
+  it("rejeita transferência com cartão", () => {
+    expect(
+      createTransactionSchema.safeParse(
+        validTransaction({
+          tipo: "transferencia",
+          categoriaId: null,
+          contaDestinoId,
+          cartaoId,
+        }),
+      ).success,
+    ).toBe(false);
   });
 
   it("rejeita transferência parcelada", () => {

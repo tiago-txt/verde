@@ -38,4 +38,31 @@ describe("resumo do mês", () => {
       saldoPrevisto: 20_000,
     });
   });
+
+  it("ignora compras no cartão e conta apenas pagamentos de fatura efetivos", () => {
+    const summary = summarizeTransactions([
+      { tipo: "receita", valor: 100_000, pago: true },
+      { tipo: "despesa", valor: 30_000, pago: true, cartaoId: "card-1" },
+      {
+        tipo: "transferencia",
+        valor: 20_000,
+        pago: true,
+        cartaoDestinoId: "card-1",
+        faturaChave: "2026-12",
+      },
+      {
+        tipo: "transferencia",
+        valor: 10_000,
+        pago: false,
+        cartaoDestinoId: "card-1",
+        faturaChave: "2026-12",
+      },
+      { tipo: "transferencia", valor: 500_000, pago: true },
+    ]);
+
+    expect(summary.saidasPagas).toBe(20_000);
+    expect(summary.saidasPrevistas).toBe(20_000);
+    expect(summary.saldoRealizado).toBe(80_000);
+    expect(summary.saldoPrevisto).toBe(80_000);
+  });
 });

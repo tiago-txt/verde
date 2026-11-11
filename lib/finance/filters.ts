@@ -10,12 +10,14 @@ export type TransactionFilters = {
   mes: string;
   tipo: TransactionType | null;
   contas: string[];
+  cartoes: string[];
   categorias: string[];
   tags: string[];
   status: TransactionStatusFilter;
   q: string | null;
   dias: number;
   detalhe: string | null;
+  comprasCartao: boolean;
 };
 
 export type SearchParamsLike = Record<
@@ -90,12 +92,14 @@ export function parseTransactionFilters(
     mes,
     tipo,
     contas: validUniqueIds(arrayValues(params.contas)),
+    cartoes: validUniqueIds(arrayValues(params.cartoes)),
     categorias: validUniqueIds(arrayValues(params.categorias)),
     tags: validUniqueIds(arrayValues(params.tags)),
     status,
     q,
     dias,
     detalhe,
+    comprasCartao: firstValue(params.compras) === "1",
   };
 }
 
@@ -103,21 +107,24 @@ export function hasActiveFilters(filters: TransactionFilters): boolean {
   return Boolean(
     filters.tipo ||
       filters.contas.length ||
+      filters.cartoes.length ||
       filters.categorias.length ||
       filters.tags.length ||
       filters.status !== "todos" ||
-      filters.q,
+      filters.q ||
+      filters.comprasCartao,
   );
 }
 
 export function countActiveFilters(filters: TransactionFilters): number {
   let count = 0;
   if (filters.tipo) count += 1;
-  if (filters.contas.length) count += 1;
+  if (filters.contas.length || filters.cartoes.length) count += 1;
   if (filters.categorias.length) count += 1;
   if (filters.tags.length) count += 1;
   if (filters.status !== "todos") count += 1;
   if (filters.q) count += 1;
+  if (filters.comprasCartao) count += 1;
   return count;
 }
 
@@ -129,6 +136,7 @@ export function buildTransactionSearchParams(
 
   if (filters.tipo) params.set("tipo", filters.tipo);
   if (filters.contas.length) params.set("contas", filters.contas.join(","));
+  if (filters.cartoes.length) params.set("cartoes", filters.cartoes.join(","));
   if (filters.categorias.length)
     params.set("categorias", filters.categorias.join(","));
   if (filters.tags.length) params.set("tags", filters.tags.join(","));
@@ -136,6 +144,7 @@ export function buildTransactionSearchParams(
   if (filters.q) params.set("q", filters.q);
   if (filters.dias !== DEFAULT_DIAS) params.set("dias", String(filters.dias));
   if (filters.detalhe) params.set("detalhe", filters.detalhe);
+  if (filters.comprasCartao) params.set("compras", "1");
 
   return params;
 }

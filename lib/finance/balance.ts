@@ -9,6 +9,8 @@ export type BalanceTransaction = {
   contaId: string | null;
   contaDestinoId: string | null;
   cartaoId: string | null;
+  cartaoDestinoId?: string | null;
+  faturaChave?: string | null;
   deletedAt?: Date | number | null;
 };
 
@@ -27,6 +29,9 @@ export function isBalanceRelevant(
 ): boolean {
   if (transaction.deletedAt) return false;
   if (transaction.cartaoId) return false;
+  // Pagamento de fatura não pago é apenas uma intenção; a fatura virtual
+  // continua representando o valor no previsto.
+  if (transaction.faturaChave && !transaction.pago) return false;
   if (mode === "atual" && !transaction.pago) return false;
   return true;
 }

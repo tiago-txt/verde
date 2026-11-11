@@ -4,11 +4,11 @@ Finanças pessoais e familiares, em português do Brasil, com valores em **BRL**
 valores armazenados sempre em **centavos**. Interface responsiva (PWA no celular
 e dashboard no computador), self-hosted em um único container Docker, com SQLite.
 
-> **Status:** etapas 1–3 concluídas — autenticação, contas, categorias/tags,
+> **Status:** etapas 1–4 concluídas — autenticação, contas, categorias/tags,
 > lançamentos completos (filtros, busca, painel de detalhes, saldo do dia,
-> seleção múltipla e ações em lote), recorrência/parcelamento e seed demo.
-> Cartões, relatórios, limites e PWA entram nas próximas etapas (veja o
-> [roteiro](#roteiro)).
+> seleção múltipla e ações em lote), recorrência/parcelamento, orçamentos com
+> ciclo e cartões/faturas. Dashboard, relatórios, limites e PWA entram nas
+> próximas etapas (veja o [roteiro](#roteiro)).
 
 ---
 
@@ -52,14 +52,32 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Parcelamento** (2–60x): total dividido com resto na primeira parcela ou valor
   por parcela; todas as parcelas geradas na criação.
 - **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
-- **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
-  parcelas e transferências.
+- **Orçamentos com ciclo** (`/limite-de-gastos`): envelope por categorias com dia
+  de fechamento, valor por ciclo, overrides, vigências e eventos virtuais de
+  provisão/sobra no previsto, sem alterar o realizado.
+- **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
+  calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
+  pagamento de fatura por transferência (parcial ou total, com desfazer).
 - **Performance**: lista paginada por dias visíveis (`dias` na URL), saldo do dia
-  calculado por uma query agregada e filtros/índices no SQLite. Testado com
-  500+ lançamentos no mês.
+  calculado por uma query agregada; faturas e orçamentos agregados em uma única
+  consulta por página, com índices por cartão/data e fatura.
+- **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
+  parcelas, transferências, 2 cartões com faturas e um pagamento de fatura.
 
-Ainda são placeholders: cartões/faturas (etapa 4), dashboard completo,
-relatórios, limites e PWA (etapas 5–6).
+### Regras de fatura de cartão
+
+- A fatura é **calculada**, não gravada. Ela é identificada por `cartao_id` +
+  `YYYY-MM` do **vencimento**.
+- O ciclo começa no `dia_fechamento` e termina no dia anterior ao fechamento do
+  mês seguinte.
+- **Compra feita no dia do fechamento entra na fatura seguinte.**
+- O vencimento é o primeiro `dia_vencimento` posterior ao fechamento; se
+  `dia_vencimento <= dia_fechamento`, ele cai no mês seguinte ao fechamento.
+- Compras no cartão não movimentam a conta. O pagamento é uma transferência da
+  conta para o cartão, com vínculo à fatura (`fatura_chave`). O valor pago reduz
+  a conta e a fatura; o restante aparece como linha virtual de fatura no previsto.
+
+Ainda são placeholders: dashboard completo, relatórios e PWA (etapas 5–6).
 
 ---
 
@@ -71,9 +89,9 @@ app/
     page.tsx             # visão geral (dashboard completo na etapa 5)
     lancamentos/         # lista mensal + CRUD completo (etapa 2)
     contas/              # CRUD de contas e saldos
-    cartoes/             # etapa 4
+    cartoes/             # cartões, faturas e pagamentos
+    limite-de-gastos/    # orçamentos com ciclo
     relatorios/          # etapa 5
-    limites/             # etapa 5
     configuracoes/       # perfil, tema, logout
       categorias/        # categorias, subcategorias e tags
   login/                 # login (fora do shell)
@@ -84,6 +102,8 @@ components/
   ui/                    # Button, Input, Card, Dialog, Popover, Dropdown, etc.
   calendar/              # calendário, date picker e seletor de mês/ano
   accounts/              # cards e formulário de contas
+  cards/                 # cartões, faturas, limite e pagamento
+  budgets/               # orçamentos, chips, detalhe e ciclo
   categories/            # categorias, subcategorias e tags
   transactions/          # lista, filtros, detalhes, lote, formulário e escopos
   app-shell.tsx          # sidebar desktop + bottom nav + FAB mobile
@@ -98,7 +118,8 @@ lib/
     seed-demo.ts         # dados de exemplo (SEED_DEMO=true)
     queries/             # leituras (saldos, filtros, saldo do dia, detalhe)
   finance/               # lógica pura testável: saldos, recorrência, parcelas,
-                         # escopos, filtros, calendário, datas, saldo do dia e lote
+                         # escopos, filtros, calendário, datas, saldo do dia,
+                         # lote, orçamentos com ciclo e faturas de cartão
   validation/            # schemas Zod compartilhados
   auth/
     jwt.ts               # assinatura/verificação (Edge-safe)

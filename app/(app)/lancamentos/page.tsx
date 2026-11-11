@@ -9,6 +9,7 @@ import {
   listMonthTransactions,
 } from "@/lib/db/queries/transactions";
 import { getBudgetEventsForMonth, getBudgetEventsForDayBalances } from "@/lib/db/queries/budgets";
+import { listCardInvoiceEventsForMonth, listCardInvoiceEventsForDayBalances } from "@/lib/db/queries/cards";
 import { todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
 import { parseTransactionFilters } from "@/lib/finance/filters";
@@ -30,9 +31,18 @@ export default async function LancamentosPage({
   const transactions = listMonthTransactions(filters);
   const formData = getTransactionFormData();
   const budgetEvents = getBudgetEventsForMonth(filters.mes, filters);
+  const cardInvoiceEvents = listCardInvoiceEventsForMonth(filters.mes, filters);
   const dayBalances = aplicarEventosAoSalsoDia(
     getDayBalances(filters.mes),
-    getBudgetEventsForDayBalances(filters.mes),
+    [
+      ...getBudgetEventsForDayBalances(filters.mes),
+      ...listCardInvoiceEventsForDayBalances(filters.mes).map((event) => ({
+        tipo: "provisao" as const,
+        data: event.vencimento,
+        valor: event.restante,
+        ciclo: event.faturaChave,
+      })),
+    ],
   );
   const detail = filters.detalhe
     ? getTransactionDetail(filters.detalhe)
@@ -50,6 +60,7 @@ export default async function LancamentosPage({
       filters={filters}
       transactions={transactions}
       budgetEvents={budgetEvents}
+      cardInvoiceEvents={cardInvoiceEvents}
       formData={formData}
       detail={detail}
       dayBalances={dayBalances}

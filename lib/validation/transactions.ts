@@ -18,7 +18,8 @@ const transactionFields = z.object({
     .positive("O valor deve ser maior que zero"),
   data: isoDateSchema,
   pago: z.boolean(),
-  contaId: idSchema,
+  contaId: idSchema.nullable(),
+  cartaoId: idSchema.nullable(),
   contaDestinoId: idSchema.nullable(),
   categoriaId: idSchema.nullable(),
   tagIds: z
@@ -43,6 +44,7 @@ type RefinableTransaction = Pick<
   TransactionFormValues,
   | "tipo"
   | "contaId"
+  | "cartaoId"
   | "contaDestinoId"
   | "categoriaId"
   | "repeticao"
@@ -58,6 +60,20 @@ function refineTransaction(
   ctx: z.RefinementCtx,
 ): void {
   if (value.tipo === "transferencia") {
+    if (!value.contaId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["contaId"],
+        message: "Escolha a conta de origem",
+      });
+    }
+    if (value.cartaoId) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["cartaoId"],
+        message: "Transferências não usam cartão",
+      });
+    }
     if (!value.contaDestinoId) {
       ctx.addIssue({
         code: "custom",
@@ -79,6 +95,24 @@ function refineTransaction(
         message: "Transferências não podem ser parceladas",
       });
     }
+  } else if (!value.contaId && !value.cartaoId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["contaId"],
+      message: "Escolha uma conta ou cartão",
+    });
+  } else if (value.contaId && value.cartaoId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["cartaoId"],
+      message: "Escolha apenas conta ou cartão",
+    });
+  } else if (value.cartaoId && value.contaDestinoId) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["contaDestinoId"],
+      message: "Compra no cartão não tem conta de destino",
+    });
   }
 
   if (value.repeticao === "fixa" && value.dataFim) {

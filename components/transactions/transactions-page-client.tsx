@@ -51,6 +51,7 @@ import { TransactionDetailsPanel } from "./transaction-details-panel";
 import { TransactionFormDialog } from "./transaction-form-dialog";
 import { TransactionRow } from "./transaction-row";
 import { BudgetEventRow } from "./budget-event-row";
+import { CardInvoiceRow } from "./card-invoice-row";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import { useToast } from "@/components/ui/toast";
@@ -69,6 +70,7 @@ import type {
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
+import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import {
   addMonths,
   currentMonth,
@@ -83,6 +85,7 @@ import {
 } from "@/lib/finance/filters";
 import { dayLabel, groupTransactionsByDay } from "@/lib/finance/day-labels";
 import { aplicarEventosAoResumo } from "@/lib/finance/budgets";
+import { aplicarFaturasAoResumo } from "@/lib/finance/cards";
 import { summarizeTransactions } from "@/lib/finance/summary";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -149,6 +152,7 @@ type TransactionsPageClientProps = {
   filters: TransactionFilters;
   transactions: TransactionListItem[];
   budgetEvents: BudgetEventView[];
+  cardInvoiceEvents: CardInvoiceEvent[];
   formData: TransactionFormData;
   detail: TransactionDetail | null;
   dayBalances: Record<string, number>;
@@ -161,12 +165,14 @@ type TransactionDayGroup = {
   day: string;
   items: TransactionListItem[];
   events: BudgetEventView[];
+  invoices: CardInvoiceEvent[];
 };
 
 export function TransactionsPageClient({
   filters,
   transactions,
   budgetEvents,
+  cardInvoiceEvents,
   formData,
   detail,
   dayBalances,
@@ -254,29 +260,46 @@ export function TransactionsPageClient({
     const map = new Map<string, TransactionDayGroup>(
       base.map((group) => [
         group.day,
-        { day: group.day, items: group.items, events: [] },
+        { day: group.day, items: group.items, events: [], invoices: [] },
       ]),
     );
 
     for (const event of budgetEvents) {
       let group = map.get(event.data);
       if (!group) {
-        group = { day: event.data, items: [], events: [] };
+        group = { day: event.data, items: [], events: [], invoices: [] };
         map.set(event.data, group);
       }
       group.events.push(event);
     }
 
+    for (const invoice of cardInvoiceEvents) {
+      let group = map.get(invoice.vencimento);
+      if (!group) {
+        group = {
+          day: invoice.vencimento,
+          items: [],
+          events: [],
+          invoices: [],
+        };
+        map.set(invoice.vencimento, group);
+      }
+      group.invoices.push(invoice);
+    }
+
     return [...map.values()].sort((a, b) => a.day.localeCompare(b.day));
-  }, [optimisticTransactions, budgetEvents]);
+  }, [optimisticTransactions, budgetEvents, cardInvoiceEvents]);
   const visibleGroups = groups.slice(0, filters.dias);
   const summary = useMemo(
     () =>
-      aplicarEventosAoResumo(
-        summarizeTransactions(optimisticTransactions),
-        budgetEvents,
+      aplicarFaturasAoResumo(
+        aplicarEventosAoResumo(
+          summarizeTransactions(optimisticTransactions),
+          budgetEvents,
+        ),
+        cardInvoiceEvents,
       ),
-    [optimisticTransactions, budgetEvents],
+    [optimisticTransactions, budgetEvents, cardInvoiceEvents],
   );
   const hasMoreDays = groups.length > filters.dias;
   const activeFilters = hasActiveFilters(filters);
@@ -290,7 +313,14 @@ export function TransactionsPageClient({
     patch: Partial<
       Pick<
         TransactionFilters,
-        "tipo" | "contas" | "categorias" | "tags" | "status" | "q"
+        | "tipo"
+        | "contas"
+        | "cartoes"
+        | "categorias"
+        | "tags"
+        | "status"
+        | "q"
+        | "comprasCartao"
       >
     >,
   ) {
@@ -302,12 +332,14 @@ export function TransactionsPageClient({
       ...filters,
       tipo: null,
       contas: [],
+      cartoes: [],
       categorias: [],
       tags: [],
       status: "todos",
       q: null,
       dias: 10,
       detalhe: null,
+      comprasCartao: false,
     });
   }
 
@@ -488,7 +520,13 @@ export function TransactionsPageClient({
   }
 
   function selectAll() {
-    setSelectedIds(new Set(optimisticTransactions.map((item) => item.id)));
+    setSelectedIds(
+      new Set(
+        optimisticTransactions
+          .filter((item) => !item.cartaoId)
+          .map((item) => item.id),
+      ),
+    );
   }
 
   function exitSelection() {
@@ -793,10 +831,13 @@ export function TransactionsPageClient({
       ) : (
         <div className="space-y-4">
           {visibleGroups.map((group) => {
+            const selectableItems = group.items.filter(
+              (item) => !item.cartaoId,
+            );
             const allSelected =
-              group.items.length > 0 &&
-              group.items.every((item) => selectedIds.has(item.id));
-            const someSelected = group.items.some((item) =>
+              selectableItems.length > 0 &&
+              selectableItems.every((item) => selectedIds.has(item.id));
+            const someSelected = selectableItems.some((item) =>
               selectedIds.has(item.id),
             );
             const balance = dayBalances[group.day] ?? 0;
@@ -813,7 +854,7 @@ export function TransactionsPageClient({
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    {selectionMode && group.items.length > 0 && (
+                    {selectionMode && selectableItems.length > 0 && (
                       <Checkbox
                         checked={
                           allSelected
@@ -823,7 +864,7 @@ export function TransactionsPageClient({
                               : false
                         }
                         onCheckedChange={(checked) =>
-                          toggleDay(group.items, checked === true)
+                          toggleDay(selectableItems, checked === true)
                         }
                         aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
                       />
@@ -839,6 +880,9 @@ export function TransactionsPageClient({
                     {group.items.length} lançamento(s)
                     {group.events.length > 0
                       ? ` · ${group.events.length} orçamento(s)`
+                      : ""}
+                    {group.invoices.length > 0
+                      ? ` · ${group.invoices.length} fatura(s)`
                       : ""}
                   </span>
                 </div>
@@ -865,6 +909,18 @@ export function TransactionsPageClient({
                       key={event.id}
                       event={event}
                       onOpen={setSelectedBudgetEvent}
+                    />
+                  ))}
+
+                  {group.invoices.map((invoice) => (
+                    <CardInvoiceRow
+                      key={invoice.id}
+                      event={invoice}
+                      onOpen={(event) => {
+                        router.push(
+                          `/cartoes/${event.cartaoId}?fatura=${event.faturaChave}`,
+                        );
+                      }}
                     />
                   ))}
                 </div>

@@ -11,6 +11,7 @@ const conta2 = "22222222-2222-4222-8222-222222222222";
 const cat1 = "33333333-3333-4333-8333-333333333333";
 const tag1 = "44444444-4444-4444-8444-444444444444";
 const detalhe = "55555555-5555-4555-8555-555555555555";
+const cartao1 = "66666666-6666-4666-8666-666666666666";
 
 describe("parsing de filtros da URL", () => {
   it("usa defaults e ignora valores inválidos", () => {
@@ -68,6 +69,20 @@ describe("parsing de filtros da URL", () => {
   it("limita a busca a 100 caracteres", () => {
     const filters = parseTransactionFilters({ q: "a".repeat(150) });
     expect(filters.q).toHaveLength(100);
+  });
+
+  it("lê cartões e o switch de compras no cartão", () => {
+    const filters = parseTransactionFilters(
+      { cartoes: cartao1, compras: "1" },
+      "2026-11",
+    );
+    expect(filters.cartoes).toEqual([cartao1]);
+    expect(filters.comprasCartao).toBe(true);
+    expect(countActiveFilters(filters)).toBe(2);
+
+    const params = buildTransactionSearchParams(filters);
+    expect(params.get("cartoes")).toBe(cartao1);
+    expect(params.get("compras")).toBe("1");
   });
 });
 

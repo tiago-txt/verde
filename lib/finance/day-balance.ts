@@ -5,6 +5,8 @@ export type DayBalanceTransaction = {
   valor: number;
   data: string;
   cartaoId: string | null;
+  cartaoDestinoId?: string | null;
+  pago?: boolean;
   deletedAt?: Date | number | null;
 };
 
@@ -66,6 +68,15 @@ export function computeDayBalances(
     let delta = 0;
     if (transaction.tipo === "receita") delta = transaction.valor;
     else if (transaction.tipo === "despesa") delta = -transaction.valor;
+    else if (
+      transaction.tipo === "transferencia" &&
+      transaction.cartaoDestinoId &&
+      transaction.pago
+    ) {
+      // Pagamento efetivo de fatura sai do total das contas (o destino é o
+      // cartão, não outra conta).
+      delta = -transaction.valor;
+    }
 
     deltas.set(transaction.data, (deltas.get(transaction.data) ?? 0) + delta);
   }

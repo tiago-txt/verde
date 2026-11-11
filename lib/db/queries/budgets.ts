@@ -15,6 +15,7 @@ import {
   budgetOverrides,
   budgets,
   categories,
+  creditCards,
   transactions,
   type Budget,
 } from "@/lib/db/schema";
@@ -99,9 +100,19 @@ export type BudgetCategoryOption = BudgetCategoryInfo & {
 export type BudgetFormData = {
   categories: BudgetCategoryOption[];
   accounts: BudgetAccountOption[];
+  cards: BudgetCardOption[];
   defaultAccountId: string | null;
   currentCycle: string;
   activeBudgets: BudgetCategoryUsage[];
+};
+
+export type BudgetCardOption = {
+  id: string;
+  nome: string;
+  cor: string;
+  icone: string;
+  diaFechamento: number;
+  arquivado: boolean;
 };
 
 export type BudgetAccountOption = {
@@ -513,6 +524,8 @@ function emptyBudgetFilters(monthKey: string): TransactionFilters {
     q: null,
     dias: 10,
     detalhe: null,
+    cartoes: [],
+    comprasCartao: false,
   };
 }
 
@@ -657,6 +670,19 @@ export function getBudgetFormData(): BudgetFormData {
       blockedByBudgetId: blockedBy.get(category.id) ?? null,
     })),
     accounts: listBudgetAccounts(),
+    cards: getDb()
+      .select({
+        id: creditCards.id,
+        nome: creditCards.nome,
+        cor: creditCards.cor,
+        icone: creditCards.icone,
+        diaFechamento: creditCards.diaFechamento,
+        arquivado: creditCards.arquivado,
+      })
+      .from(creditCards)
+      .where(isNull(creditCards.deletedAt))
+      .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
+      .all(),
     defaultAccountId: getDefaultBudgetAccountId(),
     currentCycle: cycle,
     activeBudgets,

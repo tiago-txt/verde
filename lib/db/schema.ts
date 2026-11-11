@@ -40,6 +40,16 @@ export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 export const RECURRENCE_FREQUENCIES = ["mensal", "semanal", "anual"] as const;
 export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
 
+export const CARD_BRANDS = [
+  "visa",
+  "mastercard",
+  "elo",
+  "amex",
+  "hipercard",
+  "outra",
+] as const;
+export type CardBrand = (typeof CARD_BRANDS)[number];
+
 /** Campos copiados para cada lançamento gerado por uma recorrência. */
 export type RecurrenceTemplate = {
   tipo: TransactionType;
@@ -96,13 +106,16 @@ export const creditCards = sqliteTable(
       onDelete: "set null",
     }),
     cor: text("cor").notNull().default("#818cf8"),
+    icone: text("icone").notNull().default("CreditCard"),
     arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
   (table) => [
+    index("credit_cards_arquivado_idx").on(table.arquivado),
     check("credit_cards_fechamento_check", sql`${table.diaFechamento} between 1 and 31`),
     check("credit_cards_vencimento_check", sql`${table.diaVencimento} between 1 and 31`),
+    check("credit_cards_limite_check", sql`${table.limite} >= 0`),
   ],
 );
 
@@ -159,6 +172,12 @@ export const transactions = sqliteTable(
     contaDestinoId: text("conta_destino_id").references(() => accounts.id, {
       onDelete: "set null",
     }),
+    /** Destino de transferência que paga uma fatura de cartão. */
+    cartaoDestinoId: text("cartao_destino_id").references(() => creditCards.id, {
+      onDelete: "set null",
+    }),
+    /** Fatura paga por esta transferência (YYYY-MM do vencimento). */
+    faturaChave: text("fatura_chave"),
     categoriaId: text("categoria_id").references(() => categories.id, {
       onDelete: "set null",
     }),
@@ -177,6 +196,9 @@ export const transactions = sqliteTable(
     index("transactions_data_idx").on(table.data),
     index("transactions_conta_idx").on(table.contaId),
     index("transactions_cartao_idx").on(table.cartaoId),
+    index("transactions_cartao_data_idx").on(table.cartaoId, table.data),
+    index("transactions_cartao_destino_idx").on(table.cartaoDestinoId),
+    index("transactions_fatura_chave_idx").on(table.faturaChave),
     index("transactions_categoria_idx").on(table.categoriaId),
     index("transactions_recorrencia_idx").on(table.recorrenciaId),
     index("transactions_parcela_grupo_idx").on(table.parcelaGrupoId),

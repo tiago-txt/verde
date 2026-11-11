@@ -89,4 +89,39 @@ describe("saldo no dia", () => {
     expect(balances.get("2026-11-03")).toBe(150_000);
     expect(balances.get("2026-11-05")).toBe(160_000);
   });
+
+  it("pagamento de fatura pago reduz o total; não pago e compra no cartão não", () => {
+    const balances = computeDayBalances(
+      [{ saldoInicial: 100_000 }],
+      [
+        {
+          tipo: "despesa",
+          valor: 30_000,
+          data: "2026-11-01",
+          cartaoId: "card-1",
+        },
+        {
+          tipo: "transferencia",
+          valor: 20_000,
+          data: "2026-11-02",
+          cartaoId: null,
+          cartaoDestinoId: "card-1",
+          pago: true,
+        },
+        {
+          tipo: "transferencia",
+          valor: 10_000,
+          data: "2026-11-03",
+          cartaoId: null,
+          cartaoDestinoId: "card-1",
+          pago: false,
+        },
+      ],
+      ["2026-11-01", "2026-11-02", "2026-11-03"],
+    );
+
+    expect(balances.get("2026-11-01")).toBe(100_000);
+    expect(balances.get("2026-11-02")).toBe(80_000);
+    expect(balances.get("2026-11-03")).toBe(80_000);
+  });
 });

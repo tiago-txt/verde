@@ -7,6 +7,7 @@ import {
   type BalanceTransaction,
 } from "@/lib/finance/balance";
 import { getBudgetAccountDeltasForMonth } from "./budgets";
+import { getCardInvoiceAccountDeltas } from "./cards";
 
 export type AccountWithBalance = Account & {
   saldoAtual: number;
@@ -31,6 +32,8 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
       contaId: transactions.contaId,
       contaDestinoId: transactions.contaDestinoId,
       cartaoId: transactions.cartaoId,
+      cartaoDestinoId: transactions.cartaoDestinoId,
+      faturaChave: transactions.faturaChave,
       deletedAt: transactions.deletedAt,
     })
     .from(transactions)
@@ -51,6 +54,13 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
   // Provisões (−) e sobras (+) do mês corrente afetam apenas o previsto.
   const budgetDeltas = getBudgetAccountDeltasForMonth(currentMonth());
   for (const [accountId, delta] of budgetDeltas) {
+    previsto.set(accountId, (previsto.get(accountId) ?? 0) + delta);
+  }
+
+  // Faturas de cartão em aberto serão pagas pela conta de pagamento.
+  const cardDeltas = getCardInvoiceAccountDeltas();
+  for (const [accountId, delta] of cardDeltas) {
+    if (!previsto.has(accountId)) continue;
     previsto.set(accountId, (previsto.get(accountId) ?? 0) + delta);
   }
 

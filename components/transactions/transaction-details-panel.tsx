@@ -27,7 +27,8 @@ import { CategoryIcon } from "@/components/category-icon";
 import { FormError } from "@/components/form-feedback";
 import type { TransactionDetail } from "@/lib/db/queries/transactions";
 import type { RecurrenceFrequency } from "@/lib/db/schema";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { faturaDaCompra } from "@/lib/finance/cards";
+import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +108,17 @@ export function TransactionDetailsPanel({
 
   const detailId = detail.id;
   const isTransfer = detail.tipo === "transferencia";
+  const isCardPurchase = Boolean(detail.cartaoId);
+  const isInvoicePayment = Boolean(detail.cartaoDestinoId);
+  const cardInvoiceKey =
+    isCardPurchase &&
+    detail.cartaoDiaFechamento &&
+    detail.cartaoDiaVencimento
+      ? faturaDaCompra(detail.data, {
+          diaFechamento: detail.cartaoDiaFechamento,
+          diaVencimento: detail.cartaoDiaVencimento,
+        })
+      : null;
   const sign =
     detail.tipo === "receita" ? "+" : detail.tipo === "despesa" ? "−" : "";
   const valueColor = isTransfer
@@ -161,7 +173,9 @@ export function TransactionDetailsPanel({
           <div className="border-b border-border p-5 pr-12">
             <div className="flex flex-wrap items-center gap-2">
               <Badge variant={TYPE_BADGE[detail.tipo]}>
-                {TYPE_LABELS[detail.tipo]}
+                {isCardPurchase && detail.tipo === "receita"
+                  ? "Estorno/crédito"
+                  : TYPE_LABELS[detail.tipo]}
               </Badge>
               <span className="text-xs text-muted-foreground">
                 {formatDate(detail.data)}
@@ -170,9 +184,13 @@ export function TransactionDetailsPanel({
             <DialogHeader className="mt-2">
               <DialogTitle className="text-xl">{detail.descricao}</DialogTitle>
               <DialogDescription>
-                {isTransfer
-                  ? "Transferência entre contas"
-                  : detail.categoriaNome ?? "Outros"}
+                {isInvoicePayment
+                  ? "Pagamento de fatura"
+                  : isCardPurchase
+                    ? `Compra no cartão${cardInvoiceKey ? ` · fatura ${formatMonthShort(cardInvoiceKey)}` : ""}`
+                    : isTransfer
+                      ? "Transferência entre contas"
+                      : detail.categoriaNome ?? "Outros"}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -249,22 +267,50 @@ export function TransactionDetailsPanel({
 
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">
-                  {isTransfer ? "Contas" : "Conta"}
+                  {isTransfer ? "Contas" : isCardPurchase ? "Cartão" : "Conta"}
                 </dt>
                 <dd className="flex min-w-0 items-center gap-1.5">
-                  <AccountLine
-                    nome={detail.contaNome}
-                    icone={detail.contaIcone}
-                    cor={detail.contaCor}
-                  />
-                  {isTransfer && (
+                  {isCardPurchase ? (
                     <>
-                      <span aria-hidden="true">→</span>
                       <AccountLine
-                        nome={detail.contaDestinoNome}
-                        icone={detail.contaDestinoIcone}
-                        cor={detail.contaDestinoCor}
+                        nome={detail.cartaoNome}
+                        icone="CreditCard"
+                        cor={detail.cartaoCor}
                       />
+                      {cardInvoiceKey && (
+                        <span className="text-xs text-muted-foreground">
+                          · fatura {formatMonthShort(cardInvoiceKey)}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <AccountLine
+                        nome={detail.contaNome}
+                        icone={detail.contaIcone}
+                        cor={detail.contaCor}
+                      />
+                      {isInvoicePayment ? (
+                        <>
+                          <span aria-hidden="true">→</span>
+                          <AccountLine
+                            nome={detail.cartaoDestinoNome}
+                            icone="CreditCard"
+                            cor={detail.cartaoDestinoCor}
+                          />
+                        </>
+                      ) : (
+                        isTransfer && (
+                          <>
+                            <span aria-hidden="true">→</span>
+                            <AccountLine
+                              nome={detail.contaDestinoNome}
+                              icone={detail.contaDestinoIcone}
+                              cor={detail.contaDestinoCor}
+                            />
+                          </>
+                        )
+                      )}
                     </>
                   )}
                 </dd>
@@ -310,43 +356,57 @@ export function TransactionDetailsPanel({
 
           <div className="border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
             <DialogFooter className="flex-row flex-wrap items-center justify-between gap-2">
-              <Button
-                type="button"
-                variant={paid ? "outline" : "default"}
-                onClick={togglePaid}
-                disabled={isPending}
-                aria-pressed={paid}
-              >
-                {isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : paid ? (
-                  <CheckCircle2 className="h-4 w-4 text-success" />
-                ) : (
-                  <Circle className="h-4 w-4" />
-                )}
-                {paid ? "Marcar não pago" : "Marcar pago"}
-              </Button>
+              {isCardPurchase ? (
+                <p className="text-xs text-muted-foreground">
+                  Status derivado da fatura
+                  {cardInvoiceKey
+                    ? ` de ${formatMonthShort(cardInvoiceKey)}`
+                    : ""}
+                  .
+                </p>
+              ) : (
+                <Button
+                  type="button"
+                  variant={paid ? "outline" : "default"}
+                  onClick={togglePaid}
+                  disabled={isPending}
+                  aria-pressed={paid}
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : paid ? (
+                    <CheckCircle2 className="h-4 w-4 text-success" />
+                  ) : (
+                    <Circle className="h-4 w-4" />
+                  )}
+                  {paid ? "Marcar não pago" : "Marcar pago"}
+                </Button>
+              )}
 
               <div className="flex items-center gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => onEdit(detail)}
-                >
-                  <Pencil className="h-4 w-4" />
-                  Editar
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-11 w-11"
-                  aria-label="Duplicar lançamento"
-                  title="Duplicar"
-                  onClick={() => onDuplicate(detail)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
+                {!detail.faturaChave && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => onEdit(detail)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Editar
+                  </Button>
+                )}
+                {!detail.faturaChave && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11"
+                    aria-label="Duplicar lançamento"
+                    title="Duplicar"
+                    onClick={() => onDuplicate(detail)}
+                  >
+                    <Copy className="h-4 w-4" />
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="ghost"

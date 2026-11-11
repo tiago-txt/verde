@@ -1,0 +1,503 @@
+import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { getDb } from "@/lib/db";
+import {
+  accounts,
+  categories,
+  creditCards,
+  transactions,
+  type CreditCard,
+} from "@/lib/db/schema";
+import { todayISO } from "@/lib/dates";
+import { addDaysISO } from "@/lib/dates";
+import {
+  calcularLimiteUsado,
+  datasDaFatura,
+  faturaDaCompra,
+  faturaPassaFiltros,
+  limiteDisponivel,
+  montarResumoFatura,
+  type CardCycleConfig,
+  type CardInvoiceFilters,
+  type CardInvoiceSummary,
+} from "@/lib/finance/cards";
+
+export type CardAccountInfo = {
+  id: string;
+  nome: string;
+  cor: string;
+  icone: string;
+  arquivada: boolean;
+};
+
+export type CardWithInvoice = CreditCard & {
+  contaPagamentoNome: string | null;
+  currentInvoice: CardInvoiceSummary;
+  limiteUsado: number;
+  disponivel: number;
+  comprasCount: number;
+};
+
+export type CardOption = {
+  id: string;
+  nome: string;
+  bandeira: string;
+  cor: string;
+  icone: string;
+  arquivado: boolean;
+  diaFechamento: number;
+  diaVencimento: number;
+};
+
+export type CardPurchaseItem = {
+  id: string;
+  tipo: "despesa" | "receita";
+  descricao: string;
+  valor: number;
+  data: string;
+  pago: boolean;
+  categoriaId: string | null;
+  categoriaNome: string | null;
+  categoriaCor: string | null;
+  categoriaIcone: string | null;
+  parcelaAtual: number | null;
+  parcelaTotal: number | null;
+  observacao: string | null;
+};
+
+export type CardPaymentItem = {
+  id: string;
+  valor: number;
+  data: string;
+  pago: boolean;
+  contaId: string | null;
+  contaNome: string | null;
+  contaCor: string | null;
+  contaIcone: string | null;
+};
+
+export type CardInvoiceDetail = {
+  card: CreditCard & { contaPagamentoNome: string | null };
+  fatura: CardInvoiceSummary;
+  purchases: CardPurchaseItem[];
+  payments: CardPaymentItem[];
+  futureInvoices: CardInvoiceSummary[];
+  limiteUsado: number;
+  disponivel: number;
+  currentInvoiceChave: string;
+  contaPagamento: CardAccountInfo | null;
+};
+
+export type CardInvoiceEvent = {
+  id: string;
+  cartaoId: string;
+  cartaoNome: string;
+  cartaoCor: string;
+  cartaoIcone: string;
+  contaPagamentoId: string | null;
+  faturaChave: string;
+  inicio: string;
+  fechamento: string;
+  vencimento: string;
+  total: number;
+  pago: number;
+  restante: number;
+  status: CardInvoiceSummary["status"];
+  vencida: boolean;
+};
+
+type MovementRow = {
+  cartaoId: string | null;
+  tipo: "despesa" | "receita" | "transferencia";
+  valor: number;
+  data: string;
+};
+
+type PaymentRow = {
+  cartaoId: string | null;
+  valor: number;
+  pago: boolean;
+  faturaChave: string | null;
+  data: string;
+};
+
+function cardConfig(card: CreditCard): CardCycleConfig {
+  return {
+    diaFechamento: card.diaFechamento,
+    diaVencimento: card.diaVencimento,
+  };
+}
+
+function loadLedger(): { movements: MovementRow[]; payments: PaymentRow[] } {
+  const db = getDb();
+  const movements = db
+    .select({
+      cartaoId: transactions.cartaoId,
+      tipo: transactions.tipo,
+      valor: transactions.valor,
+      data: transactions.data,
+    })
+    .from(transactions)
+    .where(
+      and(isNull(transactions.deletedAt), isNotNull(transactions.cartaoId)),
+    )
+    .all();
+
+  const payments = db
+    .select({
+      cartaoId: transactions.cartaoDestinoId,
+      valor: transactions.valor,
+      pago: transactions.pago,
+      faturaChave: transactions.faturaChave,
+      data: transactions.data,
+    })
+    .from(transactions)
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        isNotNull(transactions.cartaoDestinoId),
+      ),
+    )
+    .all();
+
+  return { movements, payments };
+}
+
+function invoicesForCard(
+  card: CreditCard,
+  movements: MovementRow[],
+  payments: PaymentRow[],
+  hoje: string,
+): CardInvoiceSummary[] {
+  const config = cardConfig(card);
+  const buckets = new Map<string, { total: number; pago: number }>();
+
+  function bucket(key: string) {
+    const current = buckets.get(key) ?? { total: 0, pago: 0 };
+    buckets.set(key, current);
+    return current;
+  }
+
+  for (const movement of movements) {
+    if (movement.cartaoId !== card.id) continue;
+    if (movement.tipo === "transferencia") continue;
+    const key = faturaDaCompra(movement.data, config);
+    const target = bucket(key);
+    target.total +=
+      movement.tipo === "despesa" ? movement.valor : -movement.valor;
+  }
+
+  for (const payment of payments) {
+    if (payment.cartaoId !== card.id || !payment.faturaChave) continue;
+    if (payment.pago) bucket(payment.faturaChave).pago += payment.valor;
+    else bucket(payment.faturaChave);
+  }
+
+  return [...buckets.entries()]
+    .map(([chave, totals]) =>
+      montarResumoFatura(chave, config, totals.total, totals.pago, hoje),
+    )
+    .sort((a, b) => a.chave.localeCompare(b.chave));
+}
+
+function emptyInvoice(card: CreditCard, chave: string, hoje: string) {
+  return montarResumoFatura(chave, cardConfig(card), 0, 0, hoje);
+}
+
+export function listCards(): CardWithInvoice[] {
+  const db = getDb();
+  const hoje = todayISO();
+  const rows = db
+    .select({ card: creditCards, contaNome: accounts.nome })
+    .from(creditCards)
+    .leftJoin(accounts, eq(creditCards.contaPagamentoId, accounts.id))
+    .where(isNull(creditCards.deletedAt))
+    .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
+    .all();
+
+  if (rows.length === 0) return [];
+
+  const { movements, payments } = loadLedger();
+  const counts = db
+    .select({
+      cartaoId: transactions.cartaoId,
+      total: sql<number>`count(*)`,
+    })
+    .from(transactions)
+    .where(
+      and(isNull(transactions.deletedAt), isNotNull(transactions.cartaoId)),
+    )
+    .groupBy(transactions.cartaoId)
+    .all();
+  const countByCard = new Map(counts.map((row) => [row.cartaoId, row.total]));
+
+  return rows.map(({ card, contaNome }) => {
+    const invoices = invoicesForCard(card, movements, payments, hoje);
+    const currentKey = faturaDaCompra(hoje, cardConfig(card));
+    const currentInvoice =
+      invoices.find((invoice) => invoice.chave === currentKey) ??
+      emptyInvoice(card, currentKey, hoje);
+    const limiteUsado = calcularLimiteUsado(invoices);
+
+    return {
+      ...card,
+      contaPagamentoNome: contaNome,
+      currentInvoice,
+      limiteUsado,
+      disponivel: limiteDisponivel(card.limite, limiteUsado),
+      comprasCount: countByCard.get(card.id) ?? 0,
+    };
+  });
+}
+
+export function getCardById(id: string) {
+  return getDb()
+    .select()
+    .from(creditCards)
+    .where(and(eq(creditCards.id, id), isNull(creditCards.deletedAt)))
+    .get();
+}
+
+export function countCardTransactions(id: string): number {
+  const result = getDb()
+    .select({ total: sql<number>`count(*)` })
+    .from(transactions)
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        sql`(${transactions.cartaoId} = ${id} or ${transactions.cartaoDestinoId} = ${id})`,
+      ),
+    )
+    .get();
+
+  return result?.total ?? 0;
+}
+
+export function getCardInvoiceDetail(
+  cardId: string,
+  chave: string,
+): CardInvoiceDetail | null {
+  const db = getDb();
+  const card = db
+    .select({ card: creditCards, contaNome: accounts.nome })
+    .from(creditCards)
+    .leftJoin(accounts, eq(creditCards.contaPagamentoId, accounts.id))
+    .where(and(eq(creditCards.id, cardId), isNull(creditCards.deletedAt)))
+    .get();
+  if (!card) return null;
+
+  const hoje = todayISO();
+  const { movements, payments } = loadLedger();
+  const invoices = invoicesForCard(card.card, movements, payments, hoje);
+  const currentKey = faturaDaCompra(hoje, cardConfig(card.card));
+  const fatura =
+    invoices.find((invoice) => invoice.chave === chave) ??
+    emptyInvoice(card.card, chave, hoje);
+
+  const interval = datasDaFatura(chave, cardConfig(card.card));
+  const intervalEnd = addDaysISO(interval.fechamento, -1);
+  const purchaseRows = db
+    .select({
+      id: transactions.id,
+      tipo: transactions.tipo,
+      descricao: transactions.descricao,
+      valor: transactions.valor,
+      data: transactions.data,
+      pago: transactions.pago,
+      categoriaId: transactions.categoriaId,
+      categoriaNome: categories.nome,
+      categoriaCor: categories.cor,
+      categoriaIcone: categories.icone,
+      parcelaAtual: transactions.parcelaAtual,
+      parcelaTotal: transactions.parcelaTotal,
+      observacao: transactions.observacao,
+    })
+    .from(transactions)
+    .leftJoin(categories, eq(transactions.categoriaId, categories.id))
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        eq(transactions.cartaoId, card.card.id),
+        gte(transactions.data, interval.inicio),
+        lte(transactions.data, intervalEnd),
+      ),
+    )
+    .orderBy(asc(transactions.data), asc(transactions.createdAt))
+    .all();
+
+  const paymentRows = db
+    .select({
+      id: transactions.id,
+      valor: transactions.valor,
+      data: transactions.data,
+      pago: transactions.pago,
+      contaId: transactions.contaId,
+      contaNome: accounts.nome,
+      contaCor: accounts.cor,
+      contaIcone: accounts.icone,
+    })
+    .from(transactions)
+    .leftJoin(accounts, eq(transactions.contaId, accounts.id))
+    .where(
+      and(
+        isNull(transactions.deletedAt),
+        eq(transactions.cartaoDestinoId, card.card.id),
+        eq(transactions.faturaChave, chave),
+      ),
+    )
+    .orderBy(asc(transactions.data), asc(transactions.createdAt))
+    .all();
+
+  const used = calcularLimiteUsado(invoices);
+  const contaPagamento = card.card.contaPagamentoId
+    ? (db
+        .select({
+          id: accounts.id,
+          nome: accounts.nome,
+          cor: accounts.cor,
+          icone: accounts.icone,
+          arquivada: accounts.arquivada,
+        })
+        .from(accounts)
+        .where(eq(accounts.id, card.card.contaPagamentoId))
+        .get() ?? null)
+    : null;
+
+  return {
+    card: { ...card.card, contaPagamentoNome: card.contaNome },
+    fatura,
+    purchases: purchaseRows as CardPurchaseItem[],
+    payments: paymentRows,
+    futureInvoices: invoices.filter(
+      (invoice) => invoice.chave > chave && invoice.restante > 0,
+    ),
+    limiteUsado: used,
+    disponivel: limiteDisponivel(card.card.limite, used),
+    currentInvoiceChave: currentKey,
+    contaPagamento,
+  };
+}
+
+export function listCardInvoiceEventsForMonth(
+  monthKey: string,
+  filters: CardInvoiceFilters,
+): CardInvoiceEvent[] {
+  const db = getDb();
+  const hoje = todayISO();
+  const cards = db
+    .select()
+    .from(creditCards)
+    .where(isNull(creditCards.deletedAt))
+    .all();
+  if (cards.length === 0) return [];
+
+  const { movements, payments } = loadLedger();
+  const events: CardInvoiceEvent[] = [];
+
+  for (const card of cards) {
+    const invoices = invoicesForCard(card, movements, payments, hoje);
+    for (const fatura of invoices) {
+      if (!fatura.vencimento.startsWith(monthKey)) continue;
+      if (fatura.restante <= 0) continue;
+
+      const passes = faturaPassaFiltros(
+        {
+          restante: fatura.restante,
+          cartaoId: card.id,
+          cartaoNome: card.nome,
+          contaPagamentoId: card.contaPagamentoId,
+        },
+        filters,
+      );
+      if (!passes) continue;
+
+      events.push({
+        id: `${card.id}:${fatura.chave}`,
+        cartaoId: card.id,
+        cartaoNome: card.nome,
+        cartaoCor: card.cor,
+        cartaoIcone: card.icone,
+        contaPagamentoId: card.contaPagamentoId,
+        faturaChave: fatura.chave,
+        inicio: fatura.inicio,
+        fechamento: fatura.fechamento,
+        vencimento: fatura.vencimento,
+        total: fatura.total,
+        pago: fatura.pago,
+        restante: fatura.restante,
+        status: fatura.status,
+        vencida: fatura.vencida,
+      });
+    }
+  }
+
+  return events.sort(
+    (a, b) =>
+      a.vencimento.localeCompare(b.vencimento) ||
+      a.cartaoNome.localeCompare(b.cartaoNome),
+  );
+}
+
+const EMPTY_CARD_FILTERS: CardInvoiceFilters = {
+  tipo: null,
+  cartoes: [],
+  contas: [],
+  categorias: [],
+  tags: [],
+  status: "todos",
+  q: null,
+};
+
+/** Eventos de fatura para os saldos previstos (sem filtros da tela). */
+export function listCardInvoiceEventsForDayBalances(
+  monthKey: string,
+): CardInvoiceEvent[] {
+  return listCardInvoiceEventsForMonth(monthKey, EMPTY_CARD_FILTERS);
+}
+
+/** Deltas de previsto por conta de pagamento (todas as faturas em aberto). */
+export function getCardInvoiceAccountDeltas(): Map<string, number> {
+  const db = getDb();
+  const hoje = todayISO();
+  const cards = db
+    .select()
+    .from(creditCards)
+    .where(isNull(creditCards.deletedAt))
+    .all();
+  if (cards.length === 0) return new Map();
+
+  const { movements, payments } = loadLedger();
+  const deltas = new Map<string, number>();
+
+  for (const card of cards) {
+    if (!card.contaPagamentoId) continue;
+    const used = calcularLimiteUsado(
+      invoicesForCard(card, movements, payments, hoje),
+    );
+    if (used > 0) {
+      deltas.set(
+        card.contaPagamentoId,
+        (deltas.get(card.contaPagamentoId) ?? 0) - used,
+      );
+    }
+  }
+
+  return deltas;
+}
+
+export function listCardsForFilter(): CardOption[] {
+  return getDb()
+    .select({
+      id: creditCards.id,
+      nome: creditCards.nome,
+      bandeira: creditCards.bandeira,
+      cor: creditCards.cor,
+      icone: creditCards.icone,
+      arquivado: creditCards.arquivado,
+      diaFechamento: creditCards.diaFechamento,
+      diaVencimento: creditCards.diaVencimento,
+    })
+    .from(creditCards)
+    .where(isNull(creditCards.deletedAt))
+    .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
+    .all();
+}

@@ -8,7 +8,7 @@ import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type TransactionsSummaryFooterProps = {
-  summary: MonthSummaryWithBudgets;
+  summary: MonthSummaryWithBudgets & { faturasCartao?: number };
 };
 
 function Value({
@@ -87,7 +87,7 @@ export function TransactionsSummaryFooter({
           </div>
 
           {expanded && (
-            <div className="mt-3 grid grid-cols-3 gap-4 border-t border-border pt-3 lg:grid-cols-6">
+            <div className="mt-3 grid grid-cols-3 gap-4 border-t border-border pt-3 lg:grid-cols-7">
               <Value
                 label="Entradas"
                 value={summary.entradasPrevistas}
@@ -127,6 +127,12 @@ export function TransactionsSummaryFooter({
                 value={summary.sobrasOrcamento}
                 tone="text-success"
                 hint="no fechamento"
+              />
+              <Value
+                label="Faturas a pagar"
+                value={summary.faturasCartao ?? 0}
+                tone="text-warning"
+                hint="no vencimento"
               />
             </div>
           )}
@@ -184,7 +190,7 @@ export function TransactionsSummaryFooter({
                 <Value label="A pagar" value={aPagar} tone="text-warning" />
                 <Value label="A receber" value={aReceber} tone="text-success" />
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2">
                 <Value
                   label="Orçamentos a gastar"
                   value={summary.provisoesOrcamento}
@@ -194,6 +200,11 @@ export function TransactionsSummaryFooter({
                   label="Sobras previstas"
                   value={summary.sobrasOrcamento}
                   tone="text-success"
+                />
+                <Value
+                  label="Faturas a pagar"
+                  value={summary.faturasCartao ?? 0}
+                  tone="text-warning"
                 />
               </div>
             </div>

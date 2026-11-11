@@ -65,10 +65,14 @@ type AppShellProps = {
 
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
-  const pageTitle = PAGE_TITLES[pathname] ?? "Verde";
+  const pageTitle = pathname.startsWith("/cartoes/")
+    ? "Fatura do cartão"
+    : (PAGE_TITLES[pathname] ?? "Verde");
   const isTransactionsPage = pathname.startsWith("/lancamentos");
   const hideFloatingNew =
-    isTransactionsPage || pathname.startsWith("/limite-de-gastos");
+    isTransactionsPage ||
+    pathname.startsWith("/limite-de-gastos") ||
+    pathname.startsWith("/cartoes");
 
   return (
     <div className="min-h-dvh bg-background">

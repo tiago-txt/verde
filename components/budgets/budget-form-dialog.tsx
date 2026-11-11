@@ -106,6 +106,7 @@ export function BudgetFormDialog({
 }: BudgetFormDialogProps) {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [closingCardId, setClosingCardId] = useState("");
 
   const form = useForm<BudgetFormValues>({
     resolver: zodResolver(createBudgetSchema),
@@ -121,6 +122,7 @@ export function BudgetFormDialog({
     if (!open) return;
     setError(null);
     setSearch("");
+    setClosingCardId("");
     reset(defaultValues(budget, formData, ciclo));
   }, [open, budget, formData, ciclo, reset]);
 
@@ -231,6 +233,45 @@ export function BudgetFormDialog({
                 <FieldError message={formState.errors.diaFechamento?.message} />
               </div>
             </div>
+
+            {formData.cards.length > 0 && (
+              <div className="space-y-1">
+                <Label
+                  htmlFor="budget-cartao-fechamento"
+                  className="text-xs text-muted-foreground"
+                >
+                  Usar o fechamento do cartão
+                </Label>
+                <NativeSelect
+                  id="budget-cartao-fechamento"
+                  value={closingCardId}
+                  onChange={(event) => {
+                    const id = event.target.value;
+                    setClosingCardId(id);
+                    const card = formData.cards.find((item) => item.id === id);
+                    if (card) {
+                      form.setValue("diaFechamento", card.diaFechamento, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      });
+                    }
+                  }}
+                >
+                  <option value="">Não vincular</option>
+                  {formData.cards
+                    .filter((card) => !card.arquivado)
+                    .map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.nome} (fecha dia {card.diaFechamento})
+                      </option>
+                    ))}
+                </NativeSelect>
+                <p className="text-[11px] text-muted-foreground">
+                  Copia o dia de fechamento atual. Mudanças futuras no cartão não
+                  reescrevem ciclos passados deste orçamento.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-1">
               <Label

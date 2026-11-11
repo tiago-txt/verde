@@ -94,4 +94,20 @@ describe("cálculo de saldos", () => {
       computeAccountBalance(contaB, [transferencia], "previsto"),
     ).toBe(1_000);
   });
+
+  it("pagamento de fatura só reduz a conta quando pago", () => {
+    const pago = tx({
+      tipo: "transferencia",
+      valor: 20_000,
+      pago: true,
+      cartaoDestinoId: "card-1",
+      faturaChave: "2026-12",
+    });
+    const naoPago = { ...pago, pago: false };
+
+    expect(computeAccountBalance(contaA, [pago], "atual")).toBe(80_000);
+    expect(computeAccountBalance(contaA, [pago], "previsto")).toBe(80_000);
+    expect(computeAccountBalance(contaA, [naoPago], "atual")).toBe(100_000);
+    expect(computeAccountBalance(contaA, [naoPago], "previsto")).toBe(100_000);
+  });
 });

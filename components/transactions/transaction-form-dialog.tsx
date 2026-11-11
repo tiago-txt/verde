@@ -9,6 +9,7 @@ import {
   Check,
   ChevronDown,
   CopyPlus,
+  CreditCard,
   Loader2,
   Paperclip,
   Repeat,
@@ -58,8 +59,9 @@ import {
   buildInstallmentPlan,
   installmentTotal,
 } from "@/lib/finance/installments";
+import { datasDaFatura, faturaDaCompra } from "@/lib/finance/cards";
 import type { Scope } from "@/lib/finance/scopes";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
 import {
   createTransactionSchema,
@@ -98,6 +100,7 @@ function buildDefaults(
   transaction: TransactionListItem | null,
   formData: TransactionFormData,
   mode: "create" | "edit",
+  initialCartaoId?: string | null,
 ): TransactionFormValues {
   if (mode === "edit" && transaction) {
     return {
@@ -106,7 +109,8 @@ function buildDefaults(
       valor: transaction.valor,
       data: transaction.data,
       pago: transaction.pago,
-      contaId: transaction.contaId ?? "",
+      contaId: transaction.contaId,
+      cartaoId: transaction.cartaoId,
       contaDestinoId: transaction.contaDestinoId,
       categoriaId: transaction.categoriaId,
       tagIds: transaction.tags.map((tag) => tag.id),
@@ -119,6 +123,12 @@ function buildDefaults(
     };
   }
 
+  const lastCard = formData.cards.find(
+    (card) => card.id === formData.lastCardId && !card.arquivado,
+  );
+  const initialCard = formData.cards.find(
+    (card) => card.id === initialCartaoId && !card.arquivado,
+  );
   const lastAccount = formData.accounts.find(
     (account) => account.id === formData.lastAccountId && !account.arquivada,
   );
@@ -126,6 +136,7 @@ function buildDefaults(
     lastAccount ??
     formData.accounts.find((account) => !account.arquivada) ??
     formData.accounts[0];
+  const defaultCard = initialCard ?? lastCard ?? null;
 
   return {
     tipo: "despesa",
@@ -133,7 +144,8 @@ function buildDefaults(
     valor: 0,
     data: todayISO(),
     pago: true,
-    contaId: firstAccount?.id ?? "",
+    contaId: defaultCard ? null : (firstAccount?.id ?? null),
+    cartaoId: defaultCard?.id ?? null,
     contaDestinoId: null,
     categoriaId: null,
     tagIds: [],
@@ -237,6 +249,7 @@ type TransactionFormDialogProps = {
   transaction?: TransactionListItem | null;
   scope?: Scope;
   formData: TransactionFormData;
+  initialCartaoId?: string | null;
   onSaved: () => void;
   onRequestDelete?: (transaction: TransactionListItem) => void;
 };
@@ -248,6 +261,7 @@ export function TransactionFormDialog({
   transaction = null,
   scope = "single",
   formData,
+  initialCartaoId = null,
   onSaved,
   onRequestDelete,
 }: TransactionFormDialogProps) {
@@ -266,7 +280,7 @@ export function TransactionFormDialog({
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(createTransactionSchema),
-    defaultValues: buildDefaults(transaction, formData, mode),
+    defaultValues: buildDefaults(transaction, formData, mode, initialCartaoId),
   });
 
   const { register, control, handleSubmit, reset, watch, setValue, formState } =
@@ -280,6 +294,7 @@ export function TransactionFormDialog({
   const baseValor = watch("baseValor");
   const frequencia = watch("frequencia");
   const contaId = watch("contaId");
+  const cartaoId = watch("cartaoId");
   const categoriaId = watch("categoriaId");
   const tagIds = watch("tagIds");
   const observacao = watch("observacao");
@@ -287,6 +302,15 @@ export function TransactionFormDialog({
   const pago = watch("pago");
   // Lido no render para o react-hook-form assinar as mudanças de estado sujo.
   const isDirty = formState.isDirty;
+  const selectedCard =
+    formData.cards.find((card) => card.id === cartaoId) ?? null;
+  const isCard = Boolean(selectedCard) && tipo !== "transferencia";
+  const cardInvoiceKey = selectedCard
+    ? faturaDaCompra(data, selectedCard)
+    : null;
+  const cardInvoiceDates = selectedCard && cardInvoiceKey
+    ? datasDaFatura(cardInvoiceKey, selectedCard)
+    : null;
 
   const isGrouped = Boolean(
     transaction?.recorrenciaId || transaction?.parcelaGrupoId,
@@ -304,8 +328,8 @@ export function TransactionFormDialog({
     setConfirmCloseOpen(false);
     setDescriptionOpen(false);
     setAccountTouched(false);
-    reset(buildDefaults(transaction, formData, mode));
-  }, [open, transaction, formData, mode, reset]);
+    reset(buildDefaults(transaction, formData, mode, initialCartaoId));
+  }, [open, transaction, formData, mode, reset, initialCartaoId]);
 
   const categoryOptions = formData.categories.filter(
     (category) =>
@@ -397,9 +421,39 @@ export function TransactionFormDialog({
     setValue("tipo", next, { shouldValidate: true });
     setValue("categoriaId", null);
     setValue("contaDestinoId", null);
+    if (next === "transferencia") {
+      setValue("cartaoId", null);
+      setValue("pago", true);
+      if (!contaId) {
+        const account =
+          formData.accounts.find((item) => !item.arquivada) ??
+          formData.accounts[0];
+        setValue("contaId", account?.id ?? null);
+      }
+    }
     if (next === "transferencia" && repeticao === "parcelada") {
       setValue("repeticao", "nenhuma");
     }
+  }
+
+  function handleSourceChange(value: string) {
+    setAccountTouched(true);
+    if (value.startsWith("cartao:")) {
+      setValue("cartaoId", value.slice("cartao:".length) || null, {
+        shouldValidate: true,
+      });
+      setValue("contaId", null);
+      setValue("pago", false);
+      if (tipo === "transferencia") {
+        setValue("tipo", "despesa");
+      }
+      return;
+    }
+
+    setValue("cartaoId", null);
+    setValue("contaId", value.slice("conta:".length) || null, {
+      shouldValidate: true,
+    });
   }
 
   function toggleChip(chip: "repetir" | "obs" | "tags") {
@@ -472,7 +526,7 @@ export function TransactionFormDialog({
     }
 
     if (keepOpen) {
-      reset(buildDefaults(null, formData, "create"));
+      reset(buildDefaults(null, formData, "create", initialCartaoId));
       setActiveChip(null);
       setServerError(null);
       onSaved();
@@ -574,7 +628,9 @@ export function TransactionFormDialog({
               >
                 {(
                   ["despesa", "receita", "transferencia"] as TransactionType[]
-                ).map((type) => (
+                )
+                  .filter((type) => !(isCard && type === "transferencia"))
+                  .map((type) => (
                   <button
                     key={type}
                     type="button"
@@ -588,7 +644,9 @@ export function TransactionFormDialog({
                         : "text-muted-foreground hover:text-foreground",
                     )}
                   >
-                    {TYPE_LABELS[type]}
+                    {isCard && type === "receita"
+                      ? "Estorno/crédito"
+                      : TYPE_LABELS[type]}
                   </button>
                 ))}
               </div>
@@ -719,33 +777,35 @@ export function TransactionFormDialog({
                 <FieldError message={formState.errors.data?.message} />
               </div>
 
-              <div className="col-span-2 space-y-1 sm:col-span-2">
-                <FieldLabel htmlFor="transaction-pago">Pago</FieldLabel>
-                <div
-                  className="flex h-14 items-center justify-between gap-2 rounded-md border border-border px-3"
-                  title={
-                    paidLocked
-                      ? "O status é mantido ao editar vários lançamentos"
-                      : undefined
-                  }
-                >
-                  <span className="text-sm font-medium">
-                    {pago ? "Pago" : "Não pago"}
-                  </span>
-                  <Controller
-                    control={control}
-                    name="pago"
-                    render={({ field }) => (
-                      <Switch
-                        id="transaction-pago"
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                        disabled={paidLocked}
-                      />
-                    )}
-                  />
+              {!isCard && (
+                <div className="col-span-2 space-y-1 sm:col-span-2">
+                  <FieldLabel htmlFor="transaction-pago">Pago</FieldLabel>
+                  <div
+                    className="flex h-14 items-center justify-between gap-2 rounded-md border border-border px-3"
+                    title={
+                      paidLocked
+                        ? "O status é mantido ao editar vários lançamentos"
+                        : undefined
+                    }
+                  >
+                    <span className="text-sm font-medium">
+                      {pago ? "Pago" : "Não pago"}
+                    </span>
+                    <Controller
+                      control={control}
+                      name="pago"
+                      render={({ field }) => (
+                        <Switch
+                          id="transaction-pago"
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                          disabled={paidLocked}
+                        />
+                      )}
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {tipo === "transferencia" ? (
                 <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:col-span-6">
@@ -823,27 +883,78 @@ export function TransactionFormDialog({
               ) : (
                 <>
                   <div className="col-span-2 space-y-1 sm:col-span-3">
-                    <FieldLabel htmlFor="transaction-conta">Conta</FieldLabel>
+                    <FieldLabel htmlFor="transaction-conta">
+                      Conta/Cartão
+                    </FieldLabel>
                     <NativeSelect
                       id="transaction-conta"
-                      aria-invalid={Boolean(formState.errors.contaId)}
-                      {...register("contaId", {
-                        onChange: () => setAccountTouched(true),
-                      })}
+                      value={
+                        cartaoId
+                          ? `cartao:${cartaoId}`
+                          : contaId
+                            ? `conta:${contaId}`
+                            : ""
+                      }
+                      aria-invalid={Boolean(
+                        formState.errors.contaId || formState.errors.cartaoId,
+                      )}
+                      onChange={(event) => handleSourceChange(event.target.value)}
                     >
-                      {!hasAccounts && <option value="">Nenhuma conta</option>}
-                      {formData.accounts.map((account) => (
-                        <option
-                          key={account.id}
-                          value={account.id}
-                          disabled={account.arquivada && account.id !== contaId}
-                        >
-                          {account.nome}
-                          {account.arquivada ? " (arquivada)" : ""}
-                        </option>
-                      ))}
+                      {!hasAccounts &&
+                        formData.cards.filter((card) => !card.arquivado)
+                          .length === 0 && (
+                          <option value="">Nenhuma conta ou cartão</option>
+                        )}
+                      <optgroup label="Contas">
+                        {formData.accounts.map((account) => (
+                          <option
+                            key={account.id}
+                            value={`conta:${account.id}`}
+                            disabled={
+                              account.arquivada && account.id !== contaId
+                            }
+                          >
+                            {account.nome}
+                            {account.arquivada ? " (arquivada)" : ""}
+                          </option>
+                        ))}
+                      </optgroup>
+                      <optgroup label="Cartões">
+                        {formData.cards.map((card) => (
+                          <option
+                            key={card.id}
+                            value={`cartao:${card.id}`}
+                            disabled={
+                              card.arquivado && card.id !== cartaoId
+                            }
+                          >
+                            {card.nome}
+                            {card.arquivado ? " (arquivado)" : ""}
+                          </option>
+                        ))}
+                      </optgroup>
                     </NativeSelect>
                     <FieldError message={formState.errors.contaId?.message} />
+                    <FieldError message={formState.errors.cartaoId?.message} />
+
+                    {selectedCard && cardInvoiceKey && cardInvoiceDates && (
+                      <p className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                        <CreditCard
+                          className="h-3.5 w-3.5 shrink-0"
+                          style={{ color: selectedCard.cor }}
+                          aria-hidden="true"
+                        />
+                        <span>
+                          Fatura de {formatMonthTitle(cardInvoiceKey)} · vence{" "}
+                          {formatDate(cardInvoiceDates.vencimento).slice(0, 5)}
+                        </span>
+                        {tipo === "receita" && (
+                          <Badge variant="success" className="px-1.5 py-0 text-[10px]">
+                            Estorno/crédito
+                          </Badge>
+                        )}
+                      </p>
+                    )}
                   </div>
 
                   <div className="col-span-2 space-y-1 sm:col-span-3">

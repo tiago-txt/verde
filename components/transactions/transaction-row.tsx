@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Circle,
   Copy,
+  CreditCard,
   MoreHorizontal,
   Pencil,
   Repeat,
@@ -25,7 +26,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CategoryIcon } from "@/components/category-icon";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
-import { formatCurrency } from "@/lib/format";
+import { faturaDaCompra } from "@/lib/finance/cards";
+import { formatCurrency, formatMonthShort } from "@/lib/format";
 import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +85,17 @@ export function TransactionRow({
   const paid = transaction.pago;
 
   const isTransfer = transaction.tipo === "transferencia";
+  const isCardPurchase = Boolean(transaction.cartaoId);
+  const isInvoicePayment = Boolean(transaction.cartaoDestinoId);
+  const cardInvoiceKey =
+    isCardPurchase &&
+    transaction.cartaoDiaFechamento &&
+    transaction.cartaoDiaVencimento
+      ? faturaDaCompra(transaction.data, {
+          diaFechamento: transaction.cartaoDiaFechamento,
+          diaVencimento: transaction.cartaoDiaVencimento,
+        })
+      : null;
   const sign =
     transaction.tipo === "receita"
       ? "+"
@@ -140,7 +153,7 @@ export function TransactionRow({
         selected && "bg-primary/10",
       )}
     >
-      {selectionMode && (
+      {selectionMode && !isCardPurchase && (
         <Checkbox
           checked={selected}
           onCheckedChange={() => onToggleSelected?.(transaction.id)}
@@ -151,7 +164,21 @@ export function TransactionRow({
 
       {isTransfer ? (
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
-          <ArrowLeftRight className="h-5 w-5" aria-hidden="true" />
+          {isInvoicePayment ? (
+            <CreditCard className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <ArrowLeftRight className="h-5 w-5" aria-hidden="true" />
+          )}
+        </span>
+      ) : isCardPurchase ? (
+        <span
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+          style={{
+            backgroundColor: `${transaction.cartaoCor ?? "#818cf8"}22`,
+            color: transaction.cartaoCor ?? "#818cf8",
+          }}
+        >
+          <CreditCard className="h-5 w-5" aria-hidden="true" />
         </span>
       ) : (
         <CategoryIcon
@@ -190,6 +217,16 @@ export function TransactionRow({
               {transaction.parcelaAtual}/{transaction.parcelaTotal}
             </Badge>
           )}
+          {isCardPurchase && cardInvoiceKey && (
+            <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              Fatura {formatMonthShort(cardInvoiceKey)}
+            </Badge>
+          )}
+          {isCardPurchase && (
+            <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              Informativa
+            </Badge>
+          )}
           {transaction.observacao && (
             <StickyNote
               className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -215,11 +252,30 @@ export function TransactionRow({
                 cor={transaction.contaCor}
               />
               <span aria-hidden="true">→</span>
+              {isInvoicePayment ? (
+                <AccountBadge
+                  nome={transaction.cartaoDestinoNome}
+                  icone="CreditCard"
+                  cor={transaction.cartaoDestinoCor}
+                />
+              ) : (
+                <AccountBadge
+                  nome={transaction.contaDestinoNome}
+                  icone={transaction.contaDestinoIcone}
+                  cor={transaction.contaDestinoCor}
+                />
+              )}
+            </>
+          ) : isCardPurchase ? (
+            <>
               <AccountBadge
-                nome={transaction.contaDestinoNome}
-                icone={transaction.contaDestinoIcone}
-                cor={transaction.contaDestinoCor}
+                nome={transaction.cartaoNome}
+                icone="CreditCard"
+                cor={transaction.cartaoCor}
               />
+              {transaction.categoriaNome && (
+                <span className="truncate">· {transaction.categoriaNome}</span>
+              )}
             </>
           ) : (
             <>
@@ -241,7 +297,7 @@ export function TransactionRow({
           {sign}
           {formatCurrency(transaction.valor)}
         </span>
-        {!selectionMode && (
+        {!selectionMode && !isCardPurchase && (
           <button
             type="button"
             onClick={() => onTogglePaid(transaction, !paid)}
@@ -279,15 +335,19 @@ export function TransactionRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => onEdit(transaction)}>
-              <Pencil />
-              Editar
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => onDuplicate(transaction)}>
-              <Copy />
-              Duplicar
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
+            {!transaction.faturaChave && (
+              <DropdownMenuItem onSelect={() => onEdit(transaction)}>
+                <Pencil />
+                Editar
+              </DropdownMenuItem>
+            )}
+            {!transaction.faturaChave && (
+              <DropdownMenuItem onSelect={() => onDuplicate(transaction)}>
+                <Copy />
+                Duplicar
+              </DropdownMenuItem>
+            )}
+            {!transaction.faturaChave && <DropdownMenuSeparator />}
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onSelect={() => onDelete(transaction)}

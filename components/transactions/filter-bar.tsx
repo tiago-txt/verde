@@ -39,7 +39,14 @@ import { cn } from "@/lib/utils";
 type FilterPatch = Partial<
   Pick<
     TransactionFilters,
-    "tipo" | "contas" | "categorias" | "tags" | "status" | "q"
+    | "tipo"
+    | "contas"
+    | "cartoes"
+    | "categorias"
+    | "tags"
+    | "status"
+    | "q"
+    | "comprasCartao"
   >
 >;
 
@@ -166,6 +173,49 @@ function AccountFilter({
             <span className="min-w-0 flex-1 truncate">
               {account.nome}
               {account.arquivada ? " (arquivada)" : ""}
+            </span>
+          </label>
+        ))
+      )}
+    </div>
+  );
+}
+
+function CardFilter({
+  cards,
+  selected,
+  onChange,
+}: {
+  cards: TransactionFormData["cards"];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  return (
+    <div className="max-h-64 space-y-1 overflow-y-auto">
+      {cards.length === 0 ? (
+        <p className="px-2 py-3 text-sm text-muted-foreground">
+          Nenhum cartão cadastrado.
+        </p>
+      ) : (
+        cards.map((card) => (
+          <label
+            key={card.id}
+            htmlFor={`filter-card-${card.id}`}
+            className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-accent"
+          >
+            <Checkbox
+              id={`filter-card-${card.id}`}
+              checked={selected.includes(card.id)}
+              onCheckedChange={() => onChange(toggleId(selected, card.id))}
+            />
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: card.cor }}
+              aria-hidden="true"
+            />
+            <span className="min-w-0 flex-1 truncate">
+              {card.nome}
+              {card.arquivado ? " (arquivado)" : ""}
             </span>
           </label>
         ))
@@ -414,12 +464,32 @@ export function FilterBar({
       <div className="hidden flex-wrap items-center gap-2 sm:flex">
         <SearchFilter value={filters.q} onChange={(q) => onChange({ q })} />
 
-        <FilterButton label="Origem" count={filters.contas.length}>
-          <AccountFilter
-            accounts={options.accounts}
-            selected={filters.contas}
-            onChange={(contas) => onChange({ contas })}
-          />
+        <FilterButton
+          label="Origem"
+          count={filters.contas.length + filters.cartoes.length}
+        >
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+                Contas
+              </p>
+              <AccountFilter
+                accounts={options.accounts}
+                selected={filters.contas}
+                onChange={(contas) => onChange({ contas })}
+              />
+            </div>
+            <div className="space-y-1">
+              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+                Cartões
+              </p>
+              <CardFilter
+                cards={options.cards}
+                selected={filters.cartoes}
+                onChange={(cartoes) => onChange({ cartoes })}
+              />
+            </div>
+          </div>
         </FilterButton>
 
         <FilterButton label="Tipo" count={filters.tipo ? 1 : 0}>
@@ -471,6 +541,16 @@ export function FilterBar({
             Limpar filtros
           </Button>
         )}
+
+        <label className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm">
+          <Checkbox
+            checked={filters.comprasCartao}
+            onCheckedChange={(checked) =>
+              onChange({ comprasCartao: checked === true })
+            }
+          />
+          Mostrar compras no cartão
+        </label>
       </div>
 
       <div className="flex items-center gap-2 sm:hidden">
@@ -537,12 +617,33 @@ export function FilterBar({
 
             <div className="space-y-2">
               <Label>Origem</Label>
+              <p className="text-[11px] font-medium text-muted-foreground">
+                Contas
+              </p>
               <AccountFilter
                 accounts={options.accounts}
                 selected={filters.contas}
                 onChange={(contas) => onChange({ contas })}
               />
+              <p className="pt-1 text-[11px] font-medium text-muted-foreground">
+                Cartões
+              </p>
+              <CardFilter
+                cards={options.cards}
+                selected={filters.cartoes}
+                onChange={(cartoes) => onChange({ cartoes })}
+              />
             </div>
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={filters.comprasCartao}
+                onCheckedChange={(checked) =>
+                  onChange({ comprasCartao: checked === true })
+                }
+              />
+              Mostrar compras no cartão
+            </label>
 
             <div className="space-y-2">
               <Label>Tipo</Label>

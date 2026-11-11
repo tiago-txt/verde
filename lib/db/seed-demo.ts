@@ -3,6 +3,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import {
   accounts,
   categories,
+  creditCards,
   recurrences,
   tags,
   transactionTags,
@@ -13,6 +14,7 @@ import {
 } from "./schema";
 import * as schema from "./schema";
 import { addMonths, dateInMonth, todayISO } from "@/lib/dates";
+import { faturaDaCompra } from "@/lib/finance/cards";
 import { buildInstallmentPlan } from "@/lib/finance/installments";
 
 type DatabaseInstance = BetterSQLite3Database<typeof schema>;
@@ -116,6 +118,36 @@ export function seedDemoData(db: DatabaseInstance): void {
           saldoInicial: 15_000,
           cor: "#facc15",
           icone: "Wallet",
+        },
+      ])
+      .run();
+
+    const nuCardId = crypto.randomUUID();
+    const visaCardId = crypto.randomUUID();
+
+    tx.insert(creditCards)
+      .values([
+        {
+          id: nuCardId,
+          nome: "Nu (Demo)",
+          bandeira: "visa",
+          limite: 500_000,
+          diaFechamento: 10,
+          diaVencimento: 17,
+          contaPagamentoId: checkingId,
+          cor: "#a855f7",
+          icone: "CreditCard",
+        },
+        {
+          id: visaCardId,
+          nome: "Visa (Demo)",
+          bandeira: "visa",
+          limite: 300_000,
+          diaFechamento: 20,
+          diaVencimento: 5,
+          contaPagamentoId: checkingId,
+          cor: "#38bdf8",
+          icone: "CreditCard",
         },
       ])
       .run();
@@ -334,6 +366,93 @@ export function seedDemoData(db: DatabaseInstance): void {
           [variableTag],
         );
       }
+    }
+
+    if (marketCategory && leisureCategory && pharmacyCategory) {
+      // Compras no cartão Nu (demonstração).
+      insertDemoTransaction(tx, {
+        tipo: "despesa",
+        descricao: "Mercado no Nu (Demo)",
+        valor: 30_000,
+        data: dateInMonth(months[1] as string, 9),
+        pago: false,
+        cartaoId: nuCardId,
+        categoriaId: marketCategory,
+      });
+
+      insertDemoTransaction(tx, {
+        tipo: "despesa",
+        descricao: "Lazer no Nu (Demo)",
+        valor: 20_000,
+        data: dateInMonth(months[2] as string, 15),
+        pago: false,
+        cartaoId: nuCardId,
+        categoriaId: leisureCategory,
+      });
+
+      const phoneGroupId = crypto.randomUUID();
+      for (let index = 0; index < 3; index += 1) {
+        insertDemoTransaction(tx, {
+          tipo: "despesa",
+          descricao: "Fone parcelado (Demo)",
+          valor: 10_000,
+          data: `${addMonths(dateInMonth(months[1] as string, 12).slice(0, 7), index)}-12`,
+          pago: false,
+          cartaoId: nuCardId,
+          categoriaId: leisureCategory,
+          parcelaGrupoId: phoneGroupId,
+          parcelaAtual: index + 1,
+          parcelaTotal: 3,
+        });
+      }
+
+      // Pagamento de uma fatura anterior do Nu.
+      const paidInvoiceKey = faturaDaCompra(
+        dateInMonth(months[1] as string, 9),
+        { diaFechamento: 10, diaVencimento: 17 },
+      );
+      insertDemoTransaction(tx, {
+        tipo: "transferencia",
+        descricao: "Pagamento de fatura Nu (Demo)",
+        valor: 30_000,
+        data: dateInMonth(months[2] as string, 5),
+        pago: true,
+        contaId: checkingId,
+        cartaoDestinoId: nuCardId,
+        faturaChave: paidInvoiceKey,
+        observacao: "Pagamento de fatura de demonstração",
+      });
+
+      // Compras no cartão Visa (demonstração), com vencimento antes do fechamento.
+      insertDemoTransaction(tx, {
+        tipo: "despesa",
+        descricao: "Farmácia no Visa (Demo)",
+        valor: 12_000,
+        data: dateInMonth(months[0] as string, 25),
+        pago: false,
+        cartaoId: visaCardId,
+        categoriaId: pharmacyCategory,
+      });
+
+      insertDemoTransaction(tx, {
+        tipo: "despesa",
+        descricao: "Farmácia no Visa 2 (Demo)",
+        valor: 15_000,
+        data: dateInMonth(months[2] as string, 10),
+        pago: false,
+        cartaoId: visaCardId,
+        categoriaId: pharmacyCategory,
+      });
+
+      insertDemoTransaction(tx, {
+        tipo: "despesa",
+        descricao: "Cinema no Visa (Demo)",
+        valor: 5_000,
+        data: dateInMonth(months[2] as string, 25),
+        pago: false,
+        cartaoId: visaCardId,
+        categoriaId: leisureCategory,
+      });
     }
 
     for (const month of months) {

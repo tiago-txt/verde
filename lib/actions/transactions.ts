@@ -9,6 +9,7 @@ import { getDb } from "@/lib/db";
 import {
   accounts,
   categories,
+  creditCards,
   recurrences,
   tags,
   transactionTags,
@@ -46,6 +47,8 @@ function revalidateTransactions() {
   revalidatePath("/");
   revalidatePath("/lancamentos");
   revalidatePath("/contas");
+  // Inclui o detalhe de fatura (/cartoes/[id]) e a lista.
+  revalidatePath("/cartoes", "layout");
 }
 
 function normalizeObservation(value: string | null): string | null {
@@ -70,30 +73,38 @@ function replaceTags(tx: Tx, transactionId: string, tagIds: string[]) {
 
 type AllowedReferences = {
   contaIds?: Set<string>;
+  cartaoIds?: Set<string>;
   categoriaId?: string | null;
 };
 
 function validateReferences(
   data: Pick<
     TransactionFormValues,
-    "tipo" | "contaId" | "contaDestinoId" | "categoriaId" | "tagIds"
+    | "tipo"
+    | "contaId"
+    | "cartaoId"
+    | "contaDestinoId"
+    | "categoriaId"
+    | "tagIds"
   >,
   allowed?: AllowedReferences,
 ): string | null {
   const db = getDb();
 
-  const account = db
-    .select({ id: accounts.id, arquivada: accounts.arquivada })
-    .from(accounts)
-    .where(and(eq(accounts.id, data.contaId), isNull(accounts.deletedAt)))
-    .get();
-
-  if (!account) return "Conta não encontrada.";
-  if (account.arquivada && !allowed?.contaIds?.has(account.id)) {
-    return "A conta selecionada está arquivada.";
-  }
-
   if (data.tipo === "transferencia") {
+    if (!data.contaId) return "Escolha a conta de origem.";
+
+    const account = db
+      .select({ id: accounts.id, arquivada: accounts.arquivada })
+      .from(accounts)
+      .where(and(eq(accounts.id, data.contaId), isNull(accounts.deletedAt)))
+      .get();
+
+    if (!account) return "Conta não encontrada.";
+    if (account.arquivada && !allowed?.contaIds?.has(account.id)) {
+      return "A conta selecionada está arquivada.";
+    }
+
     if (!data.contaDestinoId) return "Escolha a conta de destino.";
     if (data.contaDestinoId === data.contaId) {
       return "A conta de destino deve ser diferente da origem.";
@@ -114,7 +125,41 @@ function validateReferences(
     if (destination.arquivada && !allowed?.contaIds?.has(destination.id)) {
       return "A conta de destino está arquivada.";
     }
-  } else if (data.categoriaId) {
+  } else if (data.cartaoId) {
+    const card = db
+      .select({ id: creditCards.id, arquivado: creditCards.arquivado })
+      .from(creditCards)
+      .where(
+        and(
+          eq(creditCards.id, data.cartaoId),
+          isNull(creditCards.deletedAt),
+        ),
+      )
+      .get();
+
+    if (!card) return "Cartão não encontrado.";
+    if (card.arquivado && !allowed?.cartaoIds?.has(card.id)) {
+      return "O cartão selecionado está arquivado.";
+    }
+    if (data.contaId) {
+      return "Escolha apenas conta ou cartão.";
+    }
+  } else if (data.contaId) {
+    const account = db
+      .select({ id: accounts.id, arquivada: accounts.arquivada })
+      .from(accounts)
+      .where(and(eq(accounts.id, data.contaId), isNull(accounts.deletedAt)))
+      .get();
+
+    if (!account) return "Conta não encontrada.";
+    if (account.arquivada && !allowed?.contaIds?.has(account.id)) {
+      return "A conta selecionada está arquivada.";
+    }
+  } else {
+    return "Escolha uma conta ou cartão.";
+  }
+
+  if (data.tipo !== "transferencia" && data.categoriaId) {
     const category = db
       .select({
         id: categories.id,
@@ -175,6 +220,10 @@ export async function createTransactionAction(
 
   const id = crypto.randomUUID();
   const observacao = normalizeObservation(data.observacao);
+  const isCard = Boolean(data.cartaoId) && data.tipo !== "transferencia";
+  const cartaoId = isCard ? data.cartaoId : null;
+  const contaId = isCard ? null : data.contaId;
+  const pago = isCard ? false : data.pago;
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
 
@@ -186,8 +235,8 @@ export async function createTransactionAction(
           tipo: data.tipo,
           descricao: data.descricao,
           valor: data.valor,
-          contaId: data.contaId,
-          cartaoId: null,
+          contaId,
+          cartaoId,
           contaDestinoId,
           categoriaId,
           observacao,
@@ -213,9 +262,9 @@ export async function createTransactionAction(
             descricao: data.descricao,
             valor: data.valor,
             data: data.data,
-            pago: data.pago,
-            contaId: data.contaId,
-            cartaoId: null,
+            pago,
+            contaId,
+            cartaoId,
             contaDestinoId,
             categoriaId,
             observacao,
@@ -242,9 +291,9 @@ export async function createTransactionAction(
               descricao: data.descricao,
               valor: item.valor,
               data: item.data,
-              pago: item.numero === 1 ? data.pago : false,
-              contaId: data.contaId,
-              cartaoId: null,
+              pago: isCard ? false : item.numero === 1 ? pago : false,
+              contaId,
+              cartaoId,
               contaDestinoId: null,
               categoriaId,
               observacao,
@@ -264,9 +313,9 @@ export async function createTransactionAction(
             descricao: data.descricao,
             valor: data.valor,
             data: data.data,
-            pago: data.pago,
-            contaId: data.contaId,
-            cartaoId: null,
+            pago,
+            contaId,
+            cartaoId,
             contaDestinoId,
             categoriaId,
             observacao,
@@ -328,6 +377,12 @@ export async function updateTransactionAction(
 
   if (!existing) return fail("Lançamento não encontrado.");
 
+  if (existing.faturaChave) {
+    return fail(
+      "Pagamentos de fatura não podem ser editados. Desfaça o pagamento e registre novamente.",
+    );
+  }
+
   const isFixed = Boolean(existing.recorrenciaId);
   const isInstallment = Boolean(existing.parcelaGrupoId);
   const isGrouped = isFixed || isInstallment;
@@ -361,12 +416,19 @@ export async function updateTransactionAction(
           (value): value is string => Boolean(value),
         ),
       ),
+      cartaoIds: new Set(
+        [existing.cartaoId].filter((value): value is string => Boolean(value)),
+      ),
       categoriaId: existing.categoriaId,
     },
   );
   if (referenceError) return fail(referenceError);
 
   const observacao = normalizeObservation(data.observacao);
+  const isCard = Boolean(data.cartaoId) && data.tipo !== "transferencia";
+  const cartaoId = isCard ? data.cartaoId : null;
+  const contaId = isCard ? null : data.contaId;
+  const pago = isCard ? false : data.pago;
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
 
@@ -374,7 +436,8 @@ export async function updateTransactionAction(
     tipo: data.tipo,
     descricao: data.descricao,
     valor: data.valor,
-    contaId: data.contaId,
+    contaId,
+    cartaoId,
     contaDestinoId,
     categoriaId,
     observacao,
@@ -385,13 +448,13 @@ export async function updateTransactionAction(
   const updateValuesWithDate = {
     ...updateValues,
     data: data.data,
-    pago: data.pago,
+    pago,
   };
   // Ao editar vários lançamentos, preservamos o status de pagamento de cada
   // ocorrência (o usuário pode marcar pago individualmente ou em lote depois).
   const groupedUpdateValues =
     data.scope === "single"
-      ? { ...updateValues, pago: data.pago }
+      ? { ...updateValues, pago: isCard ? false : data.pago }
       : updateValues;
 
   try {
@@ -452,8 +515,8 @@ export async function updateTransactionAction(
               tipo: data.tipo,
               descricao: data.descricao,
               valor: data.valor,
-              contaId: data.contaId,
-              cartaoId: null,
+              contaId,
+              cartaoId,
               contaDestinoId,
               categoriaId,
               observacao,
@@ -670,6 +733,10 @@ export async function duplicateTransactionAction(
 
   if (!existing) return fail("Lançamento não encontrado.");
 
+  if (existing.faturaChave) {
+    return fail("Pagamentos de fatura não podem ser duplicados.");
+  }
+
   const tagRows = db
     .select({ tagId: transactionTags.tagId })
     .from(transactionTags)
@@ -739,6 +806,27 @@ export async function setTransactionPaidAction(input: {
     .safeParse(input);
   if (!parsed.success) return fail("Lançamento inválido.");
 
+  const existing = getDb()
+    .select({
+      id: transactions.id,
+      cartaoId: transactions.cartaoId,
+    })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.id, parsed.data.id),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .get();
+
+  if (!existing) return fail("Lançamento não encontrado.");
+  if (existing.cartaoId) {
+    return fail(
+      "O status de compras no cartão é derivado da fatura e não pode ser alterado manualmente.",
+    );
+  }
+
   const result = getDb()
     .update(transactions)
     .set({ pago: parsed.data.pago, updatedAt: new Date() })
@@ -776,6 +864,7 @@ export async function bulkSetPaidAction(input: {
       and(
         inArray(transactions.id, parsed.data.ids),
         isNull(transactions.deletedAt),
+        isNull(transactions.cartaoId),
       ),
     )
     .run();
