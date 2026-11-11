@@ -5,16 +5,17 @@ import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  ArrowLeftRight,
-  CalendarClock,
+  ArrowRight,
+  Check,
   ChevronDown,
   CopyPlus,
   Loader2,
   Paperclip,
   Repeat,
-  SlidersHorizontal,
+  StickyNote,
   Tags as TagsIcon,
   Trash2,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,7 +33,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { CategoryPicker } from "./category-picker";
+import { CategorySelect } from "./category-select";
 import { CurrencyInput } from "@/components/currency-input";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { FieldError, FormError } from "@/components/form-feedback";
@@ -52,7 +53,8 @@ import {
   installmentTotal,
 } from "@/lib/finance/installments";
 import type { Scope } from "@/lib/finance/scopes";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency } from "@/lib/format";
+import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
 import {
   createTransactionSchema,
   type TransactionFormValues,
@@ -138,6 +140,90 @@ function buildDefaults(
   };
 }
 
+function FieldLabel({
+  htmlFor,
+  children,
+}: {
+  htmlFor?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Label
+      htmlFor={htmlFor}
+      className="text-xs font-medium text-muted-foreground"
+    >
+      {children}
+    </Label>
+  );
+}
+
+function AdvancedChip({
+  icon: Icon,
+  label,
+  active,
+  open,
+  onClick,
+  disabled,
+  title,
+  dot,
+}: {
+  icon: LucideIcon;
+  label: string;
+  active?: boolean;
+  open?: boolean;
+  onClick?: () => void;
+  disabled?: boolean;
+  title?: string;
+  dot?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-expanded={disabled ? undefined : open}
+      aria-label={title ?? label}
+      title={title}
+      className={cn(
+        "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8",
+        active
+          ? "border-primary/40 bg-primary/10 text-primary"
+          : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+        disabled && "cursor-not-allowed opacity-45 hover:bg-transparent",
+      )}
+    >
+      <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+      <span className="max-w-[170px] truncate">{label}</span>
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+    </button>
+  );
+}
+
+function Accordion({
+  open,
+  children,
+}: {
+  open: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className="grid transition-[grid-template-rows] duration-200 ease-out"
+      style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      aria-hidden={!open}
+    >
+      <div className="overflow-hidden">
+        <div
+          className="mt-2 rounded-lg border border-border bg-muted/20 p-3"
+          inert={!open}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type TransactionFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -160,11 +246,15 @@ export function TransactionFormDialog({
   onRequestDelete,
 }: TransactionFormDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
-  const [advancedOpen, setAdvancedOpen] = useState(false);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [accountTouched, setAccountTouched] = useState(false);
+  const [activeChip, setActiveChip] = useState<
+    "repetir" | "obs" | "tags" | null
+  >(null);
   const skipConfirmRef = useRef(false);
+
+  useSheetViewport(open);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(createTransactionSchema),
@@ -186,6 +276,9 @@ export function TransactionFormDialog({
   const tagIds = watch("tagIds");
   const observacao = watch("observacao");
   const descricao = watch("descricao");
+  const pago = watch("pago");
+  // Lido no render para o react-hook-form assinar as mudanças de estado sujo.
+  const isDirty = formState.isDirty;
 
   const isGrouped = Boolean(
     transaction?.recorrenciaId || transaction?.parcelaGrupoId,
@@ -199,7 +292,7 @@ export function TransactionFormDialog({
     if (!open) return;
     skipConfirmRef.current = false;
     setServerError(null);
-    setAdvancedOpen(false);
+    setActiveChip(null);
     setConfirmCloseOpen(false);
     setDescriptionOpen(false);
     setAccountTouched(false);
@@ -230,7 +323,6 @@ export function TransactionFormDialog({
         baseValor,
       });
       return {
-        plan,
         total: installmentTotal(plan),
         first: plan[0]?.valor ?? 0,
         rest: plan[1]?.valor ?? plan[0]?.valor ?? 0,
@@ -240,24 +332,19 @@ export function TransactionFormDialog({
     }
   }, [repeticao, valor, parcelas, data, baseValor]);
 
-  const advancedCount =
-    (repeticao !== "nenhuma" ? 1 : 0) +
-    (tagIds.length > 0 ? 1 : 0) +
-    (observacao?.trim() ? 1 : 0);
+  const obsHasValue = Boolean(observacao?.trim());
+  const tagsHasValue = tagIds.length > 0;
 
-  const advancedSummary: string[] = [];
-  if (repeticao === "fixa") {
-    advancedSummary.push(`Fixa · ${frequencia}`);
-  }
-  if (repeticao === "parcelada") {
-    advancedSummary.push(`Parcela 1/${parcelas || "?"}`);
-  }
-  if (tagIds.length > 0) {
-    advancedSummary.push(`${tagIds.length} tag(s)`);
-  }
-  if (observacao?.trim()) {
-    advancedSummary.push("Com observação");
-  }
+  const repetitionChipLabel =
+    mode === "edit"
+      ? isInstallment
+        ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
+        : "Recorrente"
+      : repeticao === "fixa"
+        ? `Fixa · ${frequencia}`
+        : repeticao === "parcelada"
+          ? `Parcela 1/${parcelas || "?"}`
+          : "Repetir";
 
   function handleTypeChange(next: TransactionType) {
     setValue("tipo", next, { shouldValidate: true });
@@ -268,6 +355,10 @@ export function TransactionFormDialog({
     }
   }
 
+  function toggleChip(chip: "repetir" | "obs" | "tags") {
+    setActiveChip((current) => (current === chip ? null : chip));
+  }
+
   function applySuggestion(suggestion: RecentDescription) {
     setValue("descricao", suggestion.descricao, {
       shouldDirty: true,
@@ -276,8 +367,7 @@ export function TransactionFormDialog({
 
     if (!categoriaId && suggestion.categoriaId) {
       const category = formData.categories.find(
-        (item) =>
-          item.id === suggestion.categoriaId && !item.deletedAt,
+        (item) => item.id === suggestion.categoriaId && !item.deletedAt,
       );
       if (category) {
         setValue("categoriaId", category.id, { shouldValidate: true });
@@ -329,7 +419,7 @@ export function TransactionFormDialog({
 
     if (keepOpen) {
       reset(buildDefaults(null, formData, "create"));
-      setAdvancedOpen(false);
+      setActiveChip(null);
       setServerError(null);
       onSaved();
       requestAnimationFrame(() => {
@@ -358,7 +448,7 @@ export function TransactionFormDialog({
       return;
     }
 
-    if (formState.isDirty && !formState.isSubmitting) {
+    if (isDirty && !formState.isSubmitting) {
       setConfirmCloseOpen(true);
       return;
     }
@@ -366,65 +456,67 @@ export function TransactionFormDialog({
     onOpenChange(false);
   }
 
+  function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      event.preventDefault();
+      if (mode === "create") void onSubmitAndNew();
+      else void onSubmit();
+      return;
+    }
+
+    if (event.key !== "Enter" || event.shiftKey || event.defaultPrevented) {
+      return;
+    }
+
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.tagName === "TEXTAREA") return;
+    if (
+      target.tagName === "BUTTON" ||
+      target.tagName === "A" ||
+      target.getAttribute("role") === "button"
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+    void onSubmit();
+  }
+
   const hasAccounts = formData.accounts.length > 0;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-h-[92dvh] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-2xl"
+        className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-[700px]"
         showClose
       >
         <form
           onSubmit={onSubmit}
-          className="flex max-h-[92dvh] flex-col sm:max-h-[90dvh]"
+          onKeyDown={handleFormKeyDown}
+          className="flex max-h-[var(--verde-sheet-max-h,92dvh)] flex-col sm:max-h-[90dvh]"
         >
-          <div className="border-b border-border p-5 pr-12 sm:p-6 sm:pr-14">
-            <DialogHeader>
-              <DialogTitle>
-                {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
-              </DialogTitle>
-              <DialogDescription>
-                {mode === "edit"
-                  ? "Ajuste os dados do lançamento."
-                  : "Registre uma despesa, receita ou transferência em poucos passos."}
-              </DialogDescription>
-            </DialogHeader>
+          <div className="flex justify-center pt-2 sm:hidden">
+            <span className="h-1 w-10 rounded-full bg-border" />
           </div>
 
-          <div className="flex-1 space-y-5 overflow-y-auto p-5 sm:p-6">
-            <FormError message={serverError} />
-
-            {!hasAccounts && (
-              <div className="rounded-lg border border-warning/30 bg-warning/10 p-3 text-sm text-warning">
-                Você precisa de pelo menos uma conta.{" "}
-                <Link href="/contas" className="font-medium underline">
-                  Cadastrar conta
-                </Link>
-                .
-              </div>
-            )}
-
-            {mode === "edit" && isGrouped && (
-              <div className="rounded-lg border border-primary/25 bg-primary/10 p-3 text-sm">
-                <p className="flex items-center gap-2 font-medium text-primary">
-                  <Repeat className="h-4 w-4" />
-                  {isInstallment
-                    ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
-                    : "Lançamento recorrente"}
+          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 pr-12 sm:flex-nowrap sm:gap-3 sm:px-5 sm:py-3">
+            <DialogHeader className="min-w-0 flex-1">
+              <DialogTitle className="text-base sm:text-lg">
+                {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
+              </DialogTitle>
+              {mode === "edit" && isGrouped && (
+                <p className="text-xs text-muted-foreground">
+                  Escopo: {SCOPE_LABELS[scope]}
                 </p>
-                <p className="mt-1 text-muted-foreground">
-                  Editando{" "}
-                  <strong className="text-foreground">{SCOPE_LABELS[scope]}</strong>.
-                  Data, tipo e status de pagamento ficam preservados.
-                </p>
-              </div>
-            )}
+              )}
+            </DialogHeader>
 
             {canChangeType ? (
               <div
                 role="tablist"
                 aria-label="Tipo de lançamento"
-                className="grid grid-cols-3 gap-1 rounded-lg bg-muted p-1"
+                className="order-3 flex w-full gap-0.5 rounded-md bg-muted p-0.5 sm:order-2 sm:w-auto"
               >
                 {(
                   ["despesa", "receita", "transferencia"] as TransactionType[]
@@ -436,7 +528,7 @@ export function TransactionFormDialog({
                     aria-selected={tipo === type}
                     onClick={() => handleTypeChange(type)}
                     className={cn(
-                      "min-h-11 rounded-md px-2 text-sm font-medium transition-colors",
+                      "h-10 flex-1 rounded px-2 text-xs font-medium transition-colors sm:h-8 sm:flex-none sm:px-3",
                       tipo === type
                         ? "bg-card text-foreground shadow-sm"
                         : "text-muted-foreground hover:text-foreground",
@@ -447,77 +539,97 @@ export function TransactionFormDialog({
                 ))}
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <Badge variant={TYPE_BADGE[tipo]}>{TYPE_LABELS[tipo]}</Badge>
-                <span className="text-xs text-muted-foreground">
-                  tipo não editável
-                </span>
+              <Badge
+                variant={TYPE_BADGE[tipo]}
+                className="order-3 sm:order-2"
+              >
+                {TYPE_LABELS[tipo]}
+              </Badge>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+            <FormError message={serverError} />
+
+            {!hasAccounts && (
+              <div className="mb-3 rounded-md border border-warning/30 bg-warning/10 p-2 text-xs text-warning">
+                Cadastre uma conta antes de lançar.{" "}
+                <Link href="/contas" className="font-medium underline">
+                  Criar conta
+                </Link>
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label htmlFor="transaction-descricao">Descrição</Label>
-              <div className="relative">
-                <Input
-                  id="transaction-descricao"
-                  placeholder={
-                    tipo === "transferencia"
-                      ? "Ex.: Transferência para poupança"
-                      : "Ex.: Mercado do mês"
-                  }
-                  autoComplete="off"
-                  aria-invalid={Boolean(formState.errors.descricao)}
-                  onFocus={() => setDescriptionOpen(true)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      if (descriptionOpen && suggestions[0]) {
-                        applySuggestion(suggestions[0]);
-                      } else {
-                        void onSubmit();
-                      }
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
+              <div className="col-span-2 space-y-1 sm:col-span-6">
+                <FieldLabel htmlFor="transaction-descricao">
+                  Descrição
+                </FieldLabel>
+                <div className="relative">
+                  <Input
+                    id="transaction-descricao"
+                    placeholder={
+                      tipo === "transferencia"
+                        ? "Transferência para poupança"
+                        : "Ex.: Mercado do mês"
                     }
-                  }}
-                  {...register("descricao", {
-                    onBlur: () =>
-                      window.setTimeout(() => setDescriptionOpen(false), 150),
-                  })}
-                />
+                    autoComplete="off"
+                    aria-invalid={Boolean(formState.errors.descricao)}
+                    onFocus={() => setDescriptionOpen(true)}
+                    onKeyDown={(event) => {
+                      if (
+                        event.key === "Enter" &&
+                        !event.ctrlKey &&
+                        !event.metaKey &&
+                        descriptionOpen &&
+                        suggestions[0]
+                      ) {
+                        event.preventDefault();
+                        applySuggestion(suggestions[0]);
+                      }
+                    }}
+                    {...register("descricao", {
+                      onBlur: () =>
+                        window.setTimeout(
+                          () => setDescriptionOpen(false),
+                          150,
+                        ),
+                    })}
+                  />
 
-                {descriptionOpen && suggestions.length > 0 && (
-                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-                    {suggestions.map((suggestion) => (
-                      <button
-                        key={`${suggestion.descricao}-${suggestion.valor}`}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => applySuggestion(suggestion)}
-                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
-                      >
-                        <span className="min-w-0 flex-1 truncate">
-                          {suggestion.descricao}
-                          {suggestion.categoriaNome && (
-                            <span className="ml-2 text-xs text-muted-foreground">
-                              {suggestion.categoriaNome}
-                            </span>
-                          )}
-                        </span>
-                        <span className="tabular text-xs text-muted-foreground">
-                          {formatCurrency(suggestion.valor)}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                  {descriptionOpen && suggestions.length > 0 && (
+                    <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                      {suggestions.map((suggestion) => (
+                        <button
+                          key={`${suggestion.descricao}-${suggestion.valor}`}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => applySuggestion(suggestion)}
+                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                        >
+                          <span className="min-w-0 flex-1 truncate">
+                            {suggestion.descricao}
+                            {suggestion.categoriaNome && (
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {suggestion.categoriaNome}
+                              </span>
+                            )}
+                          </span>
+                          <span className="tabular text-xs text-muted-foreground">
+                            {formatCurrency(suggestion.valor)}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <FieldError message={formState.errors.descricao?.message} />
               </div>
-              <FieldError message={formState.errors.descricao?.message} />
-            </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="transaction-valor">
+              <div className="col-span-1 space-y-1 sm:col-span-2">
+                <FieldLabel htmlFor="transaction-valor">
                   {isInstallment ? "Valor da parcela" : "Valor"}
-                </Label>
+                </FieldLabel>
                 <Controller
                   control={control}
                   name="valor"
@@ -529,23 +641,14 @@ export function TransactionFormDialog({
                       large
                       autoFocus
                       aria-invalid={Boolean(formState.errors.valor)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter") {
-                          event.preventDefault();
-                          void onSubmit();
-                        }
-                      }}
                     />
                   )}
                 />
                 <FieldError message={formState.errors.valor?.message} />
-                <p className="text-xs text-muted-foreground">
-                  Digite os centavos: 123456 = R$ 1.234,56
-                </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="transaction-data">Data</Label>
+              <div className="col-span-1 space-y-1 sm:col-span-2">
+                <FieldLabel htmlFor="transaction-data">Data</FieldLabel>
                 <Controller
                   control={control}
                   name="data"
@@ -560,261 +663,289 @@ export function TransactionFormDialog({
                   )}
                 />
                 <FieldError message={formState.errors.data?.message} />
-                {!canChangeDate && (
-                  <p className="text-xs text-muted-foreground">
-                    Data bloqueada ao editar vários lançamentos.
-                  </p>
-                )}
               </div>
-            </div>
 
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
-              <div>
-                <Label htmlFor="transaction-pago">Lançamento pago</Label>
-                <p className="text-xs text-muted-foreground">
-                  {paidLocked
-                    ? "O status é mantido ao editar vários lançamentos."
-                    : repeticao === "fixa"
-                      ? "Aplica-se à primeira ocorrência; as próximas ficam não pagas."
-                      : repeticao === "parcelada"
-                        ? "Aplica-se à primeira parcela; as demais ficam não pagas."
-                        : "Marque se o dinheiro já entrou ou saiu."}
-                </p>
-              </div>
-              <Controller
-                control={control}
-                name="pago"
-                render={({ field }) => (
-                  <Switch
-                    id="transaction-pago"
-                    checked={field.value}
-                    onCheckedChange={field.onChange}
-                    disabled={paidLocked}
-                  />
-                )}
-              />
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="transaction-conta">
-                  {tipo === "transferencia" ? "Conta de origem" : "Conta"}
-                </Label>
-                <NativeSelect
-                  id="transaction-conta"
-                  aria-invalid={Boolean(formState.errors.contaId)}
-                  {...register("contaId", {
-                    onChange: () => setAccountTouched(true),
-                  })}
+              <div className="col-span-2 space-y-1 sm:col-span-2">
+                <FieldLabel htmlFor="transaction-pago">Pago</FieldLabel>
+                <div
+                  className="flex h-14 items-center justify-between gap-2 rounded-md border border-border px-3"
+                  title={
+                    paidLocked
+                      ? "O status é mantido ao editar vários lançamentos"
+                      : undefined
+                  }
                 >
-                  {!hasAccounts && <option value="">Nenhuma conta</option>}
-                  {formData.accounts.map((account) => (
-                    <option
-                      key={account.id}
-                      value={account.id}
-                      disabled={account.arquivada && account.id !== contaId}
-                    >
-                      {account.nome}
-                      {account.arquivada ? " (arquivada)" : ""}
-                    </option>
-                  ))}
-                </NativeSelect>
-                <FieldError message={formState.errors.contaId?.message} />
-              </div>
-
-              {tipo === "transferencia" && (
-                <div className="space-y-2">
-                  <Label htmlFor="transaction-destino">Conta de destino</Label>
+                  <span className="text-sm font-medium">
+                    {pago ? "Pago" : "Não pago"}
+                  </span>
                   <Controller
                     control={control}
-                    name="contaDestinoId"
+                    name="pago"
                     render={({ field }) => (
-                      <NativeSelect
-                        id="transaction-destino"
-                        value={field.value ?? ""}
-                        onChange={(event) =>
-                          field.onChange(event.target.value || null)
-                        }
-                        aria-invalid={Boolean(
-                          formState.errors.contaDestinoId,
-                        )}
-                      >
-                        <option value="">Selecione</option>
-                        {formData.accounts
-                          .filter((account) => account.id !== contaId)
-                          .map((account) => (
-                            <option
-                              key={account.id}
-                              value={account.id}
-                              disabled={
-                                account.arquivada &&
-                                account.id !== field.value
-                              }
-                            >
-                              {account.nome}
-                              {account.arquivada ? " (arquivada)" : ""}
-                            </option>
-                          ))}
-                      </NativeSelect>
+                      <Switch
+                        id="transaction-pago"
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        disabled={paidLocked}
+                      />
                     )}
                   />
-                  <FieldError
-                    message={formState.errors.contaDestinoId?.message}
-                  />
                 </div>
-              )}
-            </div>
-
-            {tipo !== "transferencia" && (
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Controller
-                  control={control}
-                  name="categoriaId"
-                  render={({ field }) => (
-                    <CategoryPicker
-                      options={categoryOptions}
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={formState.isSubmitting}
-                    />
-                  )}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Sem categoria, o lançamento usa{" "}
-                  <strong className="text-foreground">Outros</strong> do tipo{" "}
-                  {tipo === "receita" ? "receita" : "despesa"}.
-                </p>
-                <FieldError message={formState.errors.categoriaId?.message} />
               </div>
-            )}
 
-            <div className="space-y-3">
-              <button
-                type="button"
-                onClick={() => setAdvancedOpen((current) => !current)}
-                aria-expanded={advancedOpen}
-                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-border px-3 text-sm font-medium transition-colors hover:bg-accent"
-              >
-                <span className="flex items-center gap-2">
-                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                  Mais opções
-                  {advancedCount > 0 && (
-                    <Badge variant="secondary">{advancedCount}</Badge>
-                  )}
-                </span>
-                <ChevronDown
-                  className={cn(
-                    "h-4 w-4 text-muted-foreground transition-transform",
-                    advancedOpen && "rotate-180",
-                  )}
-                />
-              </button>
+              {tipo === "transferencia" ? (
+                <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:col-span-6">
+                  <div className="space-y-1">
+                    <FieldLabel htmlFor="transaction-conta">Origem</FieldLabel>
+                    <NativeSelect
+                      id="transaction-conta"
+                      aria-invalid={Boolean(formState.errors.contaId)}
+                      {...register("contaId", {
+                        onChange: () => setAccountTouched(true),
+                      })}
+                    >
+                      {!hasAccounts && <option value="">Nenhuma conta</option>}
+                      {formData.accounts.map((account) => (
+                        <option
+                          key={account.id}
+                          value={account.id}
+                          disabled={account.arquivada && account.id !== contaId}
+                        >
+                          {account.nome}
+                          {account.arquivada ? " (arquivada)" : ""}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <FieldError message={formState.errors.contaId?.message} />
+                  </div>
 
-              {advancedSummary.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {advancedSummary.join(" · ")}
-                </p>
+                  <ArrowRight
+                    className="mb-3 h-4 w-4 text-muted-foreground"
+                    aria-hidden="true"
+                  />
+
+                  <div className="space-y-1">
+                    <FieldLabel htmlFor="transaction-destino">
+                      Destino
+                    </FieldLabel>
+                    <Controller
+                      control={control}
+                      name="contaDestinoId"
+                      render={({ field }) => (
+                        <NativeSelect
+                          id="transaction-destino"
+                          value={field.value ?? ""}
+                          onChange={(event) =>
+                            field.onChange(event.target.value || null)
+                          }
+                          aria-invalid={Boolean(
+                            formState.errors.contaDestinoId,
+                          )}
+                        >
+                          <option value="">Selecione</option>
+                          {formData.accounts
+                            .filter((account) => account.id !== contaId)
+                            .map((account) => (
+                              <option
+                                key={account.id}
+                                value={account.id}
+                                disabled={
+                                  account.arquivada &&
+                                  account.id !== field.value
+                                }
+                              >
+                                {account.nome}
+                                {account.arquivada ? " (arquivada)" : ""}
+                              </option>
+                            ))}
+                        </NativeSelect>
+                      )}
+                    />
+                    <FieldError
+                      message={formState.errors.contaDestinoId?.message}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="col-span-2 space-y-1 sm:col-span-3">
+                    <FieldLabel htmlFor="transaction-conta">Conta</FieldLabel>
+                    <NativeSelect
+                      id="transaction-conta"
+                      aria-invalid={Boolean(formState.errors.contaId)}
+                      {...register("contaId", {
+                        onChange: () => setAccountTouched(true),
+                      })}
+                    >
+                      {!hasAccounts && <option value="">Nenhuma conta</option>}
+                      {formData.accounts.map((account) => (
+                        <option
+                          key={account.id}
+                          value={account.id}
+                          disabled={account.arquivada && account.id !== contaId}
+                        >
+                          {account.nome}
+                          {account.arquivada ? " (arquivada)" : ""}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <FieldError message={formState.errors.contaId?.message} />
+                  </div>
+
+                  <div className="col-span-2 space-y-1 sm:col-span-3">
+                    <FieldLabel htmlFor="transaction-categoria">
+                      Categoria
+                    </FieldLabel>
+                    <Controller
+                      control={control}
+                      name="categoriaId"
+                      render={({ field }) => (
+                        <CategorySelect
+                          id="transaction-categoria"
+                          options={categoryOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={formState.isSubmitting}
+                        />
+                      )}
+                    />
+                    <FieldError
+                      message={formState.errors.categoriaId?.message}
+                    />
+                  </div>
+                </>
               )}
 
-              {advancedOpen && (
-                <div className="space-y-5 rounded-lg border border-border p-4">
-                  {mode === "create" && (
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <Repeat className="h-4 w-4 text-primary" />
-                        Repetição
-                      </div>
+              <div className="col-span-2 flex items-center gap-2 overflow-x-auto pb-0.5 sm:col-span-6">
+                {(mode === "create" || isGrouped) && (
+                  <AdvancedChip
+                    icon={Repeat}
+                    label={repetitionChipLabel}
+                    active={
+                      mode === "edit" || repeticao !== "nenhuma"
+                    }
+                    open={activeChip === "repetir"}
+                    onClick={() => toggleChip("repetir")}
+                    disabled={mode === "edit"}
+                    title={
+                      mode === "edit"
+                        ? "A recorrência é alterada pelo escopo escolhido"
+                        : "Repetir"
+                    }
+                  />
+                )}
+                <AdvancedChip
+                  icon={StickyNote}
+                  label="Obs."
+                  active={obsHasValue}
+                  open={activeChip === "obs"}
+                  onClick={() => toggleChip("obs")}
+                  dot={obsHasValue}
+                  title="Observação"
+                />
+                <AdvancedChip
+                  icon={TagsIcon}
+                  label={tagsHasValue ? `${tagIds.length} tags` : "Tags"}
+                  active={tagsHasValue}
+                  open={activeChip === "tags"}
+                  onClick={() => toggleChip("tags")}
+                  title="Tags"
+                />
+                <AdvancedChip
+                  icon={Paperclip}
+                  label="Anexo · em breve"
+                  disabled
+                  title="Anexo (em breve)"
+                />
+              </div>
 
-                      <div className="grid grid-cols-3 gap-2">
-                        {(["nenhuma", "fixa", "parcelada"] as const).map(
-                          (option) => (
-                            <button
-                              key={option}
-                              type="button"
-                              onClick={() =>
-                                setValue("repeticao", option, {
-                                  shouldValidate: true,
-                                })
-                              }
-                              disabled={
-                                option === "parcelada" &&
-                                tipo === "transferencia"
-                              }
-                              className={cn(
-                                "min-h-11 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                                repeticao === option
-                                  ? "border-primary/50 bg-primary/10 text-primary"
-                                  : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
-                              )}
-                            >
-                              {REPETITION_LABELS[option]}
-                            </button>
-                          ),
-                        )}
+              <div className="col-span-2 sm:col-span-6">
+                {mode === "create" && (
+                  <Accordion open={activeChip === "repetir"}>
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {(
+                          ["nenhuma", "fixa", "parcelada"] as const
+                        ).map((option) => (
+                          <button
+                            key={option}
+                            type="button"
+                            onClick={() =>
+                              setValue("repeticao", option, {
+                                shouldValidate: true,
+                              })
+                            }
+                            disabled={
+                              option === "parcelada" &&
+                              tipo === "transferencia"
+                            }
+                            className={cn(
+                              "h-9 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                              repeticao === option
+                                ? "border-primary/50 bg-primary/10 text-primary"
+                                : "border-border text-muted-foreground hover:bg-accent",
+                            )}
+                          >
+                            {REPETITION_LABELS[option]}
+                          </button>
+                        ))}
                       </div>
 
                       {repeticao === "fixa" && (
-                        <div className="space-y-3">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label htmlFor="transaction-frequencia">
-                                Frequência
-                              </Label>
-                              <NativeSelect
-                                id="transaction-frequencia"
-                                {...register("frequencia")}
-                              >
-                                <option value="mensal">Mensal</option>
-                                <option value="semanal">Semanal</option>
-                                <option value="anual">Anual</option>
-                              </NativeSelect>
-                            </div>
-
-                            <div className="space-y-2">
-                              <Label htmlFor="transaction-data-fim">
-                                Data final (opcional)
-                              </Label>
-                              <Controller
-                                control={control}
-                                name="dataFim"
-                                render={({ field }) => (
-                                  <DatePicker
-                                    id="transaction-data-fim"
-                                    value={field.value ?? ""}
-                                    onChange={(iso) =>
-                                      field.onChange(iso || null)
-                                    }
-                                  />
-                                )}
-                              />
-                              <FieldError
-                                message={formState.errors.dataFim?.message}
-                              />
-                            </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <FieldLabel htmlFor="transaction-frequencia">
+                              Frequência
+                            </FieldLabel>
+                            <NativeSelect
+                              id="transaction-frequencia"
+                              className="h-10"
+                              {...register("frequencia")}
+                            >
+                              <option value="mensal">Mensal</option>
+                              <option value="semanal">Semanal</option>
+                              <option value="anual">Anual</option>
+                            </NativeSelect>
                           </div>
-                          <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                            <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                            A primeira ocorrência é {formatDate(data)}. As
-                            próximas são geradas automaticamente (até 12 meses à
-                            frente) e ficam não pagas.
-                          </p>
+                          <div className="space-y-1">
+                            <FieldLabel htmlFor="transaction-data-fim">
+                              Data final
+                            </FieldLabel>
+                            <Controller
+                              control={control}
+                              name="dataFim"
+                              render={({ field }) => (
+                                <DatePicker
+                                  id="transaction-data-fim"
+                                  value={field.value ?? ""}
+                                  onChange={(iso) =>
+                                    field.onChange(iso || null)
+                                  }
+                                  className="h-10"
+                                />
+                              )}
+                            />
+                            <FieldError
+                              message={formState.errors.dataFim?.message}
+                            />
+                          </div>
                         </div>
                       )}
 
                       {repeticao === "parcelada" && (
-                        <div className="space-y-3">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-2">
-                              <Label htmlFor="transaction-parcelas">
-                                Número de parcelas
-                              </Label>
+                        <div className="space-y-2">
+                          <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <FieldLabel htmlFor="transaction-parcelas">
+                                Parcelas
+                              </FieldLabel>
                               <Input
                                 id="transaction-parcelas"
                                 type="number"
                                 min={2}
                                 max={60}
                                 inputMode="numeric"
+                                className="h-10"
                                 {...register("parcelas", {
                                   valueAsNumber: true,
                                 })}
@@ -823,10 +954,9 @@ export function TransactionFormDialog({
                                 message={formState.errors.parcelas?.message}
                               />
                             </div>
-
-                            <div className="space-y-2">
-                              <Label>O valor informado é</Label>
-                              <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                              <FieldLabel>Valor é</FieldLabel>
+                              <div className="grid grid-cols-2 gap-1">
                                 <button
                                   type="button"
                                   onClick={() =>
@@ -835,13 +965,13 @@ export function TransactionFormDialog({
                                     })
                                   }
                                   className={cn(
-                                    "min-h-11 rounded-md border px-2 text-xs font-medium",
+                                    "h-10 rounded-md border px-1 text-xs font-medium",
                                     baseValor === "total"
                                       ? "border-primary/50 bg-primary/10 text-primary"
                                       : "border-border text-muted-foreground hover:bg-accent",
                                   )}
                                 >
-                                  O total (dividir)
+                                  Total
                                 </button>
                                 <button
                                   type="button"
@@ -851,140 +981,117 @@ export function TransactionFormDialog({
                                     })
                                   }
                                   className={cn(
-                                    "min-h-11 rounded-md border px-2 text-xs font-medium",
+                                    "h-10 rounded-md border px-1 text-xs font-medium",
                                     baseValor === "parcela"
                                       ? "border-primary/50 bg-primary/10 text-primary"
                                       : "border-border text-muted-foreground hover:bg-accent",
                                   )}
                                 >
-                                  Cada parcela
+                                  Parcela
                                 </button>
                               </div>
                             </div>
                           </div>
 
                           {installmentPreview ? (
-                            <div className="rounded-md bg-muted/50 p-3 text-sm">
-                              <p className="font-medium">
-                                {parcelas}x de{" "}
-                                {formatCurrency(installmentPreview.rest)}
-                                {installmentPreview.first !==
-                                  installmentPreview.rest && (
-                                  <span className="text-muted-foreground">
-                                    {" "}
-                                    (1ª de{" "}
-                                    {formatCurrency(installmentPreview.first)})
-                                  </span>
-                                )}
-                              </p>
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                Total:{" "}
-                                {formatCurrency(installmentPreview.total)} · 1ª
-                                parcela em {formatDate(data)}
-                              </p>
-                            </div>
+                            <p className="text-xs text-muted-foreground">
+                              {parcelas}x de{" "}
+                              {formatCurrency(installmentPreview.rest)}
+                              {installmentPreview.first !==
+                                installmentPreview.rest &&
+                                ` (1ª ${formatCurrency(installmentPreview.first)})`}{" "}
+                              · total{" "}
+                              {formatCurrency(installmentPreview.total)}
+                            </p>
                           ) : (
                             <p className="text-xs text-muted-foreground">
-                              Informe um valor e um número de parcelas válidos.
+                              Informe valor e parcelas válidos.
                             </p>
                           )}
                         </div>
                       )}
                     </div>
-                  )}
+                  </Accordion>
+                )}
 
-                  <div className="space-y-2">
-                    <Label className="flex items-center gap-2">
-                      <TagsIcon className="h-4 w-4 text-muted-foreground" />
-                      Tags
-                    </Label>
-                    {formData.tags.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Nenhuma tag cadastrada. Crie em{" "}
-                        <Link
-                          href="/configuracoes/categorias"
-                          className="underline hover:text-foreground"
-                        >
-                          Configurações &gt; Categorias
-                        </Link>
-                        .
-                      </p>
-                    ) : (
-                      <Controller
-                        control={control}
-                        name="tagIds"
-                        render={({ field }) => (
-                          <div className="flex flex-wrap gap-2">
-                            {formData.tags.map((tag) => {
-                              const checked = field.value.includes(tag.id);
-                              return (
-                                <label
-                                  key={tag.id}
-                                  htmlFor={`transaction-tag-${tag.id}`}
-                                  className={cn(
-                                    "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm transition-colors",
-                                    checked
-                                      ? "border-primary/40 bg-primary/10 text-primary"
-                                      : "border-border hover:bg-accent",
-                                  )}
-                                >
-                                  <Checkbox
-                                    id={`transaction-tag-${tag.id}`}
-                                    checked={checked}
-                                    onCheckedChange={(value) => {
-                                      field.onChange(
-                                        value
-                                          ? [...field.value, tag.id]
-                                          : field.value.filter(
-                                              (tagId) => tagId !== tag.id,
-                                            ),
-                                      );
-                                    }}
-                                  />
-                                  {tag.nome}
-                                </label>
-                              );
-                            })}
-                          </div>
-                        )}
-                      />
-                    )}
-                    <FieldError message={formState.errors.tagIds?.message} />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="transaction-observacao">Observação</Label>
+                <Accordion open={activeChip === "obs"}>
+                  <div className="space-y-1">
+                    <FieldLabel htmlFor="transaction-observacao">
+                      Observação
+                    </FieldLabel>
                     <Textarea
                       id="transaction-observacao"
                       placeholder="Opcional"
                       maxLength={1000}
+                      className="min-h-[72px]"
                       {...register("observacao")}
                     />
                     <FieldError
                       message={formState.errors.observacao?.message}
                     />
                   </div>
+                </Accordion>
 
-                  <div className="flex min-h-16 items-center justify-center gap-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground">
-                    <Paperclip className="h-4 w-4" />
-                    Adicionar anexo (em breve)
-                  </div>
-                </div>
-              )}
+                <Accordion open={activeChip === "tags"}>
+                  {formData.tags.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      Nenhuma tag.{" "}
+                      <Link
+                        href="/configuracoes/categorias"
+                        className="underline hover:text-foreground"
+                      >
+                        Criar tags
+                      </Link>
+                    </p>
+                  ) : (
+                    <Controller
+                      control={control}
+                      name="tagIds"
+                      render={({ field }) => (
+                        <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
+                          {formData.tags.map((tag) => {
+                            const checked = field.value.includes(tag.id);
+                            return (
+                              <label
+                                key={tag.id}
+                                htmlFor={`transaction-tag-${tag.id}`}
+                                className={cn(
+                                  "flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors",
+                                  checked
+                                    ? "border-primary/40 bg-primary/10 text-primary"
+                                    : "border-border hover:bg-accent",
+                                )}
+                              >
+                                <Checkbox
+                                  id={`transaction-tag-${tag.id}`}
+                                  checked={checked}
+                                  onCheckedChange={(value) => {
+                                    field.onChange(
+                                      value
+                                        ? [...field.value, tag.id]
+                                        : field.value.filter(
+                                            (tagId) => tagId !== tag.id,
+                                          ),
+                                    );
+                                  }}
+                                />
+                                {tag.nome}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    />
+                  )}
+                  <FieldError message={formState.errors.tagIds?.message} />
+                </Accordion>
+              </div>
             </div>
-
-            {mode === "edit" && !isGrouped && (
-              <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                <ArrowLeftRight className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                Este lançamento não faz parte de uma recorrência nem de um
-                parcelamento.
-              </p>
-            )}
           </div>
 
-          <div className="border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
-            <DialogFooter className="items-center sm:justify-between">
-              <div className="flex items-center gap-2">
+          <div className="border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-2">
                 {mode === "edit" && transaction && onRequestDelete && (
                   <Button
                     type="button"
@@ -999,50 +1106,43 @@ export function TransactionFormDialog({
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 )}
-              </div>
 
-              <div className="flex items-center gap-2">
                 {mode === "create" && (
                   <Button
                     type="button"
-                    variant="outline"
-                    size="icon"
-                    className="h-11 w-11"
-                    aria-label="Salvar e criar outro"
-                    title="Salvar e criar outro"
+                    variant="ghost"
+                    className="h-11 gap-1.5 px-2 text-xs sm:h-9"
                     onClick={() => void onSubmitAndNew()}
                     disabled={formState.isSubmitting || !hasAccounts}
                   >
                     {formState.isSubmitting ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <CopyPlus className="h-4 w-4" />
+                      <CopyPlus className="h-3.5 w-3.5" />
                     )}
+                    Salvar e criar outro
                   </Button>
                 )}
 
-                {mode === "edit" && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => handleOpenChange(false)}
-                    disabled={formState.isSubmitting}
-                  >
-                    Cancelar
-                  </Button>
-                )}
-
-                <Button
-                  type="submit"
-                  disabled={formState.isSubmitting || !hasAccounts}
-                >
-                  {formState.isSubmitting && (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  )}
-                  {mode === "edit" ? "Salvar alterações" : "Criar lançamento"}
-                </Button>
+                <span className="hidden whitespace-nowrap text-[10px] text-muted-foreground sm:inline">
+                  Enter salva · Ctrl/Cmd+Enter{" "}
+                  {mode === "create" ? "cria outro" : "salva"}
+                </span>
               </div>
-            </DialogFooter>
+
+              <Button
+                type="submit"
+                className="min-w-[140px]"
+                disabled={formState.isSubmitting || !hasAccounts}
+              >
+                {formState.isSubmitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="h-4 w-4" />
+                )}
+                Salvar
+              </Button>
+            </div>
           </div>
         </form>
       </DialogContent>

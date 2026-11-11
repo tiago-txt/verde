@@ -48,7 +48,7 @@ function DialogContent({
           isRightPanel
             ? "inset-0 h-dvh max-h-dvh overflow-hidden border-l p-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-md"
             : [
-                "inset-x-0 bottom-0 max-h-[92dvh] overflow-y-auto rounded-t-2xl border p-5",
+                "inset-x-0 bottom-[var(--verde-sheet-bottom,0px)] max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto rounded-t-2xl border p-5",
                 "data-[state=open]:animate-slide-up data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom",
                 "sm:inset-auto sm:left-1/2 sm:top-1/2 sm:max-h-[90dvh] sm:w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-xl sm:p-6",
                 "sm:data-[state=open]:animate-in sm:data-[state=open]:fade-in-0 sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:fade-out-0 sm:data-[state=closed]:zoom-out-95",
