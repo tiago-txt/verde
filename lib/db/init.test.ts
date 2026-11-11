@@ -74,7 +74,25 @@ describe("primeiro boot", () => {
 
     sqlite.close();
 
-    // Simula um novo boot no mesmo banco: seeds não duplicam nada.
+    // Orçamento legado com data_inicio vazio: deve ser reparado no próximo boot.
+    const writer = new Database(dbPath);
+    const legacyCategory = writer
+      .prepare(
+        "select id from categories where nome = 'Mercado' and tipo = 'despesa' limit 1",
+      )
+      .get() as { id: string } | undefined;
+    if (!legacyCategory) throw new Error("categoria Mercado");
+    const now = Date.now();
+    writer
+      .prepare(
+        `insert into budgets (id, workspace_id, nome, valor_padrao_centavos, dia_fechamento, antecedencia_ciclos, data_da_reserva, dia_vencimento, origens, conta_id, cartao_id, data_inicio, data_fim, cor, icone, arquivado, created_at, updated_at, categoria_id, mes, valor_limite)
+         values ('legacy-budget', ?, 'Legado', 50000, 1, 0, 'inicio_do_ciclo', 1, 'todas', null, null, '', null, '#34d399', 'Target', 0, ?, ?, ?, '2025-03', 50000)`,
+      )
+      .run(admin.workspace_id, now, now, legacyCategory.id);
+    writer.close();
+
+    // Simula um novo boot no mesmo banco: seeds não duplicam nada e a data
+    // legada é reparada.
     (globalThis as typeof globalThis & { __verdeDbInitialized?: boolean })
       .__verdeDbInitialized = false;
     initializeDatabase();
@@ -84,6 +102,13 @@ describe("primeiro boot", () => {
     expect(count(again, "workspaces")).toBe(1);
     expect(count(again, "categories")).toBe(expectedCategories);
     expect(count(again, "tags")).toBe(DEFAULT_TAGS.length);
+    expect(
+      (
+        again
+          .prepare("select data_inicio from budgets where id = 'legacy-budget'")
+          .get() as { data_inicio: string }
+      ).data_inicio,
+    ).toBe("2025-03");
     again.close();
   });
 });

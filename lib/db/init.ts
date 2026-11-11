@@ -2,13 +2,14 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { hashSync } from "bcryptjs";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   drizzle,
   type BetterSQLite3Database,
 } from "drizzle-orm/better-sqlite3";
 import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getAdminSeed, getSessionSecret } from "@/lib/env";
+import { currentMonth } from "@/lib/dates";
 import { getDatabasePath } from "./path";
 import { seedDemoData } from "./seed-demo";
 import { ensureWorkspace, seedWorkspaceDefaults, workspaceNameFor } from "./seed-workspace";
@@ -79,6 +80,7 @@ export function initializeDatabase(): void {
 
 function seed(db: DatabaseInstance): void {
   const adminWorkspaceId = seedFirstAdmin(db);
+  repairLegacyBudgetDates(db);
 
   // Categorias/tags padrão são por workspace. Em bancos migrados os dados
   // existentes já estão no workspace do admin e o seed não duplica nada.
@@ -93,6 +95,21 @@ function seed(db: DatabaseInstance): void {
   if (process.env.SEED_DEMO === "true" && adminWorkspaceId) {
     seedDemoData(db, adminWorkspaceId);
   }
+}
+
+/**
+ * Orçamentos legados (Etapa 1) podem ter `data_inicio = ''`, o que os deixava
+ * invisíveis na lista mas ainda bloqueando categorias no formulário. Repara a
+ * data a partir de `mes` (ou do mês atual), de forma idempotente.
+ */
+function repairLegacyBudgetDates(db: DatabaseInstance): void {
+  const fallback = currentMonth();
+  db.update(schema.budgets)
+    .set({
+      dataInicio: sql`case when length(${schema.budgets.mes}) = 7 then ${schema.budgets.mes} else ${fallback} end`,
+    })
+    .where(eq(schema.budgets.dataInicio, ""))
+    .run();
 }
 
 function seedFirstAdmin(db: DatabaseInstance): string | null {

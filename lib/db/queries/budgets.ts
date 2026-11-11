@@ -686,9 +686,12 @@ function listBudgetAccounts(workspaceId: string): BudgetAccountOption[] {
     .all();
 }
 
-export function getBudgetFormData(workspaceId: string): BudgetFormData {
+export function getBudgetFormData(
+  workspaceId: string,
+  ciclo?: string,
+): BudgetFormData {
   const { db, ws } = scopedDb(workspaceId);
-  const cycle = currentMonth();
+  const cycle = ciclo ?? currentMonth();
   const allBudgets = listBudgetsWithCategories(workspaceId);
   const allCategories = listAllCategories(workspaceId).filter(
     (category) => category.tipo === "despesa" && !category.deletedAt,
@@ -697,6 +700,8 @@ export function getBudgetFormData(workspaceId: string): BudgetFormData {
     .filter(
       (budget) =>
         !budget.arquivado &&
+        Boolean(budget.dataInicio) &&
+        budget.dataInicio <= cycle &&
         (!budget.dataFim || budget.dataFim >= cycle),
     )
     .map((budget) => ({

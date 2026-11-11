@@ -428,7 +428,7 @@ npm test
 npm run build
 ```
 
-Testes atuais (271): formatação/parse de BRL, datas/meses, máscara e parsing
+Testes atuais (276): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
 geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e

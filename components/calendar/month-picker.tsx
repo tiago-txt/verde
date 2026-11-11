@@ -21,9 +21,18 @@ type MonthPickerProps = {
   month: string;
   onChange: (monthKey: string) => void;
   className?: string;
+  /** Quando true, mostra o placeholder em vez do mês (ex.: fim opcional). */
+  empty?: boolean;
+  placeholder?: string;
 };
 
-export function MonthPicker({ month, onChange, className }: MonthPickerProps) {
+export function MonthPicker({
+  month,
+  onChange,
+  className,
+  empty = false,
+  placeholder = "Escolher mês",
+}: MonthPickerProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
 
@@ -33,11 +42,16 @@ export function MonthPicker({ month, onChange, className }: MonthPickerProps) {
       onClick={() => setOpen(true)}
       className={cn(
         "inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 text-base font-semibold capitalize transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        empty && "normal-case",
         className,
       )}
       aria-label="Escolher mês e ano"
     >
-      {formatMonthTitle(month)}
+      {empty ? (
+        <span className="text-muted-foreground">{placeholder}</span>
+      ) : (
+        formatMonthTitle(month)
+      )}
     </button>
   );
 

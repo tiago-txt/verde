@@ -39,7 +39,7 @@ export default async function LimiteDeGastosPage({
   ) {
     notFound();
   }
-  const formData = getBudgetFormData(user.workspaceId);
+  const formData = getBudgetFormData(user.workspaceId, ciclo);
 
   return (
     <BudgetsView

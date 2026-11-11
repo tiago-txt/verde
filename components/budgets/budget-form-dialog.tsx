@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Check, Loader2, Search } from "lucide-react";
+import { Check, Loader2, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { CategoryIcon } from "@/components/category-icon";
+import { MonthPicker } from "@/components/calendar/month-picker";
 import { ColorPicker } from "@/components/color-picker";
 import { IconPicker } from "@/components/icon-picker";
 import { CurrencyInput } from "@/components/currency-input";
@@ -456,6 +457,11 @@ export function BudgetFormDialog({
                         role="checkbox"
                         aria-checked={checked}
                         disabled={blocked}
+                        title={
+                          blocked
+                            ? `Já está no orçamento "${category.blockedBy}". Edite esse orçamento para liberar a categoria.`
+                            : undefined
+                        }
                         onClick={() => {
                           const current = form.getValues("categoriaIds");
                           form.setValue(
@@ -501,6 +507,17 @@ export function BudgetFormDialog({
               {noCategories && (
                 <p className="text-xs text-warning">
                   Escolha pelo menos uma categoria de despesa.
+                </p>
+              )}
+              {categories.some(
+                (category) =>
+                  category.blockedBy &&
+                  category.blockedByBudgetId !== budget?.id &&
+                  !categoriaIds.includes(category.id),
+              ) && (
+                <p className="text-[11px] text-muted-foreground">
+                  Categorias acinzentadas já estão em outro orçamento ativo.
+                  Edite esse orçamento para liberá-las.
                 </p>
               )}
               <FieldError message={formState.errors.categoriaIds?.message} />
@@ -577,39 +594,54 @@ export function BudgetFormDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label
-                  htmlFor="budget-inicio"
-                  className="text-xs text-muted-foreground"
-                >
-                  Início
-                </Label>
-                <Input
-                  id="budget-inicio"
-                  type="month"
-                  aria-invalid={Boolean(formState.errors.dataInicio)}
-                  {...register("dataInicio")}
-                />
-                <FieldError message={formState.errors.dataInicio?.message} />
-              </div>
-              <div className="space-y-1">
-                <Label
-                  htmlFor="budget-fim"
-                  className="text-xs text-muted-foreground"
-                >
-                  Fim (opcional)
-                </Label>
-                <Input
-                  id="budget-fim"
-                  type="month"
-                  aria-invalid={Boolean(formState.errors.dataFim)}
-                  value={watch("dataFim") ?? ""}
-                  onChange={(event) =>
-                    form.setValue("dataFim", event.target.value || null, {
+                <Label className="text-xs text-muted-foreground">Início</Label>
+                <MonthPicker
+                  month={watch("dataInicio")}
+                  onChange={(month) =>
+                    form.setValue("dataInicio", month, {
                       shouldValidate: true,
                       shouldDirty: true,
                     })
                   }
+                  className="w-full justify-start border border-input bg-background px-3 text-sm font-normal"
                 />
+                <FieldError message={formState.errors.dataInicio?.message} />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  Fim (opcional)
+                </Label>
+                <div className="flex gap-1">
+                  <MonthPicker
+                    month={watch("dataFim") ?? watch("dataInicio")}
+                    empty={!watch("dataFim")}
+                    placeholder="Sem data final"
+                    onChange={(month) =>
+                      form.setValue("dataFim", month, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
+                    className="w-full justify-start border border-input bg-background px-3 text-sm font-normal"
+                  />
+                  {watch("dataFim") && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      className="h-11 w-11 shrink-0"
+                      onClick={() =>
+                        form.setValue("dataFim", null, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        })
+                      }
+                      aria-label="Remover data final"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
+                </div>
                 <FieldError message={formState.errors.dataFim?.message} />
               </div>
             </div>
