@@ -439,21 +439,27 @@ export function TransactionFormDialog({
   function handleSourceChange(value: string) {
     setAccountTouched(true);
     if (value.startsWith("cartao:")) {
-      setValue("cartaoId", value.slice("cartao:".length) || null, {
-        shouldValidate: true,
+      const nextCartaoId = value.slice("cartao:".length) || null;
+      // Limpa a conta antes de validar: evita o erro momentâneo de "conta ou cartão".
+      setValue("contaId", null, { shouldDirty: true, shouldValidate: false });
+      setValue("cartaoId", nextCartaoId, {
+        shouldDirty: true,
+        shouldValidate: false,
       });
-      setValue("contaId", null);
       setValue("pago", false);
       if (tipo === "transferencia") {
         setValue("tipo", "despesa");
       }
+      void form.trigger(["contaId", "cartaoId"]);
       return;
     }
 
-    setValue("cartaoId", null);
+    setValue("cartaoId", null, { shouldDirty: true, shouldValidate: false });
     setValue("contaId", value.slice("conta:".length) || null, {
-      shouldValidate: true,
+      shouldDirty: true,
+      shouldValidate: false,
     });
+    void form.trigger(["contaId", "cartaoId"]);
   }
 
   function toggleChip(chip: "repetir" | "obs" | "tags") {
@@ -479,7 +485,7 @@ export function TransactionFormDialog({
       setValue("valor", suggestion.valor, { shouldValidate: true });
     }
 
-    if (!accountTouched && suggestion.contaId) {
+    if (!accountTouched && !cartaoId && suggestion.contaId) {
       const account = formData.accounts.find(
         (item) => item.id === suggestion.contaId && !item.arquivada,
       );
