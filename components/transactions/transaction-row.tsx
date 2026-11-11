@@ -218,6 +218,7 @@ export function TransactionRow({
           "relative flex min-h-16 items-center gap-2 bg-card px-3 py-3 transition-[transform,background-color] duration-150 sm:gap-3 sm:px-4",
           !transaction.pago && !isCardPurchase && "bg-muted/10",
           selected && "bg-primary/10",
+          !selectionMode && !selected && "lg:hover:bg-accent/60",
           reveal === "left" && "translate-x-20",
           reveal === "right" && "-translate-x-36",
         )}
@@ -268,7 +269,7 @@ export function TransactionRow({
             onPointerDown={(event) => event.stopPropagation()}
             aria-label={`Trocar categoria de ${transaction.descricao}`}
             title="Trocar categoria"
-            className="hover-action group/cat relative shrink-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="hover-action group/cat relative shrink-0 rounded-xl outline-none transition-shadow hover:ring-2 hover:ring-primary/60 focus-visible:ring-2 focus-visible:ring-ring"
           >
             <CategoryIcon
               icon={transaction.categoriaIcone}
@@ -276,10 +277,10 @@ export function TransactionRow({
               className="h-11 w-11 rounded-xl transition-transform group-hover/cat:scale-105"
             />
             <span
-              className="pointer-events-none absolute -bottom-1 -right-1 grid h-5 w-5 place-items-center rounded-full border border-border bg-card text-foreground opacity-0 shadow-sm transition-opacity group-hover/cat:opacity-100 group-focus-visible/cat:opacity-100"
+              className="pointer-events-none absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-primary/40 bg-primary text-primary-foreground opacity-0 shadow-sm transition-opacity group-hover/cat:opacity-100 group-focus-visible/cat:opacity-100"
               aria-hidden="true"
             >
-              <Pencil className="h-3 w-3" />
+              <Pencil className="h-3.5 w-3.5" />
             </span>
           </button>
         )}
@@ -319,7 +320,7 @@ export function TransactionRow({
               onPointerDown={(event) => event.stopPropagation()}
               aria-label={`Editar ${transaction.descricao}`}
               title="Editar lançamento"
-              className="hover-action group/name flex min-w-0 max-w-full items-center gap-1 rounded text-left outline-none focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring"
+              className="hover-action group/name -mx-1 flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left outline-none transition-colors hover:bg-accent focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 className={cn(
@@ -330,7 +331,7 @@ export function TransactionRow({
                 {transaction.descricao}
               </span>
               <Pencil
-                className="h-3 w-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
+                className="h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
                 aria-hidden="true"
               />
             </button>
