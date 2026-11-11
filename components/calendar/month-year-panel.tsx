@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { currentMonth } from "@/lib/dates";
 import { MONTHS_SHORT } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -123,6 +124,17 @@ export function MonthYearPanel({
           ))}
         </div>
       )}
+
+      <div className="flex justify-end border-t border-border pt-2">
+        <Button
+          type="button"
+          variant="outline"
+          className="h-10 rounded-full px-4"
+          onClick={() => onSelect(currentMonth())}
+        >
+          Mês atual
+        </Button>
+      </div>
     </div>
   );
 }

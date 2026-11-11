@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, Minus } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MonthSummaryWithBudgets } from "@/lib/finance/budgets";
 import { buildFooterSummary } from "@/lib/finance/summary-display";
@@ -167,21 +167,13 @@ export function TransactionsSummaryFooter({
       <div className="fixed bottom-0 left-0 right-0 z-30 hidden border-t border-border bg-card/95 backdrop-blur lg:left-[var(--sidebar-width,260px)] lg:block">
         {expanded && (
           <div className="mx-auto max-w-7xl px-8 pt-3">
-            <div className="relative ml-auto w-full max-w-sm border-b border-border pb-3 pr-9">
+            <div className="ml-auto w-full max-w-sm border-b border-border pb-3">
               <Statement values={values} />
-              <button
-                type="button"
-                onClick={() => setExpanded(false)}
-                aria-label="Fechar resumo"
-                className="absolute right-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <Minus className="h-4 w-4" />
-              </button>
             </div>
           </div>
         )}
         <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 px-8 py-2.5">
-          <div className="flex items-center gap-10">{totals}</div>
+          {!expanded && <div className="flex items-center gap-10">{totals}</div>}
           <Button
             type="button"
             variant="ghost"
@@ -206,21 +198,28 @@ export function TransactionsSummaryFooter({
         className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card/95 backdrop-blur lg:hidden"
       >
         <div className="px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
-              <Value
-                label="Saldo"
-                value={values.saldo}
-                tone={closingTone(values.saldo)}
-                strong
-              />
-              <Value
-                label="Previsto"
-                value={values.previsto}
-                tone={closingTone(values.previsto)}
-                strong
-              />
-            </div>
+          <div
+            className={cn(
+              "flex items-center gap-2",
+              expanded ? "justify-end" : "justify-between",
+            )}
+          >
+            {!expanded && (
+              <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
+                <Value
+                  label="Saldo"
+                  value={values.saldo}
+                  tone={closingTone(values.saldo)}
+                  strong
+                />
+                <Value
+                  label="Previsto"
+                  value={values.previsto}
+                  tone={closingTone(values.previsto)}
+                  strong
+                />
+              </div>
+            )}
             <Button
               type="button"
               variant="ghost"
