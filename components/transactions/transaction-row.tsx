@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useRef } from "react";
 import {
   ArrowLeftRight,
   CheckCircle2,
   Circle,
   Copy,
-  Loader2,
   MoreHorizontal,
   Pencil,
   Repeat,
+  StickyNote,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,33 +24,63 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { CategoryIcon } from "@/components/category-icon";
-import { setTransactionPaidAction } from "@/lib/actions/transactions";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { formatCurrency } from "@/lib/format";
+import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type TransactionRowProps = {
   transaction: TransactionListItem;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelected?: (id: string) => void;
+  onOpenDetails: (transaction: TransactionListItem) => void;
   onEdit: (transaction: TransactionListItem) => void;
   onDelete: (transaction: TransactionListItem) => void;
   onDuplicate: (transaction: TransactionListItem) => void;
-  onError: (message: string) => void;
+  onLongPress?: (transaction: TransactionListItem) => void;
+  onTogglePaid: (transaction: TransactionListItem, pago: boolean) => void;
 };
+
+function AccountBadge({
+  nome,
+  icone,
+  cor,
+}: {
+  nome: string | null;
+  icone: string | null;
+  cor: string | null;
+}) {
+  const Icon = getIcon(icone);
+
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1">
+      <Icon
+        className="h-3.5 w-3.5 shrink-0"
+        style={{ color: cor ?? undefined }}
+        aria-hidden="true"
+      />
+      <span className="truncate">{nome ?? "Sem conta"}</span>
+    </span>
+  );
+}
 
 export function TransactionRow({
   transaction,
+  selectionMode = false,
+  selected = false,
+  onToggleSelected,
+  onOpenDetails,
   onEdit,
   onDelete,
   onDuplicate,
-  onError,
+  onLongPress,
+  onTogglePaid,
 }: TransactionRowProps) {
-  const router = useRouter();
-  const [paid, setPaid] = useState(transaction.pago);
-  const [isPending, startTransition] = useTransition();
-
-  useEffect(() => {
-    setPaid(transaction.pago);
-  }, [transaction.pago]);
+  const longPressTimer = useRef<number | null>(null);
+  const longPressTriggered = useRef(false);
+  const pointerStart = useRef<{ x: number; y: number } | null>(null);
+  const paid = transaction.pago;
 
   const isTransfer = transaction.tipo === "transferencia";
   const sign =
@@ -64,35 +95,60 @@ export function TransactionRow({
       ? "text-success"
       : "text-destructive";
 
-  const accountLabel = isTransfer
-    ? `${transaction.contaNome ?? "Conta"} → ${transaction.contaDestinoNome ?? "Conta"}`
-    : transaction.contaNome ?? "Sem conta";
+  function handleMainClick() {
+    if (longPressTriggered.current) {
+      longPressTriggered.current = false;
+      return;
+    }
+    if (selectionMode) onToggleSelected?.(transaction.id);
+    else onOpenDetails(transaction);
+  }
 
-  const visibleTags = transaction.tags.slice(0, 2);
-  const extraTags = transaction.tags.length - visibleTags.length;
+  function handlePointerDown(event: React.PointerEvent<HTMLButtonElement>) {
+    if (selectionMode || !onLongPress) return;
+    pointerStart.current = { x: event.clientX, y: event.clientY };
+    longPressTimer.current = window.setTimeout(() => {
+      longPressTriggered.current = true;
+      onLongPress(transaction);
+    }, 500);
+  }
 
-  function togglePaid() {
-    const next = !paid;
-    setPaid(next);
+  function handlePointerMove(event: React.PointerEvent<HTMLButtonElement>) {
+    const start = pointerStart.current;
+    if (!start) return;
+    if (
+      Math.abs(event.clientX - start.x) > 10 ||
+      Math.abs(event.clientY - start.y) > 10
+    ) {
+      clearLongPress();
+    }
+  }
 
-    startTransition(async () => {
-      const result = await setTransactionPaidAction({
-        id: transaction.id,
-        pago: next,
-      });
-
-      if (!result.ok) {
-        setPaid(!next);
-        onError(result.error);
-        return;
-      }
-
-      router.refresh();
-    });
+  function clearLongPress() {
+    pointerStart.current = null;
+    if (longPressTimer.current) {
+      window.clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
   }
 
   return (
-    <div className="flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent/40 sm:gap-3 sm:px-4">
+    <div
+      className={cn(
+        "flex items-center gap-2 px-3 py-2.5 transition-colors hover:bg-accent/40 sm:gap-3 sm:px-4",
+        !transaction.pago && "bg-muted/15",
+        selected && "bg-primary/10",
+      )}
+    >
+      {selectionMode && (
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelected?.(transaction.id)}
+          aria-label={`Selecionar ${transaction.descricao}`}
+          className="shrink-0"
+        />
+      )}
+
       {isTransfer ? (
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
           <ArrowLeftRight className="h-5 w-5" aria-hidden="true" />
@@ -106,11 +162,21 @@ export function TransactionRow({
 
       <button
         type="button"
-        onClick={() => onEdit(transaction)}
+        onClick={handleMainClick}
+        onPointerDown={handlePointerDown}
+        onPointerUp={clearLongPress}
+        onPointerMove={handlePointerMove}
+        onPointerLeave={clearLongPress}
+        onPointerCancel={clearLongPress}
         className="min-w-0 flex-1 rounded-md py-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="truncate text-sm font-medium">
+          <span
+            className={cn(
+              "truncate text-sm font-medium",
+              !transaction.pago && "text-muted-foreground",
+            )}
+          >
             {transaction.descricao}
           </span>
           {transaction.recorrenciaId && (
@@ -124,18 +190,49 @@ export function TransactionRow({
               {transaction.parcelaAtual}/{transaction.parcelaTotal}
             </Badge>
           )}
+          {transaction.observacao && (
+            <StickyNote
+              className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+              aria-label="Tem observação"
+            />
+          )}
+          {transaction.tags.length > 0 && (
+            <span
+              className="inline-flex items-center gap-0.5 text-[10px] text-primary/80"
+              title={transaction.tags.map((tag) => `#${tag.nome}`).join(" ")}
+            >
+              <Tag className="h-3 w-3" aria-hidden="true" />
+              {transaction.tags.length}
+            </span>
+          )}
         </span>
         <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-muted-foreground">
-          <span className="truncate">{accountLabel}</span>
-          {!isTransfer && transaction.categoriaNome && (
-            <span className="truncate">· {transaction.categoriaNome}</span>
+          {isTransfer ? (
+            <>
+              <AccountBadge
+                nome={transaction.contaNome}
+                icone={transaction.contaIcone}
+                cor={transaction.contaCor}
+              />
+              <span aria-hidden="true">→</span>
+              <AccountBadge
+                nome={transaction.contaDestinoNome}
+                icone={transaction.contaDestinoIcone}
+                cor={transaction.contaDestinoCor}
+              />
+            </>
+          ) : (
+            <>
+              <AccountBadge
+                nome={transaction.contaNome}
+                icone={transaction.contaIcone}
+                cor={transaction.contaCor}
+              />
+              {transaction.categoriaNome && (
+                <span className="truncate">· {transaction.categoriaNome}</span>
+              )}
+            </>
           )}
-          {visibleTags.map((tag) => (
-            <span key={tag.id} className="text-primary/80">
-              #{tag.nome}
-            </span>
-          ))}
-          {extraTags > 0 && <span>+{extraTags}</span>}
         </span>
       </button>
 
@@ -144,60 +241,63 @@ export function TransactionRow({
           {sign}
           {formatCurrency(transaction.valor)}
         </span>
-        <button
-          type="button"
-          onClick={togglePaid}
-          disabled={isPending}
-          aria-pressed={paid}
-          aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
-          className={cn(
-            "flex min-h-11 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors",
-            paid
-              ? "text-success hover:bg-success/10"
-              : "text-muted-foreground hover:bg-accent hover:text-foreground",
-          )}
-        >
-          {isPending ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : paid ? (
-            <CheckCircle2 className="h-4 w-4" />
-          ) : (
-            <Circle className="h-4 w-4" />
-          )}
-          <span className="hidden sm:inline">{paid ? "Pago" : "Não pago"}</span>
-        </button>
+        {!selectionMode && (
+          <button
+            type="button"
+            onClick={() => onTogglePaid(transaction, !paid)}
+            aria-pressed={paid}
+            aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
+            className={cn(
+              "flex min-h-11 items-center gap-1 rounded-md px-1.5 text-[11px] font-medium transition-colors",
+              paid
+                ? "text-success hover:bg-success/10"
+                : "text-muted-foreground hover:bg-accent hover:text-foreground",
+            )}
+          >
+            {paid ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <Circle className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {paid ? "Pago" : "Não pago"}
+            </span>
+          </button>
+        )}
       </div>
 
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-11 w-11 shrink-0"
-            aria-label={`Ações de ${transaction.descricao}`}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => onEdit(transaction)}>
-            <Pencil />
-            Editar
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onDuplicate(transaction)}>
-            <Copy />
-            Duplicar
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onSelect={() => onDelete(transaction)}
-          >
-            <Trash2 />
-            Excluir
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {!selectionMode && (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-11 w-11 shrink-0"
+              aria-label={`Ações de ${transaction.descricao}`}
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onSelect={() => onEdit(transaction)}>
+              <Pencil />
+              Editar
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => onDuplicate(transaction)}>
+              <Copy />
+              Duplicar
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => onDelete(transaction)}
+            >
+              <Trash2 />
+              Excluir
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      )}
     </div>
   );
 }

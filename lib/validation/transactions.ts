@@ -79,12 +79,6 @@ function refineTransaction(
         message: "Transferências não podem ser parceladas",
       });
     }
-  } else if (!value.categoriaId) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["categoriaId"],
-      message: "Escolha uma categoria",
-    });
   }
 
   if (value.repeticao === "fixa" && value.dataFim) {

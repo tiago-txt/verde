@@ -115,6 +115,8 @@ export const categories = sqliteTable(
     icone: text("icone").notNull().default("CircleEllipsis"),
     cor: text("cor").notNull().default("#94a3b8"),
     categoriaPaiId: text("categoria_pai_id"),
+    /** Categorias de sistema (ex.: Outros) não podem ser excluídas/arquivadas. */
+    isSystem: integer("is_system", { mode: "boolean" }).notNull().default(false),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -178,6 +180,9 @@ export const transactions = sqliteTable(
     index("transactions_categoria_idx").on(table.categoriaId),
     index("transactions_recorrencia_idx").on(table.recorrenciaId),
     index("transactions_parcela_grupo_idx").on(table.parcelaGrupoId),
+    index("transactions_tipo_idx").on(table.tipo),
+    index("transactions_pago_idx").on(table.pago),
+    index("transactions_data_pago_idx").on(table.data, table.pago),
     // Garante idempotência da geração de recorrências (inclusive após soft delete).
     uniqueIndex("transactions_recorrencia_data_unique").on(
       table.recorrenciaId,

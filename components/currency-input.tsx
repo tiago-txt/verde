@@ -12,7 +12,9 @@ type CurrencyInputProps = {
   signed?: boolean;
   disabled?: boolean;
   autoFocus?: boolean;
+  large?: boolean;
   className?: string;
+  onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 };
@@ -28,7 +30,9 @@ export function CurrencyInput({
   signed = false,
   disabled,
   autoFocus,
+  large = false,
   className,
+  onKeyDown,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: CurrencyInputProps) {
@@ -46,7 +50,8 @@ export function CurrencyInput({
       <div className="relative flex-1">
         <span
           className={cn(
-            "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-medium",
+            "pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-medium",
+            large ? "text-base" : "text-sm",
             negative ? "text-destructive" : "text-muted-foreground",
           )}
         >
@@ -56,13 +61,18 @@ export function CurrencyInput({
           id={id}
           value={display}
           onChange={handleChange}
+          onKeyDown={onKeyDown}
           inputMode="numeric"
           autoComplete="off"
           disabled={disabled}
           autoFocus={autoFocus}
           aria-invalid={ariaInvalid}
           aria-describedby={ariaDescribedBy}
-          className={cn("pl-12 text-right tabular", className)}
+          className={cn(
+            "text-right tabular",
+            large ? "h-14 pl-14 text-2xl font-semibold" : "pl-12",
+            className,
+          )}
         />
       </div>
       {signed && (
@@ -72,7 +82,10 @@ export function CurrencyInput({
           disabled={disabled}
           aria-label={negative ? "Tornar valor positivo" : "Tornar valor negativo"}
           title={negative ? "Tornar positivo" : "Tornar negativo"}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+          className={cn(
+            "grid shrink-0 place-items-center rounded-md border border-input bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50",
+            large ? "h-14 w-12" : "h-11 w-11",
+          )}
         >
           {negative ? <Plus className="h-4 w-4" /> : <Minus className="h-4 w-4" />}
         </button>

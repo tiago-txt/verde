@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
   ArrowLeftRight,
   CalendarClock,
+  ChevronDown,
+  CopyPlus,
   Loader2,
+  Paperclip,
   Repeat,
+  SlidersHorizontal,
   Tags as TagsIcon,
+  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,12 +34,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { CategoryPicker } from "./category-picker";
 import { CurrencyInput } from "@/components/currency-input";
+import { DatePicker } from "@/components/calendar/date-picker";
 import { FieldError, FormError } from "@/components/form-feedback";
 import {
   createTransactionAction,
   updateTransactionAction,
 } from "@/lib/actions/transactions";
 import type {
+  RecentDescription,
   TransactionFormData,
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
@@ -104,7 +111,11 @@ function buildDefaults(
     };
   }
 
+  const lastAccount = formData.accounts.find(
+    (account) => account.id === formData.lastAccountId && !account.arquivada,
+  );
   const firstAccount =
+    lastAccount ??
     formData.accounts.find((account) => !account.arquivada) ??
     formData.accounts[0];
 
@@ -135,6 +146,7 @@ type TransactionFormDialogProps = {
   scope?: Scope;
   formData: TransactionFormData;
   onSaved: () => void;
+  onRequestDelete?: (transaction: TransactionListItem) => void;
 };
 
 export function TransactionFormDialog({
@@ -145,8 +157,14 @@ export function TransactionFormDialog({
   scope = "single",
   formData,
   onSaved,
+  onRequestDelete,
 }: TransactionFormDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [descriptionOpen, setDescriptionOpen] = useState(false);
+  const [accountTouched, setAccountTouched] = useState(false);
+  const skipConfirmRef = useRef(false);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(createTransactionSchema),
@@ -162,8 +180,12 @@ export function TransactionFormDialog({
   const data = watch("data");
   const parcelas = watch("parcelas");
   const baseValor = watch("baseValor");
+  const frequencia = watch("frequencia");
   const contaId = watch("contaId");
   const categoriaId = watch("categoriaId");
+  const tagIds = watch("tagIds");
+  const observacao = watch("observacao");
+  const descricao = watch("descricao");
 
   const isGrouped = Boolean(
     transaction?.recorrenciaId || transaction?.parcelaGrupoId,
@@ -175,7 +197,12 @@ export function TransactionFormDialog({
 
   useEffect(() => {
     if (!open) return;
+    skipConfirmRef.current = false;
     setServerError(null);
+    setAdvancedOpen(false);
+    setConfirmCloseOpen(false);
+    setDescriptionOpen(false);
+    setAccountTouched(false);
     reset(buildDefaults(transaction, formData, mode));
   }, [open, transaction, formData, mode, reset]);
 
@@ -184,6 +211,14 @@ export function TransactionFormDialog({
       category.tipo === tipo &&
       (!category.deletedAt || category.id === categoriaId),
   );
+
+  const suggestions = useMemo(() => {
+    const query = descricao.trim().toLowerCase();
+    if (!query) return [];
+    return formData.recentDescriptions
+      .filter((item) => item.descricao.toLowerCase().includes(query))
+      .slice(0, 5);
+  }, [descricao, formData.recentDescriptions]);
 
   const installmentPreview = useMemo(() => {
     if (repeticao !== "parcelada") return null;
@@ -205,6 +240,25 @@ export function TransactionFormDialog({
     }
   }, [repeticao, valor, parcelas, data, baseValor]);
 
+  const advancedCount =
+    (repeticao !== "nenhuma" ? 1 : 0) +
+    (tagIds.length > 0 ? 1 : 0) +
+    (observacao?.trim() ? 1 : 0);
+
+  const advancedSummary: string[] = [];
+  if (repeticao === "fixa") {
+    advancedSummary.push(`Fixa · ${frequencia}`);
+  }
+  if (repeticao === "parcelada") {
+    advancedSummary.push(`Parcela 1/${parcelas || "?"}`);
+  }
+  if (tagIds.length > 0) {
+    advancedSummary.push(`${tagIds.length} tag(s)`);
+  }
+  if (observacao?.trim()) {
+    advancedSummary.push("Com observação");
+  }
+
   function handleTypeChange(next: TransactionType) {
     setValue("tipo", next, { shouldValidate: true });
     setValue("categoriaId", null);
@@ -214,7 +268,37 @@ export function TransactionFormDialog({
     }
   }
 
-  const onSubmit = handleSubmit(async (values) => {
+  function applySuggestion(suggestion: RecentDescription) {
+    setValue("descricao", suggestion.descricao, {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+
+    if (!categoriaId && suggestion.categoriaId) {
+      const category = formData.categories.find(
+        (item) =>
+          item.id === suggestion.categoriaId && !item.deletedAt,
+      );
+      if (category) {
+        setValue("categoriaId", category.id, { shouldValidate: true });
+      }
+    }
+
+    if (valor === 0 && suggestion.valor > 0) {
+      setValue("valor", suggestion.valor, { shouldValidate: true });
+    }
+
+    if (!accountTouched && suggestion.contaId) {
+      const account = formData.accounts.find(
+        (item) => item.id === suggestion.contaId && !item.arquivada,
+      );
+      if (account) setValue("contaId", account.id);
+    }
+
+    setDescriptionOpen(false);
+  }
+
+  async function persist(values: TransactionFormValues, keepOpen: boolean) {
     setServerError(null);
 
     if (formData.accounts.length === 0) {
@@ -236,19 +320,64 @@ export function TransactionFormDialog({
       return;
     }
 
+    if (mode === "edit") {
+      skipConfirmRef.current = true;
+      onOpenChange(false);
+      onSaved();
+      return;
+    }
+
+    if (keepOpen) {
+      reset(buildDefaults(null, formData, "create"));
+      setAdvancedOpen(false);
+      setServerError(null);
+      onSaved();
+      requestAnimationFrame(() => {
+        document.getElementById("transaction-valor")?.focus();
+      });
+      return;
+    }
+
+    skipConfirmRef.current = true;
     onOpenChange(false);
     onSaved();
-  });
+  }
+
+  const onSubmit = handleSubmit((values) => persist(values, false));
+  const onSubmitAndNew = handleSubmit((values) => persist(values, true));
+
+  function handleOpenChange(next: boolean) {
+    if (next) {
+      onOpenChange(true);
+      return;
+    }
+
+    if (skipConfirmRef.current) {
+      skipConfirmRef.current = false;
+      onOpenChange(false);
+      return;
+    }
+
+    if (formState.isDirty && !formState.isSubmitting) {
+      setConfirmCloseOpen(true);
+      return;
+    }
+
+    onOpenChange(false);
+  }
 
   const hasAccounts = formData.accounts.length > 0;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="max-h-[92dvh] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-2xl"
         showClose
       >
-        <form onSubmit={onSubmit} className="flex max-h-[92dvh] flex-col sm:max-h-[90dvh]">
+        <form
+          onSubmit={onSubmit}
+          className="flex max-h-[92dvh] flex-col sm:max-h-[90dvh]"
+        >
           <div className="border-b border-border p-5 pr-12 sm:p-6 sm:pr-14">
             <DialogHeader>
               <DialogTitle>
@@ -257,7 +386,7 @@ export function TransactionFormDialog({
               <DialogDescription>
                 {mode === "edit"
                   ? "Ajuste os dados do lançamento."
-                  : "Registre uma despesa, receita ou transferência entre contas."}
+                  : "Registre uma despesa, receita ou transferência em poucos passos."}
               </DialogDescription>
             </DialogHeader>
           </div>
@@ -284,8 +413,9 @@ export function TransactionFormDialog({
                     : "Lançamento recorrente"}
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  Editando <strong className="text-foreground">{SCOPE_LABELS[scope]}</strong>.
-                  Data e tipo ficam bloqueados para não quebrar o cronograma.
+                  Editando{" "}
+                  <strong className="text-foreground">{SCOPE_LABELS[scope]}</strong>.
+                  Data, tipo e status de pagamento ficam preservados.
                 </p>
               </div>
             )}
@@ -327,17 +457,59 @@ export function TransactionFormDialog({
 
             <div className="space-y-2">
               <Label htmlFor="transaction-descricao">Descrição</Label>
-              <Input
-                id="transaction-descricao"
-                placeholder={
-                  tipo === "transferencia"
-                    ? "Ex.: Transferência para poupança"
-                    : "Ex.: Mercado do mês"
-                }
-                autoFocus
-                aria-invalid={Boolean(formState.errors.descricao)}
-                {...register("descricao")}
-              />
+              <div className="relative">
+                <Input
+                  id="transaction-descricao"
+                  placeholder={
+                    tipo === "transferencia"
+                      ? "Ex.: Transferência para poupança"
+                      : "Ex.: Mercado do mês"
+                  }
+                  autoComplete="off"
+                  aria-invalid={Boolean(formState.errors.descricao)}
+                  onFocus={() => setDescriptionOpen(true)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      if (descriptionOpen && suggestions[0]) {
+                        applySuggestion(suggestions[0]);
+                      } else {
+                        void onSubmit();
+                      }
+                    }
+                  }}
+                  {...register("descricao", {
+                    onBlur: () =>
+                      window.setTimeout(() => setDescriptionOpen(false), 150),
+                  })}
+                />
+
+                {descriptionOpen && suggestions.length > 0 && (
+                  <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+                    {suggestions.map((suggestion) => (
+                      <button
+                        key={`${suggestion.descricao}-${suggestion.valor}`}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => applySuggestion(suggestion)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+                      >
+                        <span className="min-w-0 flex-1 truncate">
+                          {suggestion.descricao}
+                          {suggestion.categoriaNome && (
+                            <span className="ml-2 text-xs text-muted-foreground">
+                              {suggestion.categoriaNome}
+                            </span>
+                          )}
+                        </span>
+                        <span className="tabular text-xs text-muted-foreground">
+                          {formatCurrency(suggestion.valor)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
               <FieldError message={formState.errors.descricao?.message} />
             </div>
 
@@ -354,7 +526,15 @@ export function TransactionFormDialog({
                       id="transaction-valor"
                       value={field.value}
                       onChange={field.onChange}
+                      large
+                      autoFocus
                       aria-invalid={Boolean(formState.errors.valor)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void onSubmit();
+                        }
+                      }}
                     />
                   )}
                 />
@@ -366,12 +546,18 @@ export function TransactionFormDialog({
 
               <div className="space-y-2">
                 <Label htmlFor="transaction-data">Data</Label>
-                <Input
-                  id="transaction-data"
-                  type="date"
-                  disabled={!canChangeDate}
-                  aria-invalid={Boolean(formState.errors.data)}
-                  {...register("data")}
+                <Controller
+                  control={control}
+                  name="data"
+                  render={({ field }) => (
+                    <DatePicker
+                      id="transaction-data"
+                      value={field.value}
+                      onChange={field.onChange}
+                      disabled={!canChangeDate}
+                      aria-invalid={Boolean(formState.errors.data)}
+                    />
+                  )}
                 />
                 <FieldError message={formState.errors.data?.message} />
                 {!canChangeDate && (
@@ -387,7 +573,7 @@ export function TransactionFormDialog({
                 <Label htmlFor="transaction-pago">Lançamento pago</Label>
                 <p className="text-xs text-muted-foreground">
                   {paidLocked
-                    ? "O status de pagamento é mantido ao editar vários lançamentos."
+                    ? "O status é mantido ao editar vários lançamentos."
                     : repeticao === "fixa"
                       ? "Aplica-se à primeira ocorrência; as próximas ficam não pagas."
                       : repeticao === "parcelada"
@@ -417,7 +603,9 @@ export function TransactionFormDialog({
                 <NativeSelect
                   id="transaction-conta"
                   aria-invalid={Boolean(formState.errors.contaId)}
-                  {...register("contaId")}
+                  {...register("contaId", {
+                    onChange: () => setAccountTouched(true),
+                  })}
                 >
                   {!hasAccounts && <option value="">Nenhuma conta</option>}
                   {formData.accounts.map((account) => (
@@ -492,254 +680,298 @@ export function TransactionFormDialog({
                     />
                   )}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Sem categoria, o lançamento usa{" "}
+                  <strong className="text-foreground">Outros</strong> do tipo{" "}
+                  {tipo === "receita" ? "receita" : "despesa"}.
+                </p>
                 <FieldError message={formState.errors.categoriaId?.message} />
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <TagsIcon className="h-4 w-4 text-muted-foreground" />
-                Tags
-              </Label>
-              {formData.tags.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  Nenhuma tag cadastrada. Crie em{" "}
-                  <Link
-                    href="/configuracoes/categorias"
-                    className="underline hover:text-foreground"
-                  >
-                    Configurações &gt; Categorias
-                  </Link>
-                  .
-                </p>
-              ) : (
-                <Controller
-                  control={control}
-                  name="tagIds"
-                  render={({ field }) => (
-                    <div className="flex flex-wrap gap-2">
-                      {formData.tags.map((tag) => {
-                        const checked = field.value.includes(tag.id);
-                        return (
-                          <label
-                            key={tag.id}
-                            htmlFor={`transaction-tag-${tag.id}`}
-                            className={cn(
-                              "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm transition-colors",
-                              checked
-                                ? "border-primary/40 bg-primary/10 text-primary"
-                                : "border-border hover:bg-accent",
-                            )}
-                          >
-                            <Checkbox
-                              id={`transaction-tag-${tag.id}`}
-                              checked={checked}
-                              onCheckedChange={(value) => {
-                                field.onChange(
-                                  value
-                                    ? [...field.value, tag.id]
-                                    : field.value.filter(
-                                        (tagId) => tagId !== tag.id,
-                                      ),
-                                );
-                              }}
-                            />
-                            {tag.nome}
-                          </label>
-                        );
-                      })}
-                    </div>
+            <div className="space-y-3">
+              <button
+                type="button"
+                onClick={() => setAdvancedOpen((current) => !current)}
+                aria-expanded={advancedOpen}
+                className="flex min-h-11 w-full items-center justify-between gap-2 rounded-lg border border-border px-3 text-sm font-medium transition-colors hover:bg-accent"
+              >
+                <span className="flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                  Mais opções
+                  {advancedCount > 0 && (
+                    <Badge variant="secondary">{advancedCount}</Badge>
+                  )}
+                </span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 text-muted-foreground transition-transform",
+                    advancedOpen && "rotate-180",
                   )}
                 />
+              </button>
+
+              {advancedSummary.length > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  {advancedSummary.join(" · ")}
+                </p>
               )}
-              <FieldError message={formState.errors.tagIds?.message} />
-            </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="transaction-observacao">Observação</Label>
-              <Textarea
-                id="transaction-observacao"
-                placeholder="Opcional"
-                maxLength={1000}
-                {...register("observacao")}
-              />
-              <FieldError message={formState.errors.observacao?.message} />
-            </div>
-
-            {mode === "create" && (
-              <div className="space-y-3 rounded-lg border border-border p-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  <Repeat className="h-4 w-4 text-primary" />
-                  Repetição
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  {(["nenhuma", "fixa", "parcelada"] as const).map(
-                    (option) => (
-                      <button
-                        key={option}
-                        type="button"
-                        onClick={() =>
-                          setValue("repeticao", option, {
-                            shouldValidate: true,
-                          })
-                        }
-                        disabled={
-                          option === "parcelada" &&
-                          tipo === "transferencia"
-                        }
-                        className={cn(
-                          "min-h-11 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                          repeticao === option
-                            ? "border-primary/50 bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
-                        )}
-                      >
-                        {REPETITION_LABELS[option]}
-                      </button>
-                    ),
-                  )}
-                </div>
-
-                {repeticao === "fixa" && (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="transaction-frequencia">
-                          Frequência
-                        </Label>
-                        <NativeSelect
-                          id="transaction-frequencia"
-                          {...register("frequencia")}
-                        >
-                          <option value="mensal">Mensal</option>
-                          <option value="semanal">Semanal</option>
-                          <option value="anual">Anual</option>
-                        </NativeSelect>
+              {advancedOpen && (
+                <div className="space-y-5 rounded-lg border border-border p-4">
+                  {mode === "create" && (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-2 text-sm font-medium">
+                        <Repeat className="h-4 w-4 text-primary" />
+                        Repetição
                       </div>
 
-                      <div className="space-y-2">
-                        <Label htmlFor="transaction-data-fim">
-                          Data final (opcional)
-                        </Label>
-                        <Controller
-                          control={control}
-                          name="dataFim"
-                          render={({ field }) => (
-                            <Input
-                              id="transaction-data-fim"
-                              type="date"
-                              min={data}
-                              value={field.value ?? ""}
-                              onChange={(event) =>
-                                field.onChange(event.target.value || null)
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["nenhuma", "fixa", "parcelada"] as const).map(
+                          (option) => (
+                            <button
+                              key={option}
+                              type="button"
+                              onClick={() =>
+                                setValue("repeticao", option, {
+                                  shouldValidate: true,
+                                })
                               }
-                            />
-                          )}
-                        />
-                        <FieldError
-                          message={formState.errors.dataFim?.message}
-                        />
-                      </div>
-                    </div>
-                    <p className="flex items-start gap-2 text-xs text-muted-foreground">
-                      <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                      A primeira ocorrência é {formatDate(data)}. As próximas
-                      são geradas automaticamente (até 12 meses à frente) e
-                      ficam não pagas.
-                    </p>
-                  </div>
-                )}
-
-                {repeticao === "parcelada" && (
-                  <div className="space-y-3">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="transaction-parcelas">
-                          Número de parcelas
-                        </Label>
-                        <Input
-                          id="transaction-parcelas"
-                          type="number"
-                          min={2}
-                          max={60}
-                          inputMode="numeric"
-                          {...register("parcelas", {
-                            valueAsNumber: true,
-                          })}
-                        />
-                        <FieldError
-                          message={formState.errors.parcelas?.message}
-                        />
+                              disabled={
+                                option === "parcelada" &&
+                                tipo === "transferencia"
+                              }
+                              className={cn(
+                                "min-h-11 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                                repeticao === option
+                                  ? "border-primary/50 bg-primary/10 text-primary"
+                                  : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+                              )}
+                            >
+                              {REPETITION_LABELS[option]}
+                            </button>
+                          ),
+                        )}
                       </div>
 
-                      <div className="space-y-2">
-                        <Label>O valor informado é</Label>
-                        <div className="grid grid-cols-2 gap-2">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setValue("baseValor", "total", {
-                                shouldValidate: true,
-                              })
-                            }
-                            className={cn(
-                              "min-h-11 rounded-md border px-2 text-xs font-medium",
-                              baseValor === "total"
-                                ? "border-primary/50 bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:bg-accent",
-                            )}
-                          >
-                            O total (dividir)
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setValue("baseValor", "parcela", {
-                                shouldValidate: true,
-                              })
-                            }
-                            className={cn(
-                              "min-h-11 rounded-md border px-2 text-xs font-medium",
-                              baseValor === "parcela"
-                                ? "border-primary/50 bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:bg-accent",
-                            )}
-                          >
-                            Cada parcela
-                          </button>
+                      {repeticao === "fixa" && (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="transaction-frequencia">
+                                Frequência
+                              </Label>
+                              <NativeSelect
+                                id="transaction-frequencia"
+                                {...register("frequencia")}
+                              >
+                                <option value="mensal">Mensal</option>
+                                <option value="semanal">Semanal</option>
+                                <option value="anual">Anual</option>
+                              </NativeSelect>
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label htmlFor="transaction-data-fim">
+                                Data final (opcional)
+                              </Label>
+                              <Controller
+                                control={control}
+                                name="dataFim"
+                                render={({ field }) => (
+                                  <DatePicker
+                                    id="transaction-data-fim"
+                                    value={field.value ?? ""}
+                                    onChange={(iso) =>
+                                      field.onChange(iso || null)
+                                    }
+                                  />
+                                )}
+                              />
+                              <FieldError
+                                message={formState.errors.dataFim?.message}
+                              />
+                            </div>
+                          </div>
+                          <p className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                            A primeira ocorrência é {formatDate(data)}. As
+                            próximas são geradas automaticamente (até 12 meses à
+                            frente) e ficam não pagas.
+                          </p>
                         </div>
-                      </div>
-                    </div>
+                      )}
 
-                    {installmentPreview ? (
-                      <div className="rounded-md bg-muted/50 p-3 text-sm">
-                        <p className="font-medium">
-                          {parcelas}x de{" "}
-                          {formatCurrency(installmentPreview.rest)}
-                          {installmentPreview.first !==
-                            installmentPreview.rest && (
-                            <span className="text-muted-foreground">
-                              {" "}
-                              (1ª de{" "}
-                              {formatCurrency(installmentPreview.first)})
-                            </span>
+                      {repeticao === "parcelada" && (
+                        <div className="space-y-3">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="space-y-2">
+                              <Label htmlFor="transaction-parcelas">
+                                Número de parcelas
+                              </Label>
+                              <Input
+                                id="transaction-parcelas"
+                                type="number"
+                                min={2}
+                                max={60}
+                                inputMode="numeric"
+                                {...register("parcelas", {
+                                  valueAsNumber: true,
+                                })}
+                              />
+                              <FieldError
+                                message={formState.errors.parcelas?.message}
+                              />
+                            </div>
+
+                            <div className="space-y-2">
+                              <Label>O valor informado é</Label>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setValue("baseValor", "total", {
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                  className={cn(
+                                    "min-h-11 rounded-md border px-2 text-xs font-medium",
+                                    baseValor === "total"
+                                      ? "border-primary/50 bg-primary/10 text-primary"
+                                      : "border-border text-muted-foreground hover:bg-accent",
+                                  )}
+                                >
+                                  O total (dividir)
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setValue("baseValor", "parcela", {
+                                      shouldValidate: true,
+                                    })
+                                  }
+                                  className={cn(
+                                    "min-h-11 rounded-md border px-2 text-xs font-medium",
+                                    baseValor === "parcela"
+                                      ? "border-primary/50 bg-primary/10 text-primary"
+                                      : "border-border text-muted-foreground hover:bg-accent",
+                                  )}
+                                >
+                                  Cada parcela
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {installmentPreview ? (
+                            <div className="rounded-md bg-muted/50 p-3 text-sm">
+                              <p className="font-medium">
+                                {parcelas}x de{" "}
+                                {formatCurrency(installmentPreview.rest)}
+                                {installmentPreview.first !==
+                                  installmentPreview.rest && (
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    (1ª de{" "}
+                                    {formatCurrency(installmentPreview.first)})
+                                  </span>
+                                )}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Total:{" "}
+                                {formatCurrency(installmentPreview.total)} · 1ª
+                                parcela em {formatDate(data)}
+                              </p>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              Informe um valor e um número de parcelas válidos.
+                            </p>
                           )}
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Total: {formatCurrency(installmentPreview.total)} · 1ª
-                          parcela em {formatDate(data)}
-                        </p>
-                      </div>
-                    ) : (
-                      <p className="text-xs text-muted-foreground">
-                        Informe um valor e um número de parcelas válidos.
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <TagsIcon className="h-4 w-4 text-muted-foreground" />
+                      Tags
+                    </Label>
+                    {formData.tags.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma tag cadastrada. Crie em{" "}
+                        <Link
+                          href="/configuracoes/categorias"
+                          className="underline hover:text-foreground"
+                        >
+                          Configurações &gt; Categorias
+                        </Link>
+                        .
                       </p>
+                    ) : (
+                      <Controller
+                        control={control}
+                        name="tagIds"
+                        render={({ field }) => (
+                          <div className="flex flex-wrap gap-2">
+                            {formData.tags.map((tag) => {
+                              const checked = field.value.includes(tag.id);
+                              return (
+                                <label
+                                  key={tag.id}
+                                  htmlFor={`transaction-tag-${tag.id}`}
+                                  className={cn(
+                                    "flex min-h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm transition-colors",
+                                    checked
+                                      ? "border-primary/40 bg-primary/10 text-primary"
+                                      : "border-border hover:bg-accent",
+                                  )}
+                                >
+                                  <Checkbox
+                                    id={`transaction-tag-${tag.id}`}
+                                    checked={checked}
+                                    onCheckedChange={(value) => {
+                                      field.onChange(
+                                        value
+                                          ? [...field.value, tag.id]
+                                          : field.value.filter(
+                                              (tagId) => tagId !== tag.id,
+                                            ),
+                                      );
+                                    }}
+                                  />
+                                  {tag.nome}
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      />
                     )}
+                    <FieldError message={formState.errors.tagIds?.message} />
                   </div>
-                )}
-              </div>
-            )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="transaction-observacao">Observação</Label>
+                    <Textarea
+                      id="transaction-observacao"
+                      placeholder="Opcional"
+                      maxLength={1000}
+                      {...register("observacao")}
+                    />
+                    <FieldError
+                      message={formState.errors.observacao?.message}
+                    />
+                  </div>
+
+                  <div className="flex min-h-16 items-center justify-center gap-2 rounded-lg border border-dashed border-border text-xs text-muted-foreground">
+                    <Paperclip className="h-4 w-4" />
+                    Adicionar anexo (em breve)
+                  </div>
+                </div>
+              )}
+            </div>
 
             {mode === "edit" && !isGrouped && (
               <p className="flex items-start gap-2 text-xs text-muted-foreground">
@@ -751,28 +983,98 @@ export function TransactionFormDialog({
           </div>
 
           <div className="border-t border-border p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:p-6 sm:pb-6">
-            <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => onOpenChange(false)}
-                disabled={formState.isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={formState.isSubmitting || !hasAccounts}
-              >
-                {formState.isSubmitting && (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+            <DialogFooter className="items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                {mode === "edit" && transaction && onRequestDelete && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-11 w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    aria-label="Excluir lançamento"
+                    title="Excluir lançamento"
+                    onClick={() => onRequestDelete(transaction)}
+                    disabled={formState.isSubmitting}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
                 )}
-                {mode === "edit" ? "Salvar alterações" : "Criar lançamento"}
-              </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {mode === "create" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-11 w-11"
+                    aria-label="Salvar e criar outro"
+                    title="Salvar e criar outro"
+                    onClick={() => void onSubmitAndNew()}
+                    disabled={formState.isSubmitting || !hasAccounts}
+                  >
+                    {formState.isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CopyPlus className="h-4 w-4" />
+                    )}
+                  </Button>
+                )}
+
+                {mode === "edit" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => handleOpenChange(false)}
+                    disabled={formState.isSubmitting}
+                  >
+                    Cancelar
+                  </Button>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={formState.isSubmitting || !hasAccounts}
+                >
+                  {formState.isSubmitting && (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  )}
+                  {mode === "edit" ? "Salvar alterações" : "Criar lançamento"}
+                </Button>
+              </div>
             </DialogFooter>
           </div>
         </form>
       </DialogContent>
+
+      <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Descartar lançamento?</DialogTitle>
+            <DialogDescription>
+              Há dados preenchidos que ainda não foram salvos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setConfirmCloseOpen(false)}
+            >
+              Continuar editando
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setConfirmCloseOpen(false);
+                skipConfirmRef.current = true;
+                onOpenChange(false);
+              }}
+            >
+              Descartar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

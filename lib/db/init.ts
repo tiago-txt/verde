@@ -115,6 +115,7 @@ function seedCategories(db: DatabaseInstance): void {
           tipo: category.tipo,
           icone: category.icone,
           cor: category.cor,
+          isSystem: category.isSystem ?? false,
         })
         .run();
 
@@ -127,6 +128,7 @@ function seedCategories(db: DatabaseInstance): void {
             icone: child.icone,
             cor: child.cor,
             categoriaPaiId: parentId,
+            isSystem: child.isSystem ?? false,
           })
           .run();
       }

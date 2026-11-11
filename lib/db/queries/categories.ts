@@ -25,6 +25,7 @@ export function listCategoriesWithCounts(): CategoryWithCount[] {
       icone: categories.icone,
       cor: categories.cor,
       categoriaPaiId: categories.categoriaPaiId,
+      isSystem: categories.isSystem,
       createdAt: categories.createdAt,
       updatedAt: categories.updatedAt,
       deletedAt: categories.deletedAt,
@@ -67,11 +68,29 @@ export function listAllCategories() {
       icone: categories.icone,
       cor: categories.cor,
       categoriaPaiId: categories.categoriaPaiId,
+      isSystem: categories.isSystem,
       deletedAt: categories.deletedAt,
     })
     .from(categories)
     .orderBy(asc(categories.tipo), asc(categories.nome))
     .all();
+}
+
+/** IDs das categorias de sistema "Outros" por tipo. */
+export function getSystemCategoryIds(): {
+  despesa: string | null;
+  receita: string | null;
+} {
+  const rows = getDb()
+    .select({ id: categories.id, tipo: categories.tipo })
+    .from(categories)
+    .where(eq(categories.isSystem, true))
+    .all();
+
+  return {
+    despesa: rows.find((row) => row.tipo === "despesa")?.id ?? null,
+    receita: rows.find((row) => row.tipo === "receita")?.id ?? null,
+  };
 }
 
 export function getCategoryById(id: string) {

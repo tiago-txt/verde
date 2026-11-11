@@ -65,6 +65,7 @@ type AppShellProps = {
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const pageTitle = PAGE_TITLES[pathname] ?? "Verde";
+  const isTransactionsPage = pathname.startsWith("/lancamentos");
 
   return (
     <div className="min-h-dvh bg-background">
@@ -156,14 +157,17 @@ export function AppShell({ user, children }: AppShellProps) {
         </main>
       </div>
 
-      {/* Botão flutuante (mobile) */}
-      <Link
-        href="/lancamentos?novo=1"
-        aria-label="Novo lançamento"
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform active:scale-95 lg:hidden"
-      >
-        <Plus className="h-7 w-7" aria-hidden="true" />
-      </Link>
+      {/* Botão flutuante (mobile) — na tela de lançamentos o "+" fica no cabeçalho
+          para não conflitar com a barra de resumo fixa. */}
+      {!isTransactionsPage && (
+        <Link
+          href="/lancamentos?novo=1"
+          aria-label="Novo lançamento"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform active:scale-95 lg:hidden"
+        >
+          <Plus className="h-7 w-7" aria-hidden="true" />
+        </Link>
+      )}
 
       {/* Bottom navigation (mobile) */}
       <nav

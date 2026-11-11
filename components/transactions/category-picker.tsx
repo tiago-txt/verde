@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Search } from "lucide-react";
+import { Check, CircleEllipsis, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { CategoryIcon } from "@/components/category-icon";
 import { cn } from "@/lib/utils";
@@ -68,6 +68,24 @@ export function CategoryPicker({
       </div>
 
       <div className="max-h-48 overflow-y-auto rounded-md border border-border p-1">
+        <button
+          type="button"
+          onClick={() => onChange(null)}
+          disabled={disabled}
+          className={cn(
+            "flex min-h-11 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+            value === null
+              ? "bg-primary/10 text-primary"
+              : "hover:bg-accent",
+          )}
+        >
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-muted text-muted-foreground">
+            <CircleEllipsis className="h-3.5 w-3.5" />
+          </span>
+          <span className="min-w-0 flex-1 truncate">Outros (padrão)</span>
+          {value === null && <Check className="h-4 w-4 shrink-0" />}
+        </button>
+
         {list.length === 0 ? (
           <p className="px-3 py-4 text-sm text-muted-foreground">
             Nenhuma categoria encontrada.

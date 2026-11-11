@@ -1,18 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  useOptimistic,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
+  CheckSquare,
   ChevronLeft,
   ChevronRight,
+  Download,
   Loader2,
+  MoreVertical,
   Plus,
   ReceiptText,
+  X,
 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -21,17 +29,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
 import { FormError } from "@/components/form-feedback";
-import { PageHeader } from "@/components/page-header";
+import { MonthPicker } from "@/components/calendar/month-picker";
+import {
+  BulkActionsBar,
+  BulkCategoryDialog,
+  BulkDeleteDialog,
+  BulkTagDialog,
+} from "./bulk-actions";
+import { FilterBar } from "./filter-bar";
 import { ScopeDialog } from "./scope-dialog";
+import { TransactionDetailsPanel } from "./transaction-details-panel";
 import { TransactionFormDialog } from "./transaction-form-dialog";
 import { TransactionRow } from "./transaction-row";
+import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import {
+  bulkAddTagAction,
+  bulkChangeCategoryAction,
+  bulkDeleteTransactionsAction,
+  bulkSetPaidAction,
   deleteTransactionAction,
   duplicateTransactionAction,
+  setTransactionPaidAction,
 } from "@/lib/actions/transactions";
 import type {
+  TransactionDetail,
   TransactionFormData,
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
@@ -39,51 +69,105 @@ import {
   addMonths,
   currentMonth,
   todayISO,
-  weekdayShort,
 } from "@/lib/dates";
-import type { MonthSummary } from "@/lib/finance/summary";
 import type { Scope } from "@/lib/finance/scopes";
-import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
+import {
+  buildTransactionHref,
+  buildTransactionSearchParams,
+  hasActiveFilters,
+  type TransactionFilters,
+} from "@/lib/finance/filters";
+import { dayLabel, groupTransactionsByDay } from "@/lib/finance/day-labels";
+import { summarizeTransactions } from "@/lib/finance/summary";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
+type OptimisticAction =
+  | { type: "paid"; ids: string[]; pago: boolean }
+  | {
+      type: "category";
+      ids: string[];
+      category: {
+        id: string;
+        nome: string;
+        icone: string;
+        cor: string;
+        tipo: "despesa" | "receita";
+      };
+    }
+  | { type: "tag"; ids: string[]; tag: { id: string; nome: string } }
+  | { type: "delete"; ids: string[] };
+
+function optimisticReducer(
+  state: TransactionListItem[],
+  action: OptimisticAction,
+): TransactionListItem[] {
+  switch (action.type) {
+    case "paid":
+      return state.map((transaction) =>
+        action.ids.includes(transaction.id)
+          ? { ...transaction, pago: action.pago }
+          : transaction,
+      );
+    case "category":
+      return state.map((transaction) =>
+        action.ids.includes(transaction.id) &&
+        transaction.tipo === action.category.tipo
+          ? {
+              ...transaction,
+              categoriaId: action.category.id,
+              categoriaNome: action.category.nome,
+              categoriaIcone: action.category.icone,
+              categoriaCor: action.category.cor,
+            }
+          : transaction,
+      );
+    case "tag":
+      return state.map((transaction) =>
+        action.ids.includes(transaction.id)
+          ? {
+              ...transaction,
+              tags: transaction.tags.some((tag) => tag.id === action.tag.id)
+                ? transaction.tags
+                : [...transaction.tags, action.tag],
+            }
+          : transaction,
+      );
+    case "delete":
+      return state.filter(
+        (transaction) => !action.ids.includes(transaction.id),
+      );
+  }
+}
+
 type TransactionsPageClientProps = {
-  month: string;
+  filters: TransactionFilters;
   transactions: TransactionListItem[];
   formData: TransactionFormData;
-  summary: MonthSummary;
+  detail: TransactionDetail | null;
+  dayBalances: Record<string, number>;
+  today: string;
+  overdueIds: string[];
   initialNew: boolean;
 };
 
-function SummaryCard({
-  label,
-  value,
-  hint,
-  tone,
-}: {
-  label: string;
-  value: string;
-  hint: string;
-  tone: string;
-}) {
-  return (
-    <Card>
-      <CardContent className="space-y-0.5 p-3 sm:p-4">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className={cn("tabular text-lg font-semibold", tone)}>{value}</p>
-        <p className="text-[11px] text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export function TransactionsPageClient({
-  month,
+  filters,
   transactions,
   formData,
-  summary,
+  detail,
+  dayBalances,
+  today,
+  overdueIds,
   initialNew,
 }: TransactionsPageClientProps) {
   const router = useRouter();
+  const [optimisticTransactions, applyOptimistic] = useOptimistic(
+    transactions,
+    optimisticReducer,
+  );
+  const [isBulkPending, startBulkTransition] = useTransition();
+
   const [createOpen, setCreateOpen] = useState(initialNew);
   const [editing, setEditing] = useState<{
     transaction: TransactionListItem;
@@ -97,38 +181,128 @@ export function TransactionsPageClient({
   const [pendingDelete, setPendingDelete] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
 
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [overdueOpen, setOverdueOpen] = useState(false);
+
   useEffect(() => {
     if (initialNew) setCreateOpen(true);
   }, [initialNew]);
 
-  const groups = useMemo(() => {
-    const map = new Map<string, TransactionListItem[]>();
-    for (const transaction of transactions) {
-      const list = map.get(transaction.data) ?? [];
-      list.push(transaction);
-      map.set(transaction.data, list);
-    }
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+  useEffect(() => {
+    setSelectedIds((current) => {
+      const valid = new Set(transactions.map((transaction) => transaction.id));
+      const next = new Set(
+        [...current].filter((id) => valid.has(id)),
+      );
+      return next.size === current.size ? current : next;
+    });
   }, [transactions]);
 
-  const isCurrentMonth = month === currentMonth();
-  const today = todayISO();
+  useEffect(() => {
+    if (!detail) return;
+    const detailId = detail.id;
 
-  function clearNewParam() {
-    if (initialNew) {
-      router.replace(`/lancamentos?mes=${month}`);
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      const ids = optimisticTransactions.map((transaction) => transaction.id);
+      const index = ids.indexOf(detailId);
+      if (index < 0) return;
+      const nextId =
+        event.key === "ArrowDown" ? ids[index + 1] : ids[index - 1];
+      if (nextId) {
+        router.push(buildTransactionHref({ ...filters, detalhe: nextId }));
+      }
     }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [detail, optimisticTransactions, filters, router]);
+
+  const groups = useMemo(
+    () => groupTransactionsByDay(optimisticTransactions),
+    [optimisticTransactions],
+  );
+  const visibleGroups = groups.slice(0, filters.dias);
+  const summary = useMemo(
+    () => summarizeTransactions(optimisticTransactions),
+    [optimisticTransactions],
+  );
+  const hasMoreDays = groups.length > filters.dias;
+  const activeFilters = hasActiveFilters(filters);
+  const selectedCount = selectedIds.size;
+
+  function go(next: TransactionFilters) {
+    router.push(buildTransactionHref(next));
+  }
+
+  function changeFilters(
+    patch: Partial<
+      Pick<
+        TransactionFilters,
+        "tipo" | "contas" | "categorias" | "tags" | "status" | "q"
+      >
+    >,
+  ) {
+    go({ ...filters, ...patch, dias: 10, detalhe: null });
+  }
+
+  function clearFilters() {
+    go({
+      ...filters,
+      tipo: null,
+      contas: [],
+      categorias: [],
+      tags: [],
+      status: "todos",
+      q: null,
+      dias: 10,
+      detalhe: null,
+    });
+  }
+
+  function changeMonth(monthKey: string) {
+    go({ ...filters, mes: monthKey, dias: 10, detalhe: null });
+  }
+
+  function openDetails(transaction: TransactionListItem) {
+    go({ ...filters, detalhe: transaction.id });
+  }
+
+  function closeDetails() {
+    if (filters.detalhe) go({ ...filters, detalhe: null });
+  }
+
+  function navigateDetail(id: string) {
+    go({ ...filters, detalhe: id });
+  }
+
+  function loadMoreDays() {
+    go({ ...filters, dias: Math.min(31, filters.dias + 10) });
   }
 
   function closeCreate(open: boolean) {
     setCreateOpen(open);
-    if (!open) clearNewParam();
+    if (!open && initialNew) {
+      router.replace(buildTransactionHref({ ...filters, detalhe: null }));
+    }
   }
 
   function handleSaved() {
-    setCreateOpen(false);
-    setEditing(null);
-    clearNewParam();
     router.refresh();
   }
 
@@ -201,161 +375,472 @@ export function TransactionsPageClient({
     router.refresh();
   }
 
-  function dayNet(items: TransactionListItem[]) {
-    return items.reduce((sum, transaction) => {
-      if (transaction.tipo === "receita") return sum + transaction.valor;
-      if (transaction.tipo === "despesa") return sum - transaction.valor;
-      return sum;
-    }, 0);
+  function handleFormDelete(transaction: TransactionListItem) {
+    setEditing(null);
+    setCreateOpen(false);
+    handleDelete(transaction);
   }
 
+  function handleDetailEdit(transaction: TransactionDetail) {
+    // Mantém o painel aberto: o modal de edição/escopo abre por cima e, ao
+    // salvar, o painel é atualizado pelo refresh do servidor.
+    handleEdit(transaction);
+  }
+
+  function handleDetailDelete(transaction: TransactionDetail) {
+    // Após excluir, o detalhe deixa de existir e o painel fecha no refresh.
+    handleDelete(transaction);
+  }
+
+  function handleDetailDuplicate(transaction: TransactionDetail) {
+    closeDetails();
+    void handleDuplicate(transaction);
+  }
+
+  async function handleDetailTogglePaid(id: string, pago: boolean) {
+    const result = await setTransactionPaidAction({ id, pago });
+    if (result.ok) router.refresh();
+    return result;
+  }
+
+  function handleTogglePaid(transaction: TransactionListItem, pago: boolean) {
+    startBulkTransition(async () => {
+      applyOptimistic({ type: "paid", ids: [transaction.id], pago });
+      const result = await setTransactionPaidAction({
+        id: transaction.id,
+        pago,
+      });
+      if (!result.ok) setFlash(result.error);
+      router.refresh();
+    });
+  }
+
+  function toggleSelectionMode() {
+    if (selectionMode) {
+      setSelectionMode(false);
+      setSelectedIds(new Set());
+    } else {
+      setSelectionMode(true);
+      setSelectedIds(new Set());
+    }
+  }
+
+  function toggleSelected(id: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleDay(items: TransactionListItem[], checked: boolean) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      for (const item of items) {
+        if (checked) next.add(item.id);
+        else next.delete(item.id);
+      }
+      return next;
+    });
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(optimisticTransactions.map((item) => item.id)));
+  }
+
+  function exitSelection() {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function handleLongPress(transaction: TransactionListItem) {
+    setSelectionMode(true);
+    setSelectedIds(new Set([transaction.id]));
+  }
+
+  function bulkSetPaid(pago: boolean) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+
+    startBulkTransition(async () => {
+      applyOptimistic({ type: "paid", ids, pago });
+      const result = await bulkSetPaidAction({ ids, pago });
+      if (!result.ok) setFlash(result.error);
+      setSelectedIds(new Set());
+      router.refresh();
+    });
+  }
+
+  function bulkChangeCategory(categoryId: string) {
+    const category = formData.categories.find(
+      (item) => item.id === categoryId,
+    );
+    if (!category) {
+      setBulkError("Categoria não encontrada.");
+      return;
+    }
+
+    const ids = [...selectedIds];
+    setBulkError(null);
+
+    startBulkTransition(async () => {
+      applyOptimistic({
+        type: "category",
+        ids,
+        category: {
+          id: category.id,
+          nome: category.nome,
+          icone: category.icone,
+          cor: category.cor,
+          tipo: category.tipo,
+        },
+      });
+      const result = await bulkChangeCategoryAction({
+        ids,
+        categoriaId: category.id,
+      });
+
+      if (!result.ok) {
+        setBulkError(result.error);
+        router.refresh();
+        return;
+      }
+
+      setBulkCategoryOpen(false);
+      setSelectedIds(new Set());
+      setFlash(
+        result.ignored
+          ? `${result.count} lançamento(s) atualizado(s); ${result.ignored} ignorado(s) por tipo/transferência.`
+          : `${result.count} lançamento(s) atualizado(s).`,
+      );
+      router.refresh();
+    });
+  }
+
+  function bulkAddTag(tagId: string) {
+    const tag = formData.tags.find((item) => item.id === tagId);
+    if (!tag) {
+      setBulkError("Tag não encontrada.");
+      return;
+    }
+
+    const ids = [...selectedIds];
+    setBulkError(null);
+
+    startBulkTransition(async () => {
+      applyOptimistic({ type: "tag", ids, tag });
+      const result = await bulkAddTagAction({ ids, tagId: tag.id });
+
+      if (!result.ok) {
+        setBulkError(result.error);
+        router.refresh();
+        return;
+      }
+
+      setBulkTagOpen(false);
+      setSelectedIds(new Set());
+      setFlash(`${result.count} lançamento(s) marcado(s) com #${tag.nome}.`);
+      router.refresh();
+    });
+  }
+
+  function bulkDelete() {
+    const ids = [...selectedIds];
+    setBulkError(null);
+
+    startBulkTransition(async () => {
+      applyOptimistic({ type: "delete", ids });
+      const result = await bulkDeleteTransactionsAction({ ids });
+
+      if (!result.ok) {
+        setBulkError(result.error);
+        router.refresh();
+        return;
+      }
+
+      setBulkDeleteOpen(false);
+      setSelectedIds(new Set());
+      setFlash(`${result.count} lançamento(s) excluído(s).`);
+      router.refresh();
+    });
+  }
+
+  function markOverduePaid() {
+    const ids = overdueIds;
+    if (ids.length === 0) return;
+
+    startBulkTransition(async () => {
+      applyOptimistic({ type: "paid", ids, pago: true });
+      const result = await bulkSetPaidAction({ ids, pago: true });
+      if (!result.ok) setFlash(result.error);
+      setOverdueOpen(false);
+      router.refresh();
+    });
+  }
+
+  const exportHref = `/api/export/transactions?${buildTransactionSearchParams(
+    { ...filters, detalhe: null },
+  ).toString()}`;
+
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Lançamentos"
-        description="Seu fluxo de caixa, mês a mês."
-        action={
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
-            Novo lançamento
+    <div className="space-y-4 pb-48 lg:pb-28">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          aria-label="Novo lançamento"
+        >
+          <Plus className="h-4 w-4" />
+          <span className="hidden sm:inline">Lançamento</span>
+        </Button>
+
+        <div className="order-3 flex w-full items-center justify-center gap-1 sm:order-2 sm:w-auto sm:flex-1">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11"
+            aria-label="Mês anterior"
+            onClick={() => changeMonth(addMonths(filters.mes, -1))}
+          >
+            <ChevronLeft className="h-4 w-4" />
           </Button>
-        }
+          <MonthPicker
+            month={filters.mes}
+            onChange={changeMonth}
+            className="text-center"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-11 w-11"
+            aria-label="Próximo mês"
+            onClick={() => changeMonth(addMonths(filters.mes, 1))}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+
+        <div className="order-2 ml-auto flex items-center gap-1 sm:order-3">
+          <Button
+            type="button"
+            variant={selectionMode ? "default" : "outline"}
+            size="sm"
+            className="h-11"
+            onClick={toggleSelectionMode}
+            aria-pressed={selectionMode}
+            aria-label={
+              selectionMode
+                ? "Sair do modo de seleção"
+                : "Selecionar lançamentos"
+            }
+          >
+            {selectionMode ? (
+              <X className="h-4 w-4" />
+            ) : (
+              <CheckSquare className="h-4 w-4" />
+            )}
+            <span className="hidden sm:inline">
+              {selectionMode ? "Sair" : "Selecionar"}
+            </span>
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-11 w-11"
+                aria-label="Mais ações"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem asChild>
+                <a href={exportHref} download>
+                  <Download />
+                  Exportar mês filtrado (CSV)
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                disabled={overdueIds.length === 0}
+                onSelect={() => setOverdueOpen(true)}
+              >
+                <CheckSquare />
+                Marcar vencidos como pagos ({overdueIds.length})
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => changeMonth(currentMonth())}>
+                Ir para hoje
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+
+      <FilterBar
+        filters={filters}
+        options={formData}
+        onChange={changeFilters}
+        onClear={clearFilters}
       />
 
-      <Card>
-        <CardContent className="flex items-center justify-between gap-2 p-3">
-          <Button asChild variant="outline" size="icon" aria-label="Mês anterior">
-            <Link href={`/lancamentos?mes=${addMonths(month, -1)}`}>
-              <ChevronLeft className="h-4 w-4" />
-            </Link>
-          </Button>
-
-          <div className="min-w-0 text-center">
-            <p className="truncate text-base font-semibold sm:text-lg">
-              {formatMonthTitle(month)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {transactions.length} lançamento(s)
-              {!isCurrentMonth && (
-                <>
-                  {" · "}
-                  <Link
-                    href="/lancamentos"
-                    className="text-primary hover:underline"
-                  >
-                    voltar para hoje
-                  </Link>
-                </>
-              )}
-            </p>
-          </div>
-
-          <Button asChild variant="outline" size="icon" aria-label="Próximo mês">
-            <Link href={`/lancamentos?mes=${addMonths(month, 1)}`}>
-              <ChevronRight className="h-4 w-4" />
-            </Link>
-          </Button>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <SummaryCard
-          label="Entradas"
-          value={formatCurrency(summary.entradasPagas)}
-          hint="receitas pagas"
-          tone="text-success"
+      {selectionMode && (
+        <BulkActionsBar
+          selectedCount={selectedCount}
+          onSelectAll={selectAll}
+          onClearSelection={() => setSelectedIds(new Set())}
+          onMarkPaid={() => bulkSetPaid(true)}
+          onMarkUnpaid={() => bulkSetPaid(false)}
+          onCategory={() => {
+            setBulkError(null);
+            setBulkCategoryOpen(true);
+          }}
+          onTag={() => {
+            setBulkError(null);
+            setBulkTagOpen(true);
+          }}
+          onDelete={() => {
+            setBulkError(null);
+            setBulkDeleteOpen(true);
+          }}
+          onExit={exitSelection}
         />
-        <SummaryCard
-          label="Saídas"
-          value={formatCurrency(summary.saidasPagas)}
-          hint="despesas pagas"
-          tone="text-destructive"
-        />
-        <SummaryCard
-          label="Saldo realizado"
-          value={formatCurrency(summary.saldoRealizado)}
-          hint="entradas − saídas pagas"
-          tone={
-            summary.saldoRealizado >= 0 ? "text-success" : "text-destructive"
-          }
-        />
-        <SummaryCard
-          label="Saldo previsto"
-          value={formatCurrency(summary.saldoPrevisto)}
-          hint="inclui não pagos"
-          tone={
-            summary.saldoPrevisto >= 0 ? "text-foreground" : "text-destructive"
-          }
-        />
-      </div>
+      )}
 
       <FormError message={flash} />
 
-      {groups.length === 0 ? (
-        <Card>
-          <CardContent className="p-6">
-            <EmptyState
-              icon={ReceiptText}
-              title={`Nenhum lançamento em ${formatMonthTitle(month)}`}
-              description="Adicione uma despesa, receita ou transferência para começar a acompanhar o mês."
-              action={
+      {visibleGroups.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card p-6">
+          <EmptyState
+            icon={ReceiptText}
+            title={
+              activeFilters
+                ? "Nenhum lançamento com esses filtros"
+                : "Nenhum lançamento neste mês"
+            }
+            description={
+              activeFilters
+                ? "Tente remover filtros ou mudar o mês."
+                : "Adicione uma despesa, receita ou transferência para começar."
+            }
+            action={
+              activeFilters ? (
+                <Button variant="outline" onClick={clearFilters}>
+                  Limpar filtros
+                </Button>
+              ) : (
                 <Button onClick={() => setCreateOpen(true)}>
                   <Plus className="h-4 w-4" />
                   Adicionar lançamento
                 </Button>
-              }
-            />
-          </CardContent>
-        </Card>
+              )
+            }
+          />
+        </div>
       ) : (
         <div className="space-y-4">
-          {groups.map(([day, items]) => {
-            const net = dayNet(items);
+          {visibleGroups.map((group) => {
+            const allSelected = group.items.every((item) =>
+              selectedIds.has(item.id),
+            );
+            const someSelected = group.items.some((item) =>
+              selectedIds.has(item.id),
+            );
+            const balance = dayBalances[group.day] ?? 0;
 
             return (
-              <Card key={day} className="overflow-hidden">
-                <div className="flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2 sm:px-4">
-                  <div className="flex flex-wrap items-baseline gap-2">
-                    <p className="text-sm font-semibold">{formatDate(day)}</p>
-                    <p className="text-xs capitalize text-muted-foreground">
-                      {weekdayShort(day)}
-                    </p>
-                    {day === today && (
-                      <Badge variant="default" className="px-1.5 py-0 text-[10px]">
-                        Hoje
-                      </Badge>
-                    )}
-                  </div>
-                  {net !== 0 && (
-                    <p
-                      className={cn(
-                        "tabular text-xs font-medium",
-                        net > 0 ? "text-success" : "text-destructive",
-                      )}
-                    >
-                      {net > 0 ? "+" : "−"}
-                      {formatCurrency(Math.abs(net))}
-                    </p>
+              <div
+                key={group.day}
+                className="overflow-hidden rounded-xl border border-border bg-card"
+              >
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2 sm:px-4",
+                    group.day === today && "bg-primary/10",
                   )}
+                >
+                  <div className="flex min-w-0 items-center gap-2">
+                    {selectionMode && (
+                      <Checkbox
+                        checked={
+                          allSelected
+                            ? true
+                            : someSelected
+                              ? "indeterminate"
+                              : false
+                        }
+                        onCheckedChange={(checked) =>
+                          toggleDay(group.items, checked === true)
+                        }
+                        aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
+                      />
+                    )}
+                    <p className="truncate text-sm font-semibold">
+                      {dayLabel(group.day, today)}
+                    </p>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                      {formatDate(group.day)}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {group.items.length} lançamento(s)
+                  </span>
                 </div>
 
                 <div className="divide-y divide-border">
-                  {items.map((transaction) => (
+                  {group.items.map((transaction) => (
                     <TransactionRow
                       key={transaction.id}
                       transaction={transaction}
+                      selectionMode={selectionMode}
+                      selected={selectedIds.has(transaction.id)}
+                      onToggleSelected={toggleSelected}
+                      onOpenDetails={openDetails}
                       onEdit={handleEdit}
                       onDelete={handleDelete}
                       onDuplicate={(item) => void handleDuplicate(item)}
-                      onError={setFlash}
+                      onLongPress={handleLongPress}
+                      onTogglePaid={handleTogglePaid}
                     />
                   ))}
                 </div>
-              </Card>
+
+                <div
+                  className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4"
+                  title="Saldo acumulado real das contas até este dia, sem filtros."
+                >
+                  <span className="text-xs text-muted-foreground">
+                    Saldo no dia
+                  </span>
+                  <span
+                    className={cn(
+                      "tabular text-xs font-semibold",
+                      balance < 0 ? "text-destructive" : "text-foreground",
+                    )}
+                  >
+                    {formatCurrency(balance)}
+                  </span>
+                </div>
+              </div>
             );
           })}
+
+          {hasMoreDays && (
+            <div className="flex justify-center">
+              <Button type="button" variant="outline" onClick={loadMoreDays}>
+                Carregar mais dias ({groups.length - filters.dias} restantes)
+              </Button>
+            </div>
+          )}
         </div>
       )}
+
+      <TransactionsSummaryFooter summary={summary} />
 
       <TransactionFormDialog
         open={createOpen}
@@ -377,8 +862,19 @@ export function TransactionsPageClient({
           scope={editing.scope}
           formData={formData}
           onSaved={handleSaved}
+          onRequestDelete={handleFormDelete}
         />
       )}
+
+      <TransactionDetailsPanel
+        detail={detail}
+        onClose={closeDetails}
+        onEdit={handleDetailEdit}
+        onDelete={handleDetailDelete}
+        onDuplicate={handleDetailDuplicate}
+        onNavigate={navigateDetail}
+        onTogglePaid={handleDetailTogglePaid}
+      />
 
       <ScopeDialog
         open={Boolean(scopeAction)}
@@ -424,6 +920,70 @@ export function TransactionsPageClient({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={overdueOpen} onOpenChange={setOverdueOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Marcar vencidos como pagos</DialogTitle>
+            <DialogDescription>
+              {overdueIds.length} lançamento(s) não pago(s) com data anterior a{" "}
+              {formatDate(today)} serão marcados como pagos.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setOverdueOpen(false)}
+              disabled={isBulkPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={markOverduePaid}
+              disabled={isBulkPending || overdueIds.length === 0}
+            >
+              {isBulkPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Marcar {overdueIds.length} como pagos
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <BulkCategoryDialog
+        open={bulkCategoryOpen}
+        onOpenChange={(open) => {
+          setBulkCategoryOpen(open);
+          if (!open) setBulkError(null);
+        }}
+        categories={formData.categories}
+        onConfirm={bulkChangeCategory}
+        pending={isBulkPending}
+        error={bulkError}
+      />
+
+      <BulkTagDialog
+        open={bulkTagOpen}
+        onOpenChange={(open) => {
+          setBulkTagOpen(open);
+          if (!open) setBulkError(null);
+        }}
+        tags={formData.tags}
+        onConfirm={bulkAddTag}
+        pending={isBulkPending}
+        error={bulkError}
+      />
+
+      <BulkDeleteDialog
+        open={bulkDeleteOpen}
+        onOpenChange={(open) => {
+          setBulkDeleteOpen(open);
+          if (!open) setBulkError(null);
+        }}
+        count={selectedCount}
+        onConfirm={bulkDelete}
+        pending={isBulkPending}
+        error={bulkError}
+      />
     </div>
   );
 }

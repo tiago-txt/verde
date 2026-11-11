@@ -103,6 +103,16 @@ export async function updateCategoryAction(
     return { ok: false, error: "O tipo da categoria não pode ser alterado." };
   }
 
+  if (
+    existing.isSystem &&
+    parsed.data.categoriaPaiId !== existing.categoriaPaiId
+  ) {
+    return {
+      ok: false,
+      error: "Uma categoria de sistema não pode ser movida para outra categoria.",
+    };
+  }
+
   const childCount = countChildrenForCategory(parsedId.data);
   if (childCount > 0 && parsed.data.categoriaPaiId) {
     return {
@@ -142,6 +152,14 @@ export async function setCategoryArchivedAction(
 
   const existing = getCategoryById(parsed.data.id);
   if (!existing) return { ok: false, error: "Categoria não encontrada." };
+
+  if (existing.isSystem && parsed.data.archived) {
+    return {
+      ok: false,
+      code: "SYSTEM_CATEGORY",
+      error: "Categoria de sistema não pode ser arquivada.",
+    };
+  }
 
   getDb()
     .update(categories)
@@ -183,6 +201,14 @@ export async function deleteCategoryAction(input: {
     .where(eq(categories.id, id))
     .get();
   if (!existing) return { ok: false, error: "Categoria não encontrada." };
+
+  if (existing.isSystem) {
+    return {
+      ok: false,
+      code: "SYSTEM_CATEGORY",
+      error: "Categoria de sistema não pode ser excluída.",
+    };
+  }
 
   const childCount = countChildrenForCategory(id);
   if (childCount > 0) {

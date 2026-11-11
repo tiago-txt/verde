@@ -71,7 +71,8 @@ export function CategoryFormDialog({
   const { register, control, handleSubmit, reset, watch, setValue, formState } =
     form;
   const tipo = watch("tipo");
-  const canHaveParent = !category || category.childrenCount === 0;
+  const canHaveParent =
+    (!category || category.childrenCount === 0) && !category?.isSystem;
 
   useEffect(() => {
     if (!open) return;
@@ -113,8 +114,11 @@ export function CategoryFormDialog({
       <DialogContent className="sm:max-w-lg">
         <form onSubmit={onSubmit} className="space-y-5">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
               {category ? "Editar categoria" : "Nova categoria"}
+              {category?.isSystem && (
+                <Badge variant="secondary">Sistema</Badge>
+              )}
             </DialogTitle>
             <DialogDescription>
               Categorias ajudam a entender para onde o dinheiro vai. É permitido
@@ -194,7 +198,9 @@ export function CategoryFormDialog({
                 />
               ) : (
                 <div className="flex h-11 items-center rounded-md border border-border bg-muted/40 px-3 text-xs text-muted-foreground">
-                  Esta categoria tem subcategorias e não pode ter pai.
+                  {category?.isSystem
+                    ? "Categoria de sistema não pode ter categoria pai."
+                    : "Esta categoria tem subcategorias e não pode ter pai."}
                 </div>
               )}
               <FieldError message={formState.errors.categoriaPaiId?.message} />

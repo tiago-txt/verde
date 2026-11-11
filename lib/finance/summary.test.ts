@@ -20,4 +20,22 @@ describe("resumo do mês", () => {
       saldoPrevisto: 350_000,
     });
   });
+
+  it("reflete o subconjunto filtrado", () => {
+    const all = [
+      { tipo: "despesa" as const, valor: 10_000, pago: true, categoriaId: "a" },
+      { tipo: "despesa" as const, valor: 20_000, pago: false, categoriaId: "b" },
+      { tipo: "receita" as const, valor: 30_000, pago: true, categoriaId: "a" },
+    ];
+    const filtered = all.filter((item) => item.categoriaId === "a");
+
+    expect(summarizeTransactions(filtered)).toEqual({
+      entradasPagas: 30_000,
+      saidasPagas: 10_000,
+      entradasPrevistas: 30_000,
+      saidasPrevistas: 10_000,
+      saldoRealizado: 20_000,
+      saldoPrevisto: 20_000,
+    });
+  });
 });

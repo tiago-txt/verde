@@ -95,6 +95,7 @@ function CategoryRow({
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="truncate text-sm font-medium">{category.nome}</span>
+          {category.isSystem && <Badge variant="secondary">Sistema</Badge>}
           {category.deletedAt && <Badge variant="secondary">Arquivada</Badge>}
           {category.childrenCount > 0 && (
             <Badge variant="outline">
@@ -128,27 +129,31 @@ function CategoryRow({
             <Pencil />
             Editar
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => onToggleArchive(category)}>
-            {category.deletedAt ? (
-              <>
-                <ArchiveRestore />
-                Desarquivar
-              </>
-            ) : (
-              <>
-                <Archive />
-                Arquivar
-              </>
-            )}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onSelect={() => onDelete(category)}
-          >
-            <Trash2 />
-            Excluir
-          </DropdownMenuItem>
+          {!category.isSystem && (
+            <>
+              <DropdownMenuItem onSelect={() => onToggleArchive(category)}>
+                {category.deletedAt ? (
+                  <>
+                    <ArchiveRestore />
+                    Desarquivar
+                  </>
+                ) : (
+                  <>
+                    <Archive />
+                    Arquivar
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => onDelete(category)}
+              >
+                <Trash2 />
+                Excluir
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
@@ -194,13 +199,15 @@ export function CategoryManager({
   }
 
   const moveTargets = deleting
-    ? categories.filter(
-        (category) =>
-          category.tipo === deleting.tipo &&
-          !category.deletedAt &&
-          category.id !== deleting.id &&
-          category.categoriaPaiId !== deleting.id,
-      )
+    ? categories
+        .filter(
+          (category) =>
+            category.tipo === deleting.tipo &&
+            !category.deletedAt &&
+            category.id !== deleting.id &&
+            category.categoriaPaiId !== deleting.id,
+        )
+        .sort((a, b) => Number(b.isSystem) - Number(a.isSystem))
     : [];
 
   function openNew(type: CategoryType) {
@@ -424,6 +431,7 @@ export function CategoryManager({
                 {moveTargets.map((target) => (
                   <option key={target.id} value={target.id}>
                     {target.nome}
+                    {target.isSystem ? " (sugerido)" : ""}
                   </option>
                 ))}
               </NativeSelect>

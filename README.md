@@ -4,8 +4,9 @@ Finanças pessoais e familiares, em português do Brasil, com valores em **BRL**
 valores armazenados sempre em **centavos**. Interface responsiva (PWA no celular
 e dashboard no computador), self-hosted em um único container Docker, com SQLite.
 
-> **Status:** etapas 1 e 2 concluídas — autenticação, contas, categorias/tags,
-> lançamentos com recorrência e parcelamento, lista mensal e seed de demonstração.
+> **Status:** etapas 1–3 concluídas — autenticação, contas, categorias/tags,
+> lançamentos completos (filtros, busca, painel de detalhes, saldo do dia,
+> seleção múltipla e ações em lote), recorrência/parcelamento e seed demo.
 > Cartões, relatórios, limites e PWA entram nas próximas etapas (veja o
 > [roteiro](#roteiro)).
 
@@ -35,6 +36,17 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   de subcategoria, arquivamento, exclusão com movimentação de lançamentos e tags.
 - **Lançamentos** (`/lancamentos`): despesa, receita e transferência; lista mensal
   agrupada por dia; valor em centavos; pagamento otimista; duplicar e excluir.
+- **Tela de Lançamentos completa**: filtros no servidor (origem, tipo, categorias,
+  tags e status), busca com debounce, mês/ano na URL, cabeçalho “Hoje/Ontem/Amanhã”,
+  saldo do dia real sem filtros, painel lateral no desktop / tela cheia no mobile,
+  navegação por teclado entre lançamentos, seleção múltipla com ações em lote,
+  exportação CSV e “marcar vencidos como pagos”.
+- **Calendário de data**: digitação dd/MM/yyyy com máscara, calendário em popover
+  no desktop e bottom sheet no mobile, troca rápida de mês/ano, teclado e botão
+  “Hoje”. Reutilizado em data do lançamento e data final da recorrência.
+- **Categorias de sistema “Outros”**: uma para despesa e uma para receita,
+  protegidas contra exclusão/arquivamento. Categoria é opcional no lançamento e
+  resolve automaticamente para Outros; transferências permanecem sem categoria.
 - **Recorrência fixa** (mensal/semanal/anual): geração idempotente sob demanda,
   inclusive 12 meses à frente; meses curtos e anos bissextos tratados.
 - **Parcelamento** (2–60x): total dividido com resto na primeira parcela ou valor
@@ -42,6 +54,9 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
 - **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
   parcelas e transferências.
+- **Performance**: lista paginada por dias visíveis (`dias` na URL), saldo do dia
+  calculado por uma query agregada e filtros/índices no SQLite. Testado com
+  500+ lançamentos no mês.
 
 Ainda são placeholders: cartões/faturas (etapa 4), dashboard completo,
 relatórios, limites e PWA (etapas 5–6).
@@ -66,10 +81,11 @@ app/
   layout.tsx             # tema escuro padrão + metadados
   globals.css
 components/
-  ui/                    # Button, Input, Card, Dialog, Dropdown, etc.
+  ui/                    # Button, Input, Card, Dialog, Popover, Dropdown, etc.
+  calendar/              # calendário, date picker e seletor de mês/ano
   accounts/              # cards e formulário de contas
   categories/            # categorias, subcategorias e tags
-  transactions/          # lista, formulário, escopos e pagamento otimista
+  transactions/          # lista, filtros, detalhes, lote, formulário e escopos
   app-shell.tsx          # sidebar desktop + bottom nav + FAB mobile
   auth/login-form.tsx
   ...
@@ -80,8 +96,9 @@ lib/
     index.ts             # conexão única por processo
     seed-data.ts         # categorias/tags padrão
     seed-demo.ts         # dados de exemplo (SEED_DEMO=true)
-    queries/             # leituras (saldos, categorias, lançamentos)
-  finance/               # lógica pura testável: saldos, recorrência, parcelas, escopos
+    queries/             # leituras (saldos, filtros, saldo do dia, detalhe)
+  finance/               # lógica pura testável: saldos, recorrência, parcelas,
+                         # escopos, filtros, calendário, datas, saldo do dia e lote
   validation/            # schemas Zod compartilhados
   auth/
     jwt.ts               # assinatura/verificação (Edge-safe)
@@ -337,11 +354,15 @@ npm test
 npm run build
 ```
 
-Testes atuais (69): formatação/parse de BRL, datas/meses, sessão assinada,
-cálculo de saldo atual/previsto (incluindo transferências e cartão), geração de
-recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e idempotência),
-parcelamento (resto de centavos e soma), escopos de edição/exclusão e validações
-Zod (valor, transferência, parcelas). Na etapa 4 entram os testes de fechamento
+Testes atuais (102): formatação/parse de BRL, datas/meses, máscara e parsing
+dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
+saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
+geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e
+idempotência), parcelamento (resto de centavos e soma), escopos de
+edição/exclusão, parsing/validação dos filtros da URL, resumo mensal com e sem
+filtros, resolução/proteção das categorias “Outros” e planejamento de ações em
+lote. A migration 0002 (categorias de sistema + backfill) foi validada também
+contra um banco simulando a etapa 2. Na etapa 4 entram os testes de fechamento
 de fatura.
 
 Decisões de segurança já aplicadas:
@@ -361,7 +382,7 @@ Decisões de segurança já aplicadas:
 
 - [x] **Etapa 1** — scaffold, Docker, banco + migrations, auth, shell responsivo
 - [x] **Etapa 2** — contas, categorias, tags e CRUD de lançamentos (recorrência e parcelas)
-- [ ] **Etapa 3** — tela de Lançamentos completa (filtros, painel lateral, saldo do dia, ações em lote)
+- [x] **Etapa 3** — tela de Lançamentos completa, calendário, filtros, painel, saldo do dia, lote e CSV
 - [ ] **Etapa 4** — cartões e faturas
 - [ ] **Etapa 5** — dashboard, relatórios e limite de gastos
 - [ ] **Etapa 6** — PWA, exportação/importação, backup e gestão de usuários

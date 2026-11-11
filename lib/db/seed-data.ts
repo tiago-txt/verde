@@ -5,7 +5,10 @@ export type SeedCategory = {
   tipo: CategoryType;
   icone: string;
   cor: string;
-  filhos?: Array<Pick<SeedCategory, "nome" | "icone" | "cor">>;
+  isSystem?: boolean;
+  filhos?: Array<
+    Pick<SeedCategory, "nome" | "icone" | "cor" | "isSystem">
+  >;
 };
 
 /**
@@ -54,11 +57,23 @@ export const DEFAULT_CATEGORIES: SeedCategory[] = [
   { nome: "Vestuário", tipo: "despesa", icone: "Shirt", cor: "#ec4899" },
   { nome: "Assinaturas", tipo: "despesa", icone: "Tv", cor: "#8b5cf6" },
   { nome: "Investimentos", tipo: "despesa", icone: "TrendingUp", cor: "#10b981" },
-  { nome: "Outros", tipo: "despesa", icone: "CircleEllipsis", cor: "#94a3b8" },
+  {
+    nome: "Outros",
+    tipo: "despesa",
+    icone: "CircleEllipsis",
+    cor: "#94a3b8",
+    isSystem: true,
+  },
   { nome: "Salário", tipo: "receita", icone: "Wallet", cor: "#22c55e" },
   { nome: "Freelance", tipo: "receita", icone: "Briefcase", cor: "#14b8a6" },
   { nome: "Rendimentos", tipo: "receita", icone: "PiggyBank", cor: "#0ea5e9" },
-  { nome: "Outros", tipo: "receita", icone: "CirclePlus", cor: "#94a3b8" },
+  {
+    nome: "Outros",
+    tipo: "receita",
+    icone: "CirclePlus",
+    cor: "#94a3b8",
+    isSystem: true,
+  },
 ];
 
 /** Tags iniciais (opcional, útil para começar). */

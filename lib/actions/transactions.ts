@@ -15,7 +15,11 @@ import {
   transactions,
   type RecurrenceTemplate,
 } from "@/lib/db/schema";
+import { getCategoryById } from "@/lib/db/queries/categories";
+import { getSystemCategoryIds } from "@/lib/db/queries/categories";
 import { ensureRecurrencesForMonth } from "@/lib/db/queries/transactions";
+import { idsForCategoryChange } from "@/lib/finance/batch";
+import { resolveCategoryId } from "@/lib/finance/categories";
 import { buildInstallmentPlan } from "@/lib/finance/installments";
 import {
   selectFixedRecurrenceTransactions,
@@ -109,9 +113,7 @@ function validateReferences(
     if (destination.arquivada && !allowed?.contaIds?.has(destination.id)) {
       return "A conta de destino está arquivada.";
     }
-  } else {
-    if (!data.categoriaId) return "Escolha uma categoria.";
-
+  } else if (data.categoriaId) {
     const category = db
       .select({
         id: categories.id,
@@ -157,15 +159,23 @@ export async function createTransactionAction(
   }
 
   const data = parsed.data;
-  const referenceError = validateReferences(data);
+  const categoriaId = resolveCategoryId(
+    { tipo: data.tipo, categoriaId: data.categoriaId },
+    getSystemCategoryIds(),
+  );
+  if (data.tipo !== "transferencia" && !categoriaId) {
+    return fail(
+      "A categoria padrão Outros não foi encontrada. Rode as migrations/seed novamente.",
+    );
+  }
+
+  const referenceError = validateReferences({ ...data, categoriaId });
   if (referenceError) return fail(referenceError);
 
   const id = crypto.randomUUID();
   const observacao = normalizeObservation(data.observacao);
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
-  const categoriaId =
-    data.tipo === "transferencia" ? null : data.categoriaId;
 
   try {
     getDb().transaction((tx) => {
@@ -323,21 +333,32 @@ export async function updateTransactionAction(
     );
   }
 
-  const referenceError = validateReferences(data, {
-    contaIds: new Set(
-      [existing.contaId, existing.contaDestinoId].filter(
-        (value): value is string => Boolean(value),
+  const categoriaId = resolveCategoryId(
+    { tipo: data.tipo, categoriaId: data.categoriaId },
+    getSystemCategoryIds(),
+  );
+  if (data.tipo !== "transferencia" && !categoriaId) {
+    return fail(
+      "A categoria padrão Outros não foi encontrada. Rode as migrations/seed novamente.",
+    );
+  }
+
+  const referenceError = validateReferences(
+    { ...data, categoriaId },
+    {
+      contaIds: new Set(
+        [existing.contaId, existing.contaDestinoId].filter(
+          (value): value is string => Boolean(value),
+        ),
       ),
-    ),
-    categoriaId: existing.categoriaId,
-  });
+      categoriaId: existing.categoriaId,
+    },
+  );
   if (referenceError) return fail(referenceError);
 
   const observacao = normalizeObservation(data.observacao);
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
-  const categoriaId =
-    data.tipo === "transferencia" ? null : data.categoriaId;
 
   const updateValues = {
     tipo: data.tipo,
@@ -636,6 +657,15 @@ export async function duplicateTransactionAction(
     .where(eq(transactionTags.transactionId, parsedId.data))
     .all();
 
+  const duplicatedCategoryId =
+    existing.tipo === "transferencia"
+      ? null
+      : existing.categoriaId ??
+        resolveCategoryId(
+          { tipo: existing.tipo, categoriaId: null },
+          getSystemCategoryIds(),
+        );
+
   const newId = crypto.randomUUID();
 
   db.transaction((tx) => {
@@ -650,7 +680,7 @@ export async function duplicateTransactionAction(
         contaId: existing.contaId,
         cartaoId: existing.cartaoId,
         contaDestinoId: existing.contaDestinoId,
-        categoriaId: existing.categoriaId,
+        categoriaId: duplicatedCategoryId,
         observacao: existing.observacao,
         recorrenciaId: null,
         parcelaGrupoId: null,
@@ -696,4 +726,157 @@ export async function setTransactionPaidAction(input: {
 
   revalidateTransactions();
   return { ok: true, id: parsed.data.id };
+}
+
+const batchIdsSchema = z.array(idSchema).min(1).max(500);
+
+export async function bulkSetPaidAction(input: {
+  ids: string[];
+  pago: boolean;
+}): Promise<ActionResult> {
+  await requireUser();
+
+  const parsed = z
+    .object({ ids: batchIdsSchema, pago: z.boolean() })
+    .safeParse(input);
+  if (!parsed.success) return fail("Seleção inválida.");
+
+  const result = getDb()
+    .update(transactions)
+    .set({ pago: parsed.data.pago, updatedAt: new Date() })
+    .where(
+      and(
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .run();
+
+  revalidateTransactions();
+  return { ok: true, count: result.changes };
+}
+
+export async function bulkChangeCategoryAction(input: {
+  ids: string[];
+  categoriaId: string;
+}): Promise<ActionResult> {
+  await requireUser();
+
+  const parsed = z
+    .object({ ids: batchIdsSchema, categoriaId: idSchema })
+    .safeParse(input);
+  if (!parsed.success) return fail("Seleção inválida.");
+
+  const category = getCategoryById(parsed.data.categoriaId);
+  if (!category) return fail("Categoria não encontrada.");
+
+  const rows = getDb()
+    .select({
+      id: transactions.id,
+      tipo: transactions.tipo,
+      pago: transactions.pago,
+      categoriaId: transactions.categoriaId,
+    })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+
+  const { applicable, ignored } = idsForCategoryChange(rows, category.tipo);
+
+  if (applicable.length === 0) {
+    return {
+      ok: false,
+      ignored: ignored.length,
+      error:
+        "Nenhum lançamento compatível com o tipo da categoria. Transferências e o tipo oposto são ignorados.",
+    };
+  }
+
+  getDb().transaction((tx) => {
+    tx.update(transactions)
+      .set({ categoriaId: category.id, updatedAt: new Date() })
+      .where(inArray(transactions.id, applicable))
+      .run();
+  });
+
+  revalidateTransactions();
+  revalidatePath("/configuracoes/categorias");
+  return { ok: true, count: applicable.length, ignored: ignored.length };
+}
+
+export async function bulkAddTagAction(input: {
+  ids: string[];
+  tagId: string;
+}): Promise<ActionResult> {
+  await requireUser();
+
+  const parsed = z
+    .object({ ids: batchIdsSchema, tagId: idSchema })
+    .safeParse(input);
+  if (!parsed.success) return fail("Seleção inválida.");
+
+  const tag = getDb()
+    .select({ id: tags.id })
+    .from(tags)
+    .where(eq(tags.id, parsed.data.tagId))
+    .get();
+  if (!tag) return fail("Tag não encontrada.");
+
+  const existing = getDb()
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+
+  if (existing.length === 0) return fail("Nenhum lançamento encontrado.");
+
+  getDb().transaction((tx) => {
+    tx.insert(transactionTags)
+      .values(
+        existing.map((row) => ({
+          transactionId: row.id,
+          tagId: tag.id,
+        })),
+      )
+      .onConflictDoNothing()
+      .run();
+  });
+
+  revalidateTransactions();
+  revalidatePath("/configuracoes/categorias");
+  return { ok: true, count: existing.length };
+}
+
+export async function bulkDeleteTransactionsAction(input: {
+  ids: string[];
+}): Promise<ActionResult> {
+  await requireUser();
+
+  const parsed = z.object({ ids: batchIdsSchema }).safeParse(input);
+  if (!parsed.success) return fail("Seleção inválida.");
+
+  const result = getDb()
+    .update(transactions)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .run();
+
+  revalidateTransactions();
+  revalidatePath("/configuracoes/categorias");
+  return { ok: true, count: result.changes };
 }

@@ -105,12 +105,12 @@ describe("validação de lançamentos", () => {
     expect(result.success).toBe(false);
   });
 
-  it("exige categoria em despesa/receita", () => {
+  it("aceita despesa/receita sem categoria (Outros é aplicado na action)", () => {
     expect(
       createTransactionSchema.safeParse(
         validTransaction({ categoriaId: null }),
       ).success,
-    ).toBe(false);
+    ).toBe(true);
   });
 
   it("rejeita parcelas fora do intervalo 2–60", () => {
