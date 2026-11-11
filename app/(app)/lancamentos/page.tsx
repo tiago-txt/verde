@@ -30,20 +30,27 @@ export default async function LancamentosPage({
 
   const transactions = listMonthTransactions(filters);
   const formData = getTransactionFormData();
-  const budgetEvents = getBudgetEventsForMonth(filters.mes, filters);
-  const cardInvoiceEvents = listCardInvoiceEventsForMonth(filters.mes, filters);
-  const dayBalances = aplicarEventosAoSalsoDia(
-    getDayBalances(filters.mes),
-    [
-      ...getBudgetEventsForDayBalances(filters.mes),
-      ...listCardInvoiceEventsForDayBalances(filters.mes).map((event) => ({
-        tipo: "provisao" as const,
-        data: event.vencimento,
-        valor: event.restante,
-        ciclo: event.faturaChave,
-      })),
-    ],
-  );
+  const customRange = Boolean(filters.de && filters.ate);
+  const budgetEvents = customRange
+    ? []
+    : getBudgetEventsForMonth(filters.mes, filters);
+  const cardInvoiceEvents = customRange
+    ? []
+    : listCardInvoiceEventsForMonth(filters.mes, filters);
+  const dayBalances = customRange
+    ? {}
+    : aplicarEventosAoSalsoDia(
+        getDayBalances(filters.mes),
+        [
+          ...getBudgetEventsForDayBalances(filters.mes),
+          ...listCardInvoiceEventsForDayBalances(filters.mes).map((event) => ({
+            tipo: "provisao" as const,
+            data: event.vencimento,
+            valor: event.restante,
+            ciclo: event.faturaChave,
+          })),
+        ],
+      );
   const detail = filters.detalhe
     ? getTransactionDetail(filters.detalhe)
     : null;

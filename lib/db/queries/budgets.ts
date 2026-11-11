@@ -526,6 +526,8 @@ function emptyBudgetFilters(monthKey: string): TransactionFilters {
     detalhe: null,
     cartoes: [],
     comprasCartao: false,
+    de: null,
+    ate: null,
   };
 }
 

@@ -70,8 +70,10 @@ export function AppShell({ user, children }: AppShellProps) {
     : (PAGE_TITLES[pathname] ?? "Verde");
   const isTransactionsPage = pathname.startsWith("/lancamentos");
   const hideFloatingNew =
+    pathname === "/" ||
     isTransactionsPage ||
     pathname.startsWith("/limite-de-gastos") ||
+    pathname.startsWith("/relatorios") ||
     pathname.startsWith("/cartoes");
 
   return (

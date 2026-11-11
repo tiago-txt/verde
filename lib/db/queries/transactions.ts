@@ -190,7 +190,10 @@ export function listMonthTransactions(
   filters: TransactionFilters,
 ): TransactionListItem[] {
   const db = getDb();
-  const { start, end } = monthRange(filters.mes);
+  const { start, end } =
+    filters.de && filters.ate
+      ? { start: filters.de, end: filters.ate }
+      : monthRange(filters.mes);
   const conditions = [
     isNull(transactions.deletedAt),
     gte(transactions.data, start),
@@ -233,7 +236,11 @@ export function listMonthTransactions(
   }
 
   if (filters.categorias.length > 0) {
-    conditions.push(inArray(transactions.categoriaId, filters.categorias));
+    const categoryFilter = or(
+      inArray(transactions.categoriaId, filters.categorias),
+      inArray(categories.categoriaPaiId, filters.categorias),
+    );
+    if (categoryFilter) conditions.push(categoryFilter);
   }
 
   if (filters.tags.length > 0) {

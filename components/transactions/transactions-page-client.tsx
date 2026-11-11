@@ -340,11 +340,20 @@ export function TransactionsPageClient({
       dias: 10,
       detalhe: null,
       comprasCartao: false,
+      de: null,
+      ate: null,
     });
   }
 
   function changeMonth(monthKey: string) {
-    go({ ...filters, mes: monthKey, dias: 10, detalhe: null });
+    go({
+      ...filters,
+      mes: monthKey,
+      dias: 10,
+      detalhe: null,
+      de: null,
+      ate: null,
+    });
   }
 
   function openDetails(transaction: TransactionListItem) {
@@ -360,7 +369,7 @@ export function TransactionsPageClient({
   }
 
   function loadMoreDays() {
-    go({ ...filters, dias: Math.min(31, filters.dias + 10) });
+    go({ ...filters, dias: Math.min(370, filters.dias + 10) });
   }
 
   function closeCreate(open: boolean) {
@@ -925,22 +934,24 @@ export function TransactionsPageClient({
                   ))}
                 </div>
 
-                <div
-                  className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4"
-                  title="Saldo previsto acumulado das contas até este dia, incluindo provisões e sobras de orçamento."
-                >
-                  <span className="text-xs text-muted-foreground">
-                    Saldo previsto no dia
-                  </span>
-                  <span
-                    className={cn(
-                      "tabular text-xs font-semibold",
-                      balance < 0 ? "text-destructive" : "text-foreground",
-                    )}
+                {!filters.de && !filters.ate && (
+                  <div
+                    className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4"
+                    title="Saldo previsto acumulado das contas até este dia, incluindo provisões e sobras de orçamento."
                   >
-                    {formatCurrency(balance)}
-                  </span>
-                </div>
+                    <span className="text-xs text-muted-foreground">
+                      Saldo previsto no dia
+                    </span>
+                    <span
+                      className={cn(
+                        "tabular text-xs font-semibold",
+                        balance < 0 ? "text-destructive" : "text-foreground",
+                      )}
+                    >
+                      {formatCurrency(balance)}
+                    </span>
+                  </div>
+                )}
               </div>
             );
           })}

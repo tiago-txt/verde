@@ -1,5 +1,10 @@
 import { TRANSACTION_TYPES, type TransactionType } from "@/lib/db/schema";
-import { currentMonth, isValidMonthKey, monthRange } from "@/lib/dates";
+import {
+  currentMonth,
+  isValidISODate,
+  isValidMonthKey,
+  monthRange,
+} from "@/lib/dates";
 import { idSchema } from "@/lib/validation/common";
 
 export const TRANSACTION_STATUS_FILTERS = ["todos", "pagos", "nao_pagos"] as const;
@@ -18,6 +23,8 @@ export type TransactionFilters = {
   dias: number;
   detalhe: string | null;
   comprasCartao: boolean;
+  de: string | null;
+  ate: string | null;
 };
 
 export type SearchParamsLike = Record<
@@ -80,9 +87,15 @@ export function parseTransactionFilters(
 
   const diasRaw = Number(firstValue(params.dias));
   const dias =
-    Number.isInteger(diasRaw) && diasRaw >= 1 && diasRaw <= 31
+    Number.isInteger(diasRaw) && diasRaw >= 1 && diasRaw <= 370
       ? diasRaw
       : DEFAULT_DIAS;
+
+  const deRaw = firstValue(params.de);
+  const ateRaw = firstValue(params.ate);
+  const de = deRaw && isValidISODate(deRaw) ? deRaw : null;
+  const ate = ateRaw && isValidISODate(ateRaw) ? ateRaw : null;
+  const validRange = de && ate && de <= ate ? { de, ate } : { de: null, ate: null };
 
   const detalheRaw = firstValue(params.detalhe);
   const detalhe =
@@ -100,6 +113,8 @@ export function parseTransactionFilters(
     dias,
     detalhe,
     comprasCartao: firstValue(params.compras) === "1",
+    de: validRange.de,
+    ate: validRange.ate,
   };
 }
 
@@ -112,7 +127,8 @@ export function hasActiveFilters(filters: TransactionFilters): boolean {
       filters.tags.length ||
       filters.status !== "todos" ||
       filters.q ||
-      filters.comprasCartao,
+      filters.comprasCartao ||
+      (filters.de && filters.ate),
   );
 }
 
@@ -125,6 +141,7 @@ export function countActiveFilters(filters: TransactionFilters): number {
   if (filters.status !== "todos") count += 1;
   if (filters.q) count += 1;
   if (filters.comprasCartao) count += 1;
+  if (filters.de && filters.ate) count += 1;
   return count;
 }
 
@@ -145,6 +162,10 @@ export function buildTransactionSearchParams(
   if (filters.dias !== DEFAULT_DIAS) params.set("dias", String(filters.dias));
   if (filters.detalhe) params.set("detalhe", filters.detalhe);
   if (filters.comprasCartao) params.set("compras", "1");
+  if (filters.de && filters.ate) {
+    params.set("de", filters.de);
+    params.set("ate", filters.ate);
+  }
 
   return params;
 }
@@ -155,5 +176,8 @@ export function buildTransactionHref(filters: TransactionFilters): string {
 }
 
 export function transactionFilterRange(filters: TransactionFilters) {
+  if (filters.de && filters.ate) {
+    return { start: filters.de, end: filters.ate };
+  }
   return monthRange(filters.mes);
 }

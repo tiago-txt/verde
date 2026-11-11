@@ -455,6 +455,44 @@ export function seedDemoData(db: DatabaseInstance): void {
       });
     }
 
+    // Meses mais antigos para a evolução de 12 meses nos gráficos.
+    const olderMonths = Array.from({ length: 9 }, (_, index) =>
+      addMonths(current, -11 + index),
+    );
+    if (salaryCategory && rentCategory && marketCategory) {
+      olderMonths.forEach((month, index) => {
+        insertDemoTransaction(tx, {
+          tipo: "receita",
+          descricao: "Salário (Demo)",
+          valor: 650_000,
+          data: dateInMonth(month, 5),
+          pago: true,
+          contaId: checkingId,
+          categoriaId: salaryCategory,
+          observacao: "Receita fixa de demonstração",
+        });
+        insertDemoTransaction(tx, {
+          tipo: "despesa",
+          descricao: "Aluguel (Demo)",
+          valor: 180_000,
+          data: dateInMonth(month, 10),
+          pago: true,
+          contaId: checkingId,
+          categoriaId: rentCategory,
+          observacao: "Despesa fixa de demonstração",
+        });
+        insertDemoTransaction(tx, {
+          tipo: "despesa",
+          descricao: "Mercado do mês (Demo)",
+          valor: 82_000 + index * 1_500,
+          data: dateInMonth(month, 8),
+          pago: true,
+          contaId: checkingId,
+          categoriaId: marketCategory,
+        });
+      });
+    }
+
     for (const month of months) {
       insertDemoTransaction(
         tx,

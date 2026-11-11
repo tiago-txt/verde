@@ -4,11 +4,10 @@ Finanças pessoais e familiares, em português do Brasil, com valores em **BRL**
 valores armazenados sempre em **centavos**. Interface responsiva (PWA no celular
 e dashboard no computador), self-hosted em um único container Docker, com SQLite.
 
-> **Status:** etapas 1–4 concluídas — autenticação, contas, categorias/tags,
-> lançamentos completos (filtros, busca, painel de detalhes, saldo do dia,
-> seleção múltipla e ações em lote), recorrência/parcelamento, orçamentos com
-> ciclo e cartões/faturas. Dashboard, relatórios, limites e PWA entram nas
-> próximas etapas (veja o [roteiro](#roteiro)).
+> **Status:** etapas 1–5 concluídas — autenticação, contas, categorias/tags,
+> lançamentos completos, recorrência/parcelamento, orçamentos com ciclo,
+> cartões/faturas, dashboard, relatórios, exportação/importação e PWA. A previsão
+> de saldo entra na Etapa 6.
 
 ---
 
@@ -61,6 +60,18 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Performance**: lista paginada por dias visíveis (`dias` na URL), saldo do dia
   calculado por uma query agregada; faturas e orçamentos agregados em uma única
   consulta por página, com índices por cartão/data e fatura.
+- **Visão geral** (`/`): saldo operacional e investimentos, faturas em aberto,
+  receitas × despesas com variação, donut por categoria, evolução de 6/12 meses,
+  próximos 15 dias (contas e faturas), cartões e orçamentos do ciclo.
+- **Relatórios** (`/relatorios`): por categoria (com subcategorias e variação),
+  por mês (barras empilhadas e tabela) e por conta/cartão (com faturas), filtros
+  de período/tipo/origem/categoria/tag/pago e exportação CSV por aba.
+- **Dados** (`/configuracoes/dados`): backup JSON completo, CSV de lançamentos
+  por intervalo e importação de CSV com mapeamento, pré-visualização,
+  duplicados, criação opcional de contas/categorias e desfazer do último lote.
+- **PWA**: manifest, ícones 192/512/maskable, atalhos iOS, service worker com
+  cache apenas de assets e página offline; nova versão avisa e atualiza sob
+  demanda, sem cachear respostas autenticadas ou APIs.
 - **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
   parcelas, transferências, 2 cartões com faturas e um pagamento de fatura.
 
@@ -77,7 +88,7 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   conta para o cartão, com vínculo à fatura (`fatura_chave`). O valor pago reduz
   a conta e a fatura; o restante aparece como linha virtual de fatura no previsto.
 
-Ainda são placeholders: dashboard completo, relatórios e PWA (etapas 5–6).
+Ainda são placeholders: previsão de saldo (etapa 6).
 
 ---
 

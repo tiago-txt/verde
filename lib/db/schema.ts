@@ -189,6 +189,8 @@ export const transactions = sqliteTable(
     parcelaTotal: integer("parcela_total"),
     /** Agrupa as parcelas de uma mesma compra. */
     parcelaGrupoId: text("parcela_grupo_id"),
+    /** Identifica o lote de uma importação de CSV (permite desfazer). */
+    importBatchId: text("import_batch_id"),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -206,6 +208,12 @@ export const transactions = sqliteTable(
     index("transactions_pago_idx").on(table.pago),
     index("transactions_data_pago_idx").on(table.data, table.pago),
     index("transactions_data_categoria_idx").on(table.data, table.categoriaId),
+    index("transactions_data_tipo_pago_idx").on(
+      table.data,
+      table.tipo,
+      table.pago,
+    ),
+    index("transactions_import_batch_idx").on(table.importBatchId),
     // Garante idempotência da geração de recorrências (inclusive após soft delete).
     uniqueIndex("transactions_recorrencia_data_unique").on(
       table.recorrenciaId,

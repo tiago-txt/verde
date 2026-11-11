@@ -484,6 +484,38 @@ export function getCardInvoiceAccountDeltas(): Map<string, number> {
   return deltas;
 }
 
+/** Mapa `cartaoId:YYYY-MM` -> status calculado da fatura. */
+export function getCardInvoiceStatuses(): Map<
+  string,
+  { status: CardInvoiceSummary["status"]; total: number; pago: number; restante: number }
+> {
+  const db = getDb();
+  const hoje = todayISO();
+  const cards = db
+    .select()
+    .from(creditCards)
+    .where(isNull(creditCards.deletedAt))
+    .all();
+  const map = new Map<
+    string,
+    { status: CardInvoiceSummary["status"]; total: number; pago: number; restante: number }
+  >();
+  if (cards.length === 0) return map;
+
+  const { movements, payments } = loadLedger();
+  for (const card of cards) {
+    for (const invoice of invoicesForCard(card, movements, payments, hoje)) {
+      map.set(`${card.id}:${invoice.chave}`, {
+        status: invoice.status,
+        total: invoice.total,
+        pago: invoice.pago,
+        restante: invoice.restante,
+      });
+    }
+  }
+  return map;
+}
+
 export function listCardsForFilter(): CardOption[] {
   return getDb()
     .select({

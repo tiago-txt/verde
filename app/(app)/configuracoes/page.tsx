@@ -138,8 +138,14 @@ export default async function ConfiguracoesPage() {
               no README.
             </p>
             <p>
-              Exportação CSV/JSON e importação entram na etapa 6.
+              Exportação CSV/JSON, backup completo e importação de lançamentos.
             </p>
+            <Button asChild variant="outline">
+              <Link href="/configuracoes/dados">
+                <Database className="h-4 w-4" />
+                Exportar e importar dados
+              </Link>
+            </Button>
           </CardContent>
         </Card>
       </div>

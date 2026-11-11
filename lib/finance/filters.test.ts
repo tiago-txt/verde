@@ -20,7 +20,7 @@ describe("parsing de filtros da URL", () => {
         mes: "2026-13",
         tipo: "invalido",
         status: "x",
-        dias: "99",
+        dias: "999",
         detalhe: "abc",
         contas: "abc,def",
         categorias: "tambem-invalido",

@@ -1,22 +1,38 @@
 import type { Metadata } from "next";
-import { BarChart3 } from "lucide-react";
-import { PlaceholderPage } from "@/components/placeholder-page";
+import { ReportsView } from "@/components/reports/reports-view";
+import { requireUser } from "@/lib/auth/current-user";
+import { listAllAccounts } from "@/lib/db/queries/accounts";
+import { listCardsForFilter } from "@/lib/db/queries/cards";
+import { listAllCategories, listTags } from "@/lib/db/queries/categories";
+import { getReportData } from "@/lib/db/queries/reports";
+import { parseReportFilters } from "@/lib/finance/report-filters";
 
 export const metadata: Metadata = { title: "Relatórios" };
 
-export default function RelatoriosPage() {
+export default async function RelatoriosPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  await requireUser();
+
+  const params = await searchParams;
+  const filters = parseReportFilters(params);
+  const data = getReportData(filters);
+
   return (
-    <PlaceholderPage
-      title="Relatórios"
-      description="Entenda para onde o dinheiro vai."
-      stage="Etapa 5"
-      icon={BarChart3}
-      items={[
-        "Gastos por categoria, por mês e por conta/cartão",
-        "Filtro de período com comparação entre meses",
-        "Gráficos de evolução mensal e distribuição por categoria",
-        "Exportação em CSV",
-      ]}
+    <ReportsView
+      filters={filters}
+      categoryReport={data.categoryReport}
+      monthlySeries={data.monthlySeries}
+      monthlyCategorySeries={data.monthlyCategorySeries}
+      originReport={data.originReport}
+      totals={data.totals}
+      previousRange={data.previousRange}
+      accounts={listAllAccounts()}
+      cards={listCardsForFilter()}
+      categories={listAllCategories()}
+      tags={listTags()}
     />
   );
 }

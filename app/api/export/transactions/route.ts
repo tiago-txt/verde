@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { listMonthTransactions } from "@/lib/db/queries/transactions";
+import { formatCsvDate, formatCsvNumber, toCsv } from "@/lib/finance/csv";
 import { parseTransactionFilters } from "@/lib/finance/filters";
-import { formatDate } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -11,11 +11,6 @@ const TYPE_LABELS = {
   receita: "Receita",
   transferencia: "Transferência",
 } as const;
-
-function cell(value: string | number | boolean | null | undefined): string {
-  const text = value === null || value === undefined ? "" : String(value);
-  return `"${text.replace(/"/g, '""')}"`;
-}
 
 export async function GET(request: Request) {
   const user = await getCurrentUser();
@@ -33,11 +28,11 @@ export async function GET(request: Request) {
     "Data",
     "Tipo",
     "Descrição",
-    "Categoria",
-    "Conta",
-    "Conta destino",
     "Valor (R$)",
     "Pago",
+    "Conta/Cartão",
+    "Destino",
+    "Categoria",
     "Tags",
     "Observação",
     "Recorrente",
@@ -45,14 +40,14 @@ export async function GET(request: Request) {
   ];
 
   const rows = transactions.map((transaction) => [
-    formatDate(transaction.data),
+    formatCsvDate(transaction.data),
     TYPE_LABELS[transaction.tipo],
     transaction.descricao,
-    transaction.categoriaNome ?? "Outros",
-    transaction.contaNome ?? "",
-    transaction.contaDestinoNome ?? "",
-    (transaction.valor / 100).toFixed(2).replace(".", ","),
+    formatCsvNumber(transaction.valor),
     transaction.pago ? "Sim" : "Não",
+    transaction.contaNome ?? transaction.cartaoNome ?? "",
+    transaction.contaDestinoNome ?? transaction.cartaoDestinoNome ?? "",
+    transaction.categoriaNome ?? "Outros",
     transaction.tags.map((tag) => tag.nome).join(" | "),
     transaction.observacao ?? "",
     transaction.recorrenciaId ? "Sim" : "",
@@ -61,14 +56,13 @@ export async function GET(request: Request) {
       : "",
   ]);
 
-  const csv = [header, ...rows]
-    .map((row) => row.map(cell).join(";"))
-    .join("\r\n");
+  const csv = toCsv(header, rows);
+  const suffix = filters.de && filters.ate ? `${filters.de}_${filters.ate}` : filters.mes;
 
-  return new NextResponse(`\uFEFF${csv}`, {
+  return new NextResponse(csv, {
     headers: {
       "Content-Type": "text/csv; charset=utf-8",
-      "Content-Disposition": `attachment; filename="verde-${filters.mes}.csv"`,
+      "Content-Disposition": `attachment; filename="verde-${suffix}.csv"`,
       "Cache-Control": "no-store",
     },
   });
