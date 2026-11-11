@@ -354,10 +354,11 @@ export function TransactionRow({
             {formatCurrency(transaction.valor)}
           </span>
 
-          {!selectionMode && !isCardPurchase && (
+          {!isCardPurchase && (
             <button
               type="button"
               onClick={() => onTogglePaid(transaction, !paid)}
+              disabled={selectionMode}
               aria-pressed={paid}
               aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
               title={paid ? "Pago — clique para desfazer" : "Não pago — clique para pagar"}
@@ -366,6 +367,7 @@ export function TransactionRow({
                 paid
                   ? "text-success hover:bg-success/10"
                   : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                selectionMode && "opacity-80 hover:bg-transparent",
               )}
             >
               {paid ? (

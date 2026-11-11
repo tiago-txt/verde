@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Minus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { MonthSummaryWithBudgets } from "@/lib/finance/budgets";
 import { buildFooterSummary } from "@/lib/finance/summary-display";
@@ -10,12 +10,18 @@ import { cn } from "@/lib/utils";
 
 type TransactionsSummaryFooterProps = {
   summary: MonthSummaryWithBudgets & { faturasCartao?: number };
+  openingBalance?: number;
 };
 
 /** Fechamento: de zero para cima é verde, abaixo de zero é vermelho. */
 function closingTone(value: number): string {
   return value >= 0 ? "text-success" : "text-destructive";
 }
+
+const plainNumber = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
 
 function Value({
   label,
@@ -48,7 +54,7 @@ function Value({
   );
 }
 
-function ListRow({
+function StatementRow({
   label,
   value,
   tone,
@@ -58,21 +64,58 @@ function ListRow({
   tone?: string;
 }) {
   return (
-    <div className="flex items-baseline justify-between gap-4">
+    <div className="flex items-baseline justify-between gap-6">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className={cn("tabular text-sm font-semibold", tone)}>
-        {formatCurrency(value)}
+        {plainNumber.format(value / 100)}
       </dd>
     </div>
   );
 }
 
+function Statement({
+  values,
+}: {
+  values: ReturnType<typeof buildFooterSummary>;
+}) {
+  return (
+    <dl className="space-y-1">
+      <StatementRow label="saldo anterior" value={values.saldoAnterior} />
+      <div className="border-t border-border/70" />
+      <StatementRow
+        label="receita realizada"
+        value={values.entradas}
+        tone="text-success"
+      />
+      <StatementRow label="receita prevista" value={values.entradasPrevistas} />
+      <StatementRow
+        label="despesa realizada"
+        value={-values.saidas}
+        tone="text-destructive"
+      />
+      <StatementRow label="despesa prevista" value={-values.saidasPrevistas} />
+      <div className="border-t border-border/70" />
+      <StatementRow
+        label="saldo"
+        value={values.saldo}
+        tone={closingTone(values.saldo)}
+      />
+      <StatementRow
+        label="previsto"
+        value={values.previsto}
+        tone={closingTone(values.previsto)}
+      />
+    </dl>
+  );
+}
+
 export function TransactionsSummaryFooter({
   summary,
+  openingBalance = 0,
 }: TransactionsSummaryFooterProps) {
   const [expanded, setExpanded] = useState(false);
   const mobileRef = useRef<HTMLDivElement>(null);
-  const values = buildFooterSummary(summary);
+  const values = buildFooterSummary(summary, openingBalance);
 
   // O FAB usa a altura real do resumo para ficar sempre logo acima dele.
   useEffect(() => {
@@ -100,75 +143,21 @@ export function TransactionsSummaryFooter({
     };
   }, []);
 
-  const detalhes = (
-    <dl className="space-y-1.5">
-      <ListRow
-        label="Entradas"
-        value={values.entradas}
-        tone="text-success"
-      />
-      <ListRow
-        label="Saídas"
-        value={values.saidas}
-        tone="text-destructive"
-      />
-      <ListRow
-        label="Entradas previstas"
-        value={values.entradasPrevistas}
-        tone="text-success"
-      />
-      <ListRow
-        label="Saídas previstas"
-        value={values.saidasPrevistas}
-        tone="text-destructive"
-      />
-    </dl>
-  );
-
   const totals = (
     <>
       <Value
-        label="Total"
-        value={values.realizado}
-        tone={closingTone(values.realizado)}
+        label="Saldo"
+        value={values.saldo}
+        tone={closingTone(values.saldo)}
         strong
         align="right"
       />
       <Value
-        label="Total previsto"
-        value={values.totalPrevisto}
-        tone={closingTone(values.totalPrevisto)}
+        label="Previsto"
+        value={values.previsto}
+        tone={closingTone(values.previsto)}
         strong
         align="right"
-      />
-    </>
-  );
-
-  const mobileMetrics = (
-    <>
-      <Value label="Entradas" value={values.entradas} tone="text-success" />
-      <Value label="Saídas" value={values.saidas} tone="text-destructive" />
-      <Value
-        label="Total"
-        value={values.realizado}
-        tone={closingTone(values.realizado)}
-        strong
-      />
-      <Value
-        label="Entradas previstas"
-        value={values.entradasPrevistas}
-        tone="text-success"
-      />
-      <Value
-        label="Saídas previstas"
-        value={values.saidasPrevistas}
-        tone="text-destructive"
-      />
-      <Value
-        label="Total previsto"
-        value={values.totalPrevisto}
-        tone={closingTone(values.totalPrevisto)}
-        strong
       />
     </>
   );
@@ -178,16 +167,26 @@ export function TransactionsSummaryFooter({
       <div className="fixed bottom-0 left-0 right-0 z-30 hidden border-t border-border bg-card/95 backdrop-blur lg:left-[var(--sidebar-width,260px)] lg:block">
         {expanded && (
           <div className="mx-auto max-w-7xl px-8 pt-3">
-            <div className="ml-auto w-full max-w-sm border-b border-border pb-3">
-              {detalhes}
+            <div className="relative ml-auto w-full max-w-sm border-b border-border pb-3 pr-9">
+              <Statement values={values} />
+              <button
+                type="button"
+                onClick={() => setExpanded(false)}
+                aria-label="Fechar resumo"
+                className="absolute right-0 top-1/2 grid h-8 w-8 -translate-y-1/2 place-items-center rounded-full bg-muted text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <Minus className="h-4 w-4" />
+              </button>
             </div>
           </div>
         )}
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-6 px-8 py-2.5">
+        <div className="mx-auto flex max-w-7xl items-center justify-end gap-3 px-8 py-2.5">
+          <div className="flex items-center gap-10">{totals}</div>
           <Button
             type="button"
             variant="ghost"
-            className="h-10 gap-1.5 rounded-full px-3 text-xs"
+            size="icon"
+            className="h-9 w-9 shrink-0"
             onClick={() => setExpanded((current) => !current)}
             aria-expanded={expanded}
             aria-label={expanded ? "Recolher resumo" : "Expandir resumo"}
@@ -198,9 +197,7 @@ export function TransactionsSummaryFooter({
                 expanded && "rotate-180",
               )}
             />
-            Resumo
           </Button>
-          <div className="flex items-center gap-10">{totals}</div>
         </div>
       </div>
 
@@ -212,15 +209,15 @@ export function TransactionsSummaryFooter({
           <div className="flex items-center justify-between gap-2">
             <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
               <Value
-                label="Total"
-                value={values.realizado}
-                tone={closingTone(values.realizado)}
+                label="Saldo"
+                value={values.saldo}
+                tone={closingTone(values.saldo)}
                 strong
               />
               <Value
-                label="Total previsto"
-                value={values.totalPrevisto}
-                tone={closingTone(values.totalPrevisto)}
+                label="Previsto"
+                value={values.previsto}
+                tone={closingTone(values.previsto)}
                 strong
               />
             </div>
@@ -243,8 +240,8 @@ export function TransactionsSummaryFooter({
           </div>
 
           {expanded && (
-            <div className="mt-2 grid grid-cols-3 gap-2 border-t border-border pt-2">
-              {mobileMetrics}
+            <div className="mt-2 border-t border-border pt-2">
+              <Statement values={values} />
             </div>
           )}
         </div>

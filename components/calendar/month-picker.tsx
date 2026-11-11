@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -39,7 +38,6 @@ export function MonthPicker({ month, onChange, className }: MonthPickerProps) {
       aria-label="Escolher mês e ano"
     >
       {formatMonthTitle(month)}
-      <ChevronDown className="h-4 w-4 text-muted-foreground" />
     </button>
   );
 

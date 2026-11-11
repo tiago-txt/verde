@@ -31,8 +31,22 @@ describe("rodapé de resumo", () => {
       entradasPrevistas: 600_000,
       saidasPrevistas: 325_000,
       totalPrevisto: 275_000,
+      saldoAnterior: 0,
+      saldo: 300_000,
+      previsto: 275_000,
     });
     expect(footer.totalPrevisto).toBe(withInvoices.saldoPrevisto);
+  });
+
+  it("fechamento soma o saldo anterior ao realizado e ao previsto", () => {
+    const footer = buildFooterSummary(base, 12_500);
+    expect(footer.saldoAnterior).toBe(12_500);
+    expect(footer.saldo).toBe(312_500);
+    expect(footer.previsto).toBe(312_500);
+    expect(footer.saldo).toBe(footer.saldoAnterior + footer.realizado);
+    expect(footer.previsto).toBe(
+      footer.saldoAnterior + footer.totalPrevisto,
+    );
   });
 
   it("liberação abate das saídas e nunca soma em entradas", () => {

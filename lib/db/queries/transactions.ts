@@ -444,12 +444,17 @@ export function getTransactionFormData(): TransactionFormData {
 }
 
 /**
- * Saldo total das contas ao final de cada dia do mês.
+ * Saldo total das contas ao final de cada dia do mês, junto do saldo
+ * anterior (tudo o que veio antes do primeiro dia do mês).
  * Query agregada única (sem N+1), sempre sem filtros.
  */
-export function getDayBalances(monthKey: string): Record<string, number> {
+export function getMonthBalances(monthKey: string): {
+  opening: number;
+  byDay: Record<string, number>;
+} {
   const db = getDb();
   const { end } = monthRange(monthKey);
+  const start = `${monthKey}-01`;
 
   const initialTotal =
     db
@@ -476,13 +481,21 @@ export function getDayBalances(monthKey: string): Record<string, number> {
     .groupBy(transactions.data)
     .all();
 
+  const opening = deltas
+    .filter((row) => row.data < start)
+    .reduce((sum, row) => sum + row.delta, initialTotal);
+
   const balances = computeDayBalancesFromDeltas(
     initialTotal,
     deltas,
     eachDayOfMonth(monthKey),
   );
 
-  return Object.fromEntries(balances);
+  return { opening, byDay: Object.fromEntries(balances) };
+}
+
+export function getDayBalances(monthKey: string): Record<string, number> {
+  return getMonthBalances(monthKey).byDay;
 }
 
 /**

@@ -162,6 +162,7 @@ type TransactionsPageClientProps = {
   formData: TransactionFormData;
   detail: TransactionDetail | null;
   dayBalances: Record<string, number>;
+  openingBalance: number;
   today: string;
   overdueIds: string[];
   initialNew: boolean;
@@ -182,6 +183,7 @@ export function TransactionsPageClient({
   formData,
   detail,
   dayBalances,
+  openingBalance,
   today,
   overdueIds,
   initialNew,
@@ -1059,7 +1061,10 @@ export function TransactionsPageClient({
         </div>
       )}
 
-      <TransactionsSummaryFooter summary={summary} />
+      <TransactionsSummaryFooter
+        summary={summary}
+        openingBalance={openingBalance}
+      />
 
       <TransactionFormDialog
         open={createOpen}

@@ -3,7 +3,7 @@ import { TransactionsPageClient } from "@/components/transactions/transactions-p
 import { requireUser } from "@/lib/auth/current-user";
 import {
   ensureRecurrencesForMonth,
-  getDayBalances,
+  getMonthBalances,
   getTransactionDetail,
   getTransactionFormData,
   listMonthTransactions,
@@ -37,10 +37,11 @@ export default async function LancamentosPage({
   const cardInvoiceEvents = customRange
     ? []
     : listCardInvoiceEventsForMonth(filters.mes, filters);
+  const monthBalances = getMonthBalances(filters.mes);
   const dayBalances = customRange
     ? {}
     : aplicarEventosAoSalsoDia(
-        getDayBalances(filters.mes),
+        monthBalances.byDay,
         [
           ...getBudgetEventsForDayBalances(filters.mes),
           ...listCardInvoiceEventsForDayBalances(filters.mes).map((event) => ({
@@ -71,6 +72,7 @@ export default async function LancamentosPage({
       formData={formData}
       detail={detail}
       dayBalances={dayBalances}
+      openingBalance={monthBalances.opening}
       today={today}
       overdueIds={overdueIds}
       initialNew={params.novo === "1"}

@@ -11,4 +11,7 @@ coverage
 .vscode
 .idea
 *.log
+*.tsbuildinfo
+playwright-report
+test-results
 README.md

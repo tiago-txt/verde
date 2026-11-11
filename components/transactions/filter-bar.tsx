@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   ArrowLeftRight,
   Check,
@@ -286,7 +286,7 @@ function CategoryFilter({
   compact?: boolean;
 }) {
   const [search, setSearch] = useState("");
-  const [parentId, setParentId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
   const activeCategories = useMemo(
     () => categories.filter((category) => !category.deletedAt),
     [categories],
@@ -295,28 +295,68 @@ function CategoryFilter({
   const roots = activeCategories.filter(
     (category) => !category.categoriaPaiId,
   );
-  const parent = parentId
-    ? (activeCategories.find((category) => category.id === parentId) ?? null)
-    : null;
-  const children = parent
-    ? activeCategories.filter(
-        (category) => category.categoriaPaiId === parent.id,
-      )
-    : [];
   const filtered = activeCategories.filter(
     (category) => !query || category.nome.toLowerCase().includes(query),
   );
-  const visible = query ? filtered : parent ? children : roots;
+  const visible = query ? filtered : roots;
+
+  function childrenOf(id: string) {
+    return activeCategories.filter(
+      (category) => category.categoriaPaiId === id,
+    );
+  }
 
   function pick(category: TransactionFormData["categories"][number]) {
-    const hasChildren = activeCategories.some(
-      (item) => item.categoriaPaiId === category.id,
-    );
-    if (hasChildren && !query) {
-      setParentId(category.id);
-      return;
-    }
     onChange(toggleId(selected, category.id));
+    if (!query && childrenOf(category.id).length > 0) {
+      setExpandedId((current) =>
+        current === category.id ? null : category.id,
+      );
+    }
+  }
+
+  function cell(category: TransactionFormData["categories"][number]) {
+    const checked = selected.includes(category.id);
+    const hasChildren = childrenOf(category.id).length > 0;
+    return (
+      <button
+        key={category.id}
+        type="button"
+        onClick={() => pick(category)}
+        aria-pressed={checked}
+        title={category.nome}
+        className={cn(
+          "relative flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border px-1 py-2 text-center transition-colors",
+          checked
+            ? "border-primary/50 bg-primary/10 text-primary"
+            : "border-border hover:bg-accent",
+        )}
+      >
+        <CategoryIcon
+          icon={category.icone}
+          color={category.cor}
+          className="h-9 w-9"
+          iconClassName="h-4 w-4"
+        />
+        <span className="w-full truncate text-[10px] leading-tight">
+          {category.nome}
+        </span>
+        {hasChildren && (
+          <ChevronRight
+            className={cn(
+              "absolute bottom-1 right-1 h-3 w-3 text-muted-foreground transition-transform",
+              expandedId === category.id && "rotate-90",
+            )}
+            aria-hidden="true"
+          />
+        )}
+        {checked && (
+          <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
+            <Check className="h-2.5 w-2.5" />
+          </span>
+        )}
+      </button>
+    );
   }
 
   return (
@@ -332,37 +372,6 @@ function CategoryFilter({
         />
       </div>
 
-      {parent && !query && (
-        <div className="flex shrink-0 items-center gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="icon"
-            className="h-9 w-9 shrink-0"
-            aria-label="Voltar para categorias"
-            onClick={() => setParentId(null)}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 min-w-0 flex-1 justify-start gap-2 text-xs"
-            onClick={() => onChange(toggleId(selected, parent.id))}
-          >
-            <CategoryIcon
-              icon={parent.icone}
-              color={parent.cor}
-              className="h-6 w-6"
-              iconClassName="h-3 w-3"
-            />
-            <span className="truncate">
-              {selected.includes(parent.id) ? "Remover" : "Usar"} {parent.nome}
-            </span>
-          </Button>
-        </div>
-      )}
-
       <div
         className={cn(
           "grid min-h-0 grid-cols-4 gap-1.5 overflow-y-auto overflow-x-hidden p-0.5 pr-1",
@@ -376,56 +385,22 @@ function CategoryFilter({
           </p>
         ) : (
           visible.map((category) => {
-            const checked = selected.includes(category.id);
-            const hasChildren =
-              !category.categoriaPaiId &&
-              activeCategories.some(
-                (item) => item.categoriaPaiId === category.id,
-              );
-            const parentName = category.categoriaPaiId
-              ? (activeCategories.find(
-                  (item) => item.id === category.categoriaPaiId,
-                )?.nome ?? null)
-              : null;
+            const children = !query ? childrenOf(category.id) : [];
+            const isOpen = expandedId === category.id && children.length > 0;
             return (
-              <button
-                key={category.id}
-                type="button"
-                onClick={() => pick(category)}
-                aria-pressed={checked}
-                className={cn(
-                  "relative flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border px-1 py-2 text-center transition-colors",
-                  checked
-                    ? "border-primary/50 bg-primary/10 text-primary"
-                    : "border-border hover:bg-accent",
+              <Fragment key={category.id}>
+                {cell(category)}
+                {isOpen && (
+                  <div className="col-span-full rounded-xl border border-border/70 bg-muted/20 p-2">
+                    <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                      {category.nome}
+                    </p>
+                    <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
+                      {children.map((child) => cell(child))}
+                    </div>
+                  </div>
                 )}
-              >
-                <CategoryIcon
-                  icon={category.icone}
-                  color={category.cor}
-                  className="h-9 w-9"
-                  iconClassName="h-4 w-4"
-                />
-                <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
-                  {category.nome}
-                </span>
-                {query && parentName && (
-                  <span className="w-full truncate text-[9px] text-muted-foreground">
-                    {parentName}
-                  </span>
-                )}
-                {hasChildren && !query && (
-                  <ChevronRight
-                    className="absolute bottom-1 right-1 h-3 w-3 text-muted-foreground"
-                    aria-hidden="true"
-                  />
-                )}
-                {checked && (
-                  <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
-                    <Check className="h-2.5 w-2.5" />
-                  </span>
-                )}
-              </button>
+              </Fragment>
             );
           })
         )}
@@ -540,7 +515,7 @@ function CategoryFilterButton({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(92vw,440px)] overflow-hidden p-3"
+        className="w-[min(94vw,520px)] overflow-hidden p-3"
       >
         <CategoryFilter
           categories={categories}
