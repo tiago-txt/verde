@@ -7,6 +7,7 @@ import { toIconName } from "@/lib/icon-names";
 import { Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import {
   Dialog,
   DialogContent,
@@ -56,6 +57,7 @@ export function CategoryFormDialog({
   onSaved,
 }: CategoryFormDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const form = useForm<CategoryInput>({
     resolver: zodResolver(categoryInputSchema) as Resolver<CategoryInput>,
@@ -133,7 +135,7 @@ export function CategoryFormDialog({
             <Input
               id="category-nome"
               placeholder="Ex.: Mercado"
-              autoFocus
+              autoFocus={!isMobile}
               aria-invalid={Boolean(formState.errors.nome)}
               {...register("nome")}
             />

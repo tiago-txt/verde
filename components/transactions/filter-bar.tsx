@@ -2,11 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeftRight,
   Check,
+  CheckCircle2,
   ChevronDown,
+  CreditCard,
   Search,
-  SlidersHorizontal,
+  Shapes,
+  Tag as TagIcon,
+  Wallet,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -80,11 +86,13 @@ function toggleId(ids: string[], id: string): string[] {
 function FilterButton({
   label,
   count,
+  icon: Icon,
   children,
   className,
 }: {
   label: string;
   count: number;
+  icon?: LucideIcon;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -94,15 +102,20 @@ function FilterButton({
         <Button
           type="button"
           variant="outline"
-          className={cn("h-11 gap-2", className)}
+          className={cn(
+            "h-10 gap-1.5 rounded-full px-3 text-xs",
+            count > 0 && "border-primary/40 bg-primary/10 text-primary",
+            className,
+          )}
         >
+          {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           {label}
           {count > 0 && (
             <Badge variant="default" className="px-1.5 py-0 text-[10px]">
               {count}
             </Badge>
           )}
-          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-3">
@@ -276,16 +289,19 @@ function CategoryFilter({
     [categories],
   );
   const query = search.trim().toLowerCase();
-  const matches = (name: string) =>
-    !query || name.toLowerCase().includes(query);
   const roots = activeCategories.filter(
-    (category) =>
-      !category.categoriaPaiId &&
-      (matches(category.nome) ||
-        activeCategories.some(
-          (child) =>
-            child.categoriaPaiId === category.id && matches(child.nome),
-        )),
+    (category) => !category.categoriaPaiId,
+  );
+  const ordered = [
+    ...roots,
+    ...roots.flatMap((root) =>
+      activeCategories.filter(
+        (category) => category.categoriaPaiId === root.id,
+      ),
+    ),
+  ];
+  const visible = ordered.filter(
+    (category) => !query || category.nome.toLowerCase().includes(query),
   );
 
   return (
@@ -303,71 +319,51 @@ function CategoryFilter({
 
       <div
         className={cn(
-          "space-y-1 overflow-y-auto",
-          compact ? "max-h-56" : "max-h-64",
+          "grid gap-1.5 overflow-y-auto p-0.5",
+          compact ? "max-h-64" : "max-h-72",
+          "grid-cols-4 sm:grid-cols-6",
         )}
       >
-        {roots.length === 0 ? (
-          <p className="px-2 py-3 text-sm text-muted-foreground">
+        {visible.length === 0 ? (
+          <p className="col-span-full py-6 text-center text-sm text-muted-foreground">
             Nenhuma categoria encontrada.
           </p>
         ) : (
-          roots.map((root) => {
-            const children = activeCategories.filter(
-              (category) =>
-                category.categoriaPaiId === root.id &&
-                (matches(root.nome) || matches(category.nome)),
-            );
+          visible.map((category) => {
+            const checked = selected.includes(category.id);
             return (
-              <div key={root.id}>
-                <label
-                  htmlFor={`filter-category-${root.id}`}
-                  className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-accent"
-                >
-                  <Checkbox
-                    id={`filter-category-${root.id}`}
-                    checked={selected.includes(root.id)}
-                    onCheckedChange={() =>
-                      onChange(toggleId(selected, root.id))
-                    }
-                  />
-                  <CategoryIcon
-                    icon={root.icone}
-                    color={root.cor}
-                    className="h-6 w-6"
-                    iconClassName="h-3 w-3"
-                  />
-                  <span className="min-w-0 flex-1 truncate">{root.nome}</span>
-                </label>
-                {children.length > 0 && (
-                  <div className="ml-6 border-l border-border/70 pl-1">
-                    {children.map((child) => (
-                      <label
-                        key={child.id}
-                        htmlFor={`filter-category-${child.id}`}
-                        className="flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm hover:bg-accent"
-                      >
-                        <Checkbox
-                          id={`filter-category-${child.id}`}
-                          checked={selected.includes(child.id)}
-                          onCheckedChange={() =>
-                            onChange(toggleId(selected, child.id))
-                          }
-                        />
-                        <CategoryIcon
-                          icon={child.icone}
-                          color={child.cor}
-                          className="h-6 w-6"
-                          iconClassName="h-3 w-3"
-                        />
-                        <span className="min-w-0 flex-1 truncate">
-                          {child.nome}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+              <button
+                key={category.id}
+                type="button"
+                onClick={() => onChange(toggleId(selected, category.id))}
+                aria-pressed={checked}
+                className={cn(
+                  "relative flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
+                  checked
+                    ? "border-primary/50 bg-primary/10 text-primary"
+                    : "border-border hover:bg-accent",
                 )}
-              </div>
+              >
+                <CategoryIcon
+                  icon={category.icone}
+                  color={category.cor}
+                  className="h-9 w-9"
+                  iconClassName="h-4 w-4"
+                />
+                <span className="line-clamp-2 text-[11px] leading-tight">
+                  {category.nome}
+                </span>
+                {category.categoriaPaiId && (
+                  <span className="absolute left-1 top-1 text-[9px] text-muted-foreground">
+                    ↳
+                  </span>
+                )}
+                {checked && (
+                  <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                    <Check className="h-2.5 w-2.5" />
+                  </span>
+                )}
+              </button>
             );
           })
         )}
@@ -448,24 +444,84 @@ function SearchFilter({
   );
 }
 
+function CategoryFilterButton({
+  categories,
+  selected,
+  onChange,
+}: {
+  categories: TransactionFormData["categories"];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(
+            "h-10 gap-1.5 rounded-full px-3 text-xs",
+            selected.length > 0 &&
+              "border-primary/40 bg-primary/10 text-primary",
+          )}
+        >
+          <Shapes className="h-4 w-4" aria-hidden="true" />
+          Categorias
+          {selected.length > 0 && (
+            <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+              {selected.length}
+            </Badge>
+          )}
+          <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[380px] p-3">
+        <CategoryFilter
+          categories={categories}
+          selected={selected}
+          onChange={onChange}
+        />
+        <div className="mt-2 flex justify-end">
+          <Button
+            type="button"
+            size="sm"
+            className="h-10 rounded-full px-4"
+            onClick={() => setOpen(false)}
+          >
+            Aplicar
+            {selected.length > 0 ? ` (${selected.length})` : ""}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 export function FilterBar({
   filters,
   options,
   onChange,
   onClear,
-}: FilterBarProps) {
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [searchFocus, setSearchFocus] = useState(false);
+  sheetOpen,
+  onSheetOpenChange,
+  searchFocus = false,
+}: FilterBarProps & {
+  sheetOpen: boolean;
+  onSheetOpenChange: (open: boolean) => void;
+  searchFocus?: boolean;
+}) {
   const activeCount = countActiveFilters(filters);
   const active = hasActiveFilters(filters);
 
   return (
     <>
-      <div className="hidden flex-wrap items-center gap-2 sm:flex">
+      <div className="hidden flex-wrap items-center gap-2 lg:flex">
         <SearchFilter value={filters.q} onChange={(q) => onChange({ q })} />
 
         <FilterButton
           label="Origem"
+          icon={Wallet}
           count={filters.contas.length + filters.cartoes.length}
         >
           <div className="space-y-3">
@@ -492,7 +548,11 @@ export function FilterBar({
           </div>
         </FilterButton>
 
-        <FilterButton label="Tipo" count={filters.tipo ? 1 : 0}>
+        <FilterButton
+          label="Tipo"
+          icon={ArrowLeftRight}
+          count={filters.tipo ? 1 : 0}
+        >
           <ChoiceList
             options={TYPE_OPTIONS}
             value={filters.tipo}
@@ -500,18 +560,13 @@ export function FilterBar({
           />
         </FilterButton>
 
-        <FilterButton
-          label="Categorias"
-          count={filters.categorias.length}
-        >
-          <CategoryFilter
-            categories={options.categories}
-            selected={filters.categorias}
-            onChange={(categorias) => onChange({ categorias })}
-          />
-        </FilterButton>
+        <CategoryFilterButton
+          categories={options.categories}
+          selected={filters.categorias}
+          onChange={(categorias) => onChange({ categorias })}
+        />
 
-        <FilterButton label="Tags" count={filters.tags.length}>
+        <FilterButton label="Tags" icon={TagIcon} count={filters.tags.length}>
           <TagFilter
             tags={options.tags}
             selected={filters.tags}
@@ -521,6 +576,7 @@ export function FilterBar({
 
         <FilterButton
           label="Status"
+          icon={CheckCircle2}
           count={filters.status !== "todos" ? 1 : 0}
         >
           <ChoiceList
@@ -530,80 +586,46 @@ export function FilterBar({
           />
         </FilterButton>
 
-        {active && (
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={onClear}
-            className="h-11"
-          >
-            <X className="h-4 w-4" />
-            Limpar filtros
-          </Button>
-        )}
-
-        <label className="flex h-11 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-sm">
-          <Checkbox
-            checked={filters.comprasCartao}
-            onCheckedChange={(checked) =>
-              onChange({ comprasCartao: checked === true })
-            }
-          />
-          Mostrar compras no cartão
-        </label>
-      </div>
-
-      <div className="flex items-center gap-2 sm:hidden">
         <Button
           type="button"
-          variant="outline"
+          variant={filters.comprasCartao ? "default" : "outline"}
           size="icon"
-          className="h-11 w-11"
-          aria-label="Buscar lançamentos"
-          onClick={() => {
-            setSearchFocus(true);
-            setSheetOpen(true);
-          }}
+          className="h-10 w-10 rounded-full"
+          aria-pressed={filters.comprasCartao}
+          aria-label={
+            filters.comprasCartao
+              ? "Ocultar compras no cartão"
+              : "Mostrar compras no cartão"
+          }
+          title={
+            filters.comprasCartao
+              ? "Compras no cartão visíveis"
+              : "Mostrar compras no cartão"
+          }
+          onClick={() => onChange({ comprasCartao: !filters.comprasCartao })}
         >
-          <Search className="h-4 w-4" />
+          <CreditCard className="h-4 w-4" />
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          className="h-11 flex-1 justify-between"
-          onClick={() => {
-            setSearchFocus(false);
-            setSheetOpen(true);
-          }}
-        >
-          <span className="flex items-center gap-2">
-            <SlidersHorizontal className="h-4 w-4" />
-            Filtros
-            {activeCount > 0 && (
-              <Badge variant="default" className="px-1.5 py-0 text-[10px]">
-                {activeCount}
-              </Badge>
-            )}
-          </span>
-          <ChevronDown className="h-4 w-4 text-muted-foreground" />
-        </Button>
+
         {active && (
           <Button
             type="button"
             variant="ghost"
-            size="icon"
-            className="h-11 w-11"
-            aria-label="Limpar filtros"
             onClick={onClear}
+            className="h-10 rounded-full px-3 text-xs"
           >
             <X className="h-4 w-4" />
+            Limpar
           </Button>
         )}
       </div>
 
-      <Dialog open={sheetOpen} onOpenChange={setSheetOpen}>
-        <DialogContent className="max-h-[92dvh] overflow-y-auto p-5 sm:max-w-lg">
-          <DialogHeader>
+      <Dialog open={sheetOpen} onOpenChange={onSheetOpenChange}>
+        <DialogContent
+          className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <DialogHeader className="pr-10">
             <DialogTitle>Filtros</DialogTitle>
           </DialogHeader>
 
@@ -655,7 +677,14 @@ export function FilterBar({
             </div>
 
             <div className="space-y-2">
-              <Label>Categorias</Label>
+              <div className="flex items-center justify-between">
+                <Label>Categorias</Label>
+                {filters.categorias.length > 0 && (
+                  <span className="text-[11px] text-muted-foreground">
+                    {filters.categorias.length} selecionada(s)
+                  </span>
+                )}
+              </div>
               <CategoryFilter
                 categories={options.categories}
                 selected={filters.categorias}
@@ -687,15 +716,20 @@ export function FilterBar({
             <Button
               type="button"
               variant="outline"
+              className="h-12"
               onClick={() => {
                 onClear();
-                setSheetOpen(false);
+                onSheetOpenChange(false);
               }}
             >
               Limpar filtros
             </Button>
-            <Button type="button" onClick={() => setSheetOpen(false)}>
-              Aplicar
+            <Button
+              type="button"
+              className="h-12"
+              onClick={() => onSheetOpenChange(false)}
+            >
+              Aplicar{activeCount > 0 ? ` (${activeCount})` : ""}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -54,6 +54,7 @@ export default async function DashboardPage({
       <PageHeader
         title={`Olá, ${firstName}`}
         description={`Resumo de ${formatMonthTitle(month)}.`}
+        className="azulejo rounded-2xl border border-border/60 p-4"
       />
 
       <DashboardMonthHeader month={month} />

@@ -40,6 +40,14 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+        info: {
+          DEFAULT: "hsl(var(--info))",
+          foreground: "hsl(var(--info-foreground))",
+        },
+        gold: {
+          DEFAULT: "hsl(var(--gold))",
+          foreground: "hsl(var(--gold-foreground))",
+        },
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",
@@ -68,13 +76,13 @@ const config: Config = {
       },
       fontFamily: {
         sans: [
-          "ui-sans-serif",
-          "system-ui",
-          "-apple-system",
+          "Avenir Next",
+          "Nunito",
+          "Quicksand",
+          "Segoe UI Variable Display",
           "Segoe UI",
-          "Roboto",
-          "Helvetica Neue",
-          "Arial",
+          "ui-rounded",
+          "system-ui",
           "sans-serif",
         ],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Consolas", "monospace"],

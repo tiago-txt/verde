@@ -28,10 +28,10 @@ export function CardInvoiceRow({ event, onOpen }: CardInvoiceRowProps) {
       type="button"
       onClick={() => onOpen(event)}
       aria-label={`Fatura ${event.cartaoNome}, ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}`}
-      className="flex w-full items-start gap-3 border-l-2 border-dashed border-l-indigo-400/60 bg-indigo-500/[0.05] px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
+      className="flex w-full items-start gap-3 border-l-2 border-dashed border-l-info/60 bg-info/[0.05] px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
     >
       <span
-        className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full"
+        className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl"
         style={{
           backgroundColor: `${event.cartaoCor}22`,
           color: event.cartaoCor,

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { loginAction, type LoginState } from "@/lib/actions/auth";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 
 export function LoginForm({ next }: { next?: string }) {
   const [state, formAction, isPending] = useActionState<LoginState, FormData>(
@@ -13,6 +14,7 @@ export function LoginForm({ next }: { next?: string }) {
     {},
   );
   const [showPassword, setShowPassword] = useState(false);
+  const isMobile = useIsMobile();
   // Controlado para o React não limpar o e-mail após uma tentativa inválida.
   const [email, setEmail] = useState("");
 
@@ -40,7 +42,7 @@ export function LoginForm({ next }: { next?: string }) {
           autoComplete="email"
           placeholder="voce@exemplo.com"
           required
-          autoFocus
+          autoFocus={!isMobile}
           disabled={isPending}
           value={email}
           onChange={(event) => setEmail(event.target.value)}

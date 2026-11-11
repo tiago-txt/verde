@@ -9,16 +9,22 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
+  CalendarDays,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
   Download,
   Loader2,
+  ListFilter,
   MoreVertical,
   Plus,
   ReceiptText,
+  Search,
+  SlidersHorizontal,
+  Wallet,
   X,
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -80,10 +86,11 @@ import type { Scope } from "@/lib/finance/scopes";
 import {
   buildTransactionHref,
   buildTransactionSearchParams,
+  countActiveFilters,
   hasActiveFilters,
   type TransactionFilters,
 } from "@/lib/finance/filters";
-import { dayLabel, groupTransactionsByDay } from "@/lib/finance/day-labels";
+import { groupTransactionsByDay } from "@/lib/finance/day-labels";
 import { aplicarEventosAoResumo } from "@/lib/finance/budgets";
 import { aplicarFaturasAoResumo } from "@/lib/finance/cards";
 import { summarizeTransactions } from "@/lib/finance/summary";
@@ -208,6 +215,18 @@ export function TransactionsPageClient({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersSearchFocus, setFiltersSearchFocus] = useState(false);
+
+  useEffect(() => {
+    function openNew() {
+      setCreateOpen(true);
+    }
+    window.addEventListener("verde:new-transaction", openNew);
+    return () =>
+      window.removeEventListener("verde:new-transaction", openNew);
+  }, []);
+
   const [selectedBudgetEvent, setSelectedBudgetEvent] =
     useState<BudgetEventView | null>(null);
 
@@ -680,22 +699,20 @@ export function TransactionsPageClient({
 
   return (
     <div className="space-y-4 pb-48 lg:pb-28">
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          onClick={() => setCreateOpen(true)}
-          aria-label="Novo lançamento"
-        >
-          <Plus className="h-4 w-4" />
-          <span className="hidden sm:inline">Lançamento</span>
-        </Button>
+      <div className="flex items-center gap-1 lg:gap-3">
+        <div className="hidden min-w-0 lg:block">
+          <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>
+          <p className="text-sm text-muted-foreground">
+            Acompanhe o que entrou e saiu no mês.
+          </p>
+        </div>
 
-        <div className="order-3 flex w-full items-center justify-center gap-1 sm:order-2 sm:w-auto sm:flex-1">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 lg:justify-end lg:gap-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11"
+            className="h-9 w-9 shrink-0 lg:h-11 lg:w-11"
             aria-label="Mês anterior"
             onClick={() => changeMonth(addMonths(filters.mes, -1))}
           >
@@ -704,13 +721,13 @@ export function TransactionsPageClient({
           <MonthPicker
             month={filters.mes}
             onChange={changeMonth}
-            className="text-center"
+            className="text-center text-[13px] lg:text-base"
           />
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11"
+            className="h-9 w-9 shrink-0 lg:h-11 lg:w-11"
             aria-label="Próximo mês"
             onClick={() => changeMonth(addMonths(filters.mes, 1))}
           >
@@ -718,15 +735,57 @@ export function TransactionsPageClient({
           </Button>
         </div>
 
-        <div className="order-2 ml-auto flex items-center gap-1 sm:order-3">
+        <div className="flex items-center gap-1">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-10 w-10 lg:hidden"
+            aria-label="Buscar lançamentos"
+            onClick={() => {
+              setFiltersSearchFocus(true);
+              setFiltersOpen(true);
+            }}
+          >
+            <Search className="h-5 w-5" />
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="relative h-10 w-10 lg:hidden"
+            aria-label={
+              countActiveFilters(filters) > 0
+                ? `Filtros (${countActiveFilters(filters)} ativos)`
+                : "Filtros"
+            }
+            onClick={() => {
+              setFiltersSearchFocus(false);
+              setFiltersOpen(true);
+            }}
+          >
+            <ListFilter className="h-5 w-5" />
+            {countActiveFilters(filters) > 0 && (
+              <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+                {countActiveFilters(filters)}
+              </span>
+            )}
+          </Button>
+
           <Button
             type="button"
             variant={selectionMode ? "default" : "outline"}
-            size="sm"
-            className="h-11"
+            size="icon"
+            className="hidden h-11 w-11 lg:inline-flex"
             onClick={toggleSelectionMode}
             aria-pressed={selectionMode}
             aria-label={
+              selectionMode
+                ? "Sair do modo de seleção"
+                : "Selecionar lançamentos"
+            }
+            title={
               selectionMode
                 ? "Sair do modo de seleção"
                 : "Selecionar lançamentos"
@@ -737,9 +796,28 @@ export function TransactionsPageClient({
             ) : (
               <CheckSquare className="h-4 w-4" />
             )}
-            <span className="hidden sm:inline">
-              {selectionMode ? "Sair" : "Selecionar"}
-            </span>
+          </Button>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="hidden h-11 w-11 lg:inline-flex"
+            aria-label="Ir para hoje"
+            title="Ir para hoje"
+            onClick={() => changeMonth(currentMonth())}
+          >
+            <CalendarDays className="h-4 w-4" />
+          </Button>
+
+          <Button
+            type="button"
+            className="hidden h-11 lg:inline-flex"
+            onClick={() => setCreateOpen(true)}
+            aria-label="Novo lançamento"
+          >
+            <Plus className="h-4 w-4" />
+            Lançamento
           </Button>
 
           <DropdownMenu>
@@ -748,13 +826,20 @@ export function TransactionsPageClient({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11"
+                className="h-10 w-10 lg:h-11 lg:w-11"
                 aria-label="Mais ações"
               >
-                <MoreVertical className="h-4 w-4" />
+                <MoreVertical className="h-5 w-5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                className="lg:hidden"
+                onSelect={() => toggleSelectionMode()}
+              >
+                <CheckSquare />
+                {selectionMode ? "Sair da seleção" : "Selecionar lançamentos"}
+              </DropdownMenuItem>
               <DropdownMenuItem asChild>
                 <a href={exportHref} download>
                   <Download />
@@ -782,6 +867,9 @@ export function TransactionsPageClient({
         options={formData}
         onChange={changeFilters}
         onClear={clearFilters}
+        sheetOpen={filtersOpen}
+        onSheetOpenChange={setFiltersOpen}
+        searchFocus={filtersSearchFocus}
       />
 
       {selectionMode && (
@@ -858,8 +946,8 @@ export function TransactionsPageClient({
               >
                 <div
                   className={cn(
-                    "flex items-center justify-between gap-2 border-b border-border bg-muted/30 px-3 py-2 sm:px-4",
-                    group.day === today && "bg-primary/10",
+                    "flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/20 px-3 py-2 sm:px-4",
+                    group.day === today && "bg-gold/10",
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -878,22 +966,47 @@ export function TransactionsPageClient({
                         aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
                       />
                     )}
-                    <p className="truncate text-sm font-semibold">
-                      {dayLabel(group.day, today)}
-                    </p>
-                    <span className="shrink-0 text-xs text-muted-foreground">
+                    <span className="tabular text-xl font-bold leading-none">
+                      {Number(group.day.slice(8, 10))}
+                    </span>
+                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                      {new Intl.DateTimeFormat("pt-BR", {
+                        weekday: "short",
+                        timeZone: "UTC",
+                      })
+                        .format(new Date(`${group.day}T12:00:00Z`))
+                        .replace(".", "")}
+                    </span>
+                    {group.day === today && (
+                      <Badge className="bg-gold/15 text-gold">Hoje</Badge>
+                    )}
+                    <span className="hidden text-xs text-muted-foreground sm:inline">
                       {formatDate(group.day)}
                     </span>
                   </div>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {group.items.length} lançamento(s)
-                    {group.events.length > 0
-                      ? ` · ${group.events.length} orçamento(s)`
-                      : ""}
-                    {group.invoices.length > 0
-                      ? ` · ${group.invoices.length} fatura(s)`
-                      : ""}
-                  </span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                    <span className="shrink-0">
+                      {group.items.length} lançamento(s)
+                      {group.events.length > 0
+                        ? ` · ${group.events.length} orçamento(s)`
+                        : ""}
+                      {group.invoices.length > 0
+                        ? ` · ${group.invoices.length} fatura(s)`
+                        : ""}
+                    </span>
+                    {!filters.de && !filters.ate && (
+                      <span
+                        className={cn(
+                          "tabular inline-flex items-center gap-1 font-semibold",
+                          balance < 0 ? "text-destructive" : "text-foreground",
+                        )}
+                        title="Saldo previsto acumulado das contas até este dia"
+                      >
+                        <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+                        {formatCurrency(balance)}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="divide-y divide-border">
@@ -933,25 +1046,6 @@ export function TransactionsPageClient({
                     />
                   ))}
                 </div>
-
-                {!filters.de && !filters.ate && (
-                  <div
-                    className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4"
-                    title="Saldo previsto acumulado das contas até este dia, incluindo provisões e sobras de orçamento."
-                  >
-                    <span className="text-xs text-muted-foreground">
-                      Saldo previsto no dia
-                    </span>
-                    <span
-                      className={cn(
-                        "tabular text-xs font-semibold",
-                        balance < 0 ? "text-destructive" : "text-foreground",
-                      )}
-                    >
-                      {formatCurrency(balance)}
-                    </span>
-                  </div>
-                )}
               </div>
             );
           })}

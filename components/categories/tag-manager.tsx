@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { FormError } from "@/components/form-feedback";
 import type { TagWithCount } from "@/lib/db/queries/categories";
 import {
@@ -30,6 +31,7 @@ export function TagManager({ tags }: { tags: TagWithCount[] }) {
   const [editing, setEditing] = useState<TagWithCount | null>(null);
   const [editName, setEditName] = useState("");
   const [deleting, setDeleting] = useState<TagWithCount | null>(null);
+  const isMobile = useIsMobile();
 
   async function handleCreate(event: React.FormEvent) {
     event.preventDefault();
@@ -171,7 +173,7 @@ export function TagManager({ tags }: { tags: TagWithCount[] }) {
             value={editName}
             onChange={(event) => setEditName(event.target.value)}
             maxLength={30}
-            autoFocus
+            autoFocus={!isMobile}
             aria-label="Novo nome da tag"
           />
           <DialogFooter>

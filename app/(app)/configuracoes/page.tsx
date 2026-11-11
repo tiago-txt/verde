@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Database, LogOut, Tags, Users } from "lucide-react";
+import { Database, LogOut, Tags, Users, Wallet, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,6 +27,33 @@ export default async function ConfiguracoesPage() {
         title="Configurações"
         description="Sua conta, aparência e informações do servidor."
       />
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Button asChild variant="outline" className="h-12 justify-start">
+          <Link href="/contas">
+            <Wallet className="h-4 w-4" />
+            Contas
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-12 justify-start">
+          <Link href="/cartoes">
+            <CreditCard className="h-4 w-4" />
+            Cartões
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-12 justify-start">
+          <Link href="/configuracoes/categorias">
+            <Tags className="h-4 w-4" />
+            Categorias
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-12 justify-start">
+          <Link href="/configuracoes/dados">
+            <Database className="h-4 w-4" />
+            Dados
+          </Link>
+        </Button>
+      </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
@@ -76,7 +103,7 @@ export default async function ConfiguracoesPage() {
 
         <Card>
           <CardHeader className="flex-row items-center gap-3 space-y-0">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
+            <span className="tile grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
               <Tags className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
@@ -102,7 +129,7 @@ export default async function ConfiguracoesPage() {
 
         <Card>
           <CardHeader className="flex-row items-center gap-3 space-y-0">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
+            <span className="tile grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
               <Users className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
@@ -123,7 +150,7 @@ export default async function ConfiguracoesPage() {
 
         <Card>
           <CardHeader className="flex-row items-center gap-3 space-y-0">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-muted text-muted-foreground">
+            <span className="tile grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
               <Database className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>

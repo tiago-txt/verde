@@ -55,7 +55,7 @@ export function CategorySelect({
       aria-haspopup="listbox"
       aria-expanded={open}
       className={cn(
-        "flex h-11 w-full items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm shadow-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
+        "flex h-12 w-full items-center justify-between gap-2 rounded-xl border border-input bg-background px-3 text-sm shadow-sm transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 sm:h-11",
         className,
       )}
     >
@@ -68,7 +68,7 @@ export function CategorySelect({
             iconClassName="h-3.5 w-3.5"
           />
         ) : (
-          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-full bg-muted text-muted-foreground">
+          <span className="grid h-6 w-6 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
             <CircleEllipsis className="h-3.5 w-3.5" />
           </span>
         )}
@@ -85,6 +85,7 @@ export function CategorySelect({
     <CategoryPicker
       options={options}
       value={value}
+      autoFocusSearch={!isMobile}
       onChange={(next) => {
         onChange(next);
         setOpen(false);
@@ -98,8 +99,11 @@ export function CategorySelect({
       <>
         {trigger}
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogContent className="p-4 sm:max-w-md">
-            <DialogHeader>
+          <DialogContent
+            className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <DialogHeader className="pr-10">
               <DialogTitle>Categoria</DialogTitle>
             </DialogHeader>
             {panel}
@@ -112,7 +116,7 @@ export function CategorySelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>{trigger}</PopoverAnchor>
-      <PopoverContent align="start" className="w-[340px] p-2">
+      <PopoverContent align="start" className="w-[420px] p-3">
         {panel}
       </PopoverContent>
     </Popover>

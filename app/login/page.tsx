@@ -43,7 +43,7 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       {/* Painel de marca (desktop) */}
-      <section className="relative hidden overflow-hidden border-r border-border bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
+      <section className="azulejo relative hidden overflow-hidden border-r border-border bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
         <div
           aria-hidden="true"
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(52,211,153,0.16),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(120,80,40,0.14),transparent_50%)]"

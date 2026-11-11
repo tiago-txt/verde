@@ -33,7 +33,7 @@ export function MonthPicker({ month, onChange, className }: MonthPickerProps) {
       type="button"
       onClick={() => setOpen(true)}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1 rounded-md px-2 text-base font-semibold capitalize transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 text-base font-semibold capitalize transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         className,
       )}
       aria-label="Escolher mês e ano"

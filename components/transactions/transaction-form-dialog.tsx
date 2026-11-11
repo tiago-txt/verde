@@ -12,11 +12,15 @@ import {
   CreditCard,
   Loader2,
   Paperclip,
+  Plus,
   Repeat,
   StickyNote,
   Tags as TagsIcon,
   Target,
+  ThumbsDown,
+  ThumbsUp,
   Trash2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +41,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/components/ui/toast";
 import { CategorySelect } from "./category-select";
+import { SourceSelect } from "./source-select";
 import { CurrencyInput } from "@/components/currency-input";
 import { DatePicker } from "@/components/calendar/date-picker";
 import { FieldError, FormError } from "@/components/form-feedback";
@@ -48,7 +53,7 @@ import {
   getBudgetHintAction,
   type BudgetHint,
 } from "@/lib/actions/budgets";
-import type {
+import { createTagAction } from "@/lib/actions/tags";import type {
   RecentDescription,
   TransactionFormData,
   TransactionListItem,
@@ -63,6 +68,9 @@ import { datasDaFatura, faturaDaCompra } from "@/lib/finance/cards";
 import type { Scope } from "@/lib/finance/scopes";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { keypadDisplay } from "@/lib/finance/numeric-keypad";
+import { NumericKeypad } from "./numeric-keypad";
 import {
   createTransactionSchema,
   type TransactionFormValues,
@@ -273,8 +281,12 @@ export function TransactionFormDialog({
     "repetir" | "obs" | "tags" | null
   >(null);
   const [budgetHint, setBudgetHint] = useState<BudgetHint | null>(null);
+  const [extraTags, setExtraTags] = useState<{ id: string; nome: string }[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [creatingTag, setCreatingTag] = useState(false);
   const skipConfirmRef = useRef(false);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
 
   useSheetViewport(open);
 
@@ -570,6 +582,36 @@ export function TransactionFormDialog({
     onOpenChange(false);
   }
 
+  async function handleCreateTag(
+    current: string[],
+    setIds: (ids: string[]) => void,
+  ) {
+    const nome = newTagName.trim();
+    if (!nome || creatingTag) return;
+
+    const existing = [...formData.tags, ...extraTags].find(
+      (tag) => tag.nome.toLowerCase() === nome.toLowerCase(),
+    );
+    if (existing) {
+      if (!current.includes(existing.id)) setIds([...current, existing.id]);
+      setNewTagName("");
+      return;
+    }
+
+    setCreatingTag(true);
+    const result = await createTagAction({ nome });
+    setCreatingTag(false);
+
+    if (!result.ok || !result.id) {
+      setServerError(result.ok ? "Não foi possível criar a tag." : result.error);
+      return;
+    }
+
+    setExtraTags((tags) => [...tags, { id: result.id!, nome }]);
+    setIds([...current, result.id]);
+    setNewTagName("");
+  }
+
   function handleFormKeyDown(event: React.KeyboardEvent<HTMLFormElement>) {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       event.preventDefault();
@@ -598,73 +640,162 @@ export function TransactionFormDialog({
   }
 
   const hasAccounts = formData.accounts.length > 0;
+  const headerTone =
+    tipo === "receita"
+      ? "bg-primary text-primary-foreground"
+      : tipo === "transferencia"
+        ? "bg-info text-info-foreground"
+        : "bg-destructive text-destructive-foreground";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
-        className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-[700px]"
-        showClose
+        className={cn(
+          isMobile
+            ? "!inset-0 !h-dvh !max-h-dvh !w-full !max-w-none !translate-x-0 !translate-y-0 !rounded-none !border-0 p-0"
+            : "max-h-[var(--verde-sheet-max-h,92dvh)] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-[700px]",
+        )}
+        showClose={false}
       >
         <form
           onSubmit={onSubmit}
           onKeyDown={handleFormKeyDown}
-          className="flex max-h-[var(--verde-sheet-max-h,92dvh)] flex-col sm:max-h-[90dvh]"
+          className={cn(
+            "flex flex-col",
+            isMobile
+              ? "h-dvh"
+              : "max-h-[var(--verde-sheet-max-h,92dvh)] sm:max-h-[90dvh]",
+          )}
         >
-          <div className="flex justify-center pt-2 sm:hidden">
-            <span className="h-1 w-10 rounded-full bg-border" />
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 pr-12 sm:flex-nowrap sm:gap-3 sm:px-5 sm:py-3">
-            <DialogHeader className="min-w-0 flex-1">
-              <DialogTitle className="text-base sm:text-lg">
-                {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
-              </DialogTitle>
-              {mode === "edit" && isGrouped && (
-                <p className="text-xs text-muted-foreground">
-                  Escopo: {SCOPE_LABELS[scope]}
+          {isMobile ? (
+            <div className={cn("shrink-0 px-4 pb-2 pt-3", headerTone)}>
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-sm font-medium">
+                  {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
                 </p>
-              )}
-            </DialogHeader>
-
-            {canChangeType ? (
-              <div
-                role="tablist"
-                aria-label="Tipo de lançamento"
-                className="order-3 flex w-full gap-0.5 rounded-md bg-muted p-0.5 sm:order-2 sm:w-auto"
-              >
-                {(
-                  ["despesa", "receita", "transferencia"] as TransactionType[]
-                )
-                  .filter((type) => !(isCard && type === "transferencia"))
-                  .map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    role="tab"
-                    aria-selected={tipo === type}
-                    onClick={() => handleTypeChange(type)}
-                    className={cn(
-                      "h-10 flex-1 rounded px-2 text-xs font-medium transition-colors sm:h-8 sm:flex-none sm:px-3",
-                      tipo === type
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {isCard && type === "receita"
-                      ? "Estorno/crédito"
-                      : TYPE_LABELS[type]}
-                  </button>
-                ))}
+                <button
+                  type="button"
+                  onClick={() => handleOpenChange(false)}
+                  aria-label="Fechar"
+                  className="grid h-12 w-12 place-items-center rounded-xl bg-black/10 hover:bg-black/20"
+                >
+                  <X className="h-5 w-5" />
+                </button>
               </div>
-            ) : (
-              <Badge
-                variant={TYPE_BADGE[tipo]}
-                className="order-3 sm:order-2"
+
+              {canChangeType ? (
+                <div role="tablist" aria-label="Tipo de lançamento" className="mt-1 flex">
+                  {(["despesa", "receita", "transferencia"] as TransactionType[])
+                    .filter((type) => !(isCard && type === "transferencia"))
+                    .map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        role="tab"
+                        aria-selected={tipo === type}
+                        onClick={() => handleTypeChange(type)}
+                        className={cn(
+                          "h-11 flex-1 border-b-2 px-1 text-xs font-medium transition-colors",
+                          tipo === type
+                            ? "border-gold"
+                            : "border-transparent opacity-65",
+                        )}
+                      >
+                        {isCard && type === "receita"
+                          ? "Estorno/crédito"
+                          : TYPE_LABELS[type]}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <p className="mt-1 text-xs opacity-80">{TYPE_LABELS[tipo]}</p>
+              )}
+
+              <div className="flex items-center justify-center gap-3 py-2">
+                <p className="tabular flex items-baseline gap-1.5 text-5xl font-bold">
+                  <span className="text-xl font-medium opacity-80">R$</span>
+                  {keypadDisplay(valor)}
+                </p>
+                {!isCard && (
+                  <button
+                    type="button"
+                    onClick={() => setValue("pago", !pago, { shouldDirty: true })}
+                    disabled={paidLocked}
+                    aria-label={pago ? "Marcar como não pago" : "Marcar como pago"}
+                    aria-pressed={pago}
+                    className="grid h-12 w-12 place-items-center rounded-xl bg-black/10 disabled:opacity-50"
+                  >
+                    {pago ? (
+                      <ThumbsUp className="h-6 w-6" />
+                    ) : (
+                      <ThumbsDown className="h-6 w-6 opacity-70" />
+                    )}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className={cn("flex flex-wrap items-center gap-2 border-b border-border px-4 py-2.5 sm:flex-nowrap sm:gap-3 sm:px-5 sm:py-3", headerTone)}>
+              <DialogHeader className="min-w-0 flex-1">
+                <DialogTitle className="text-base sm:text-lg">
+                  {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
+                </DialogTitle>
+                {mode === "edit" && isGrouped && (
+                  <p className="text-xs opacity-80">
+                    Escopo: {SCOPE_LABELS[scope]}
+                  </p>
+                )}
+              </DialogHeader>
+
+              {canChangeType ? (
+                <div
+                  role="tablist"
+                  aria-label="Tipo de lançamento"
+                  className="order-3 flex w-full gap-0.5 rounded-xl bg-black/10 p-0.5 sm:order-2 sm:w-auto"
+                >
+                  {(
+                    ["despesa", "receita", "transferencia"] as TransactionType[]
+                  )
+                    .filter((type) => !(isCard && type === "transferencia"))
+                    .map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        role="tab"
+                        aria-selected={tipo === type}
+                        onClick={() => handleTypeChange(type)}
+                        className={cn(
+                          "h-10 flex-1 rounded-lg px-2 text-xs font-medium transition-colors sm:h-9 sm:flex-none sm:px-3",
+                          tipo === type
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-current opacity-70 hover:opacity-100",
+                        )}
+                      >
+                        {isCard && type === "receita"
+                          ? "Estorno/crédito"
+                          : TYPE_LABELS[type]}
+                      </button>
+                    ))}
+                </div>
+              ) : (
+                <Badge
+                  variant={TYPE_BADGE[tipo]}
+                  className="order-3 sm:order-2"
+                >
+                  {TYPE_LABELS[tipo]}
+                </Badge>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleOpenChange(false)}
+                aria-label="Fechar"
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-black/10 hover:bg-black/20"
               >
-                {TYPE_LABELS[tipo]}
-              </Badge>
-            )}
-          </div>
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-4 sm:p-5">
             <FormError message={serverError} />
@@ -744,28 +875,35 @@ export function TransactionFormDialog({
                 <FieldError message={formState.errors.descricao?.message} />
               </div>
 
-              <div className="col-span-1 space-y-1 sm:col-span-2">
-                <FieldLabel htmlFor="transaction-valor">
-                  {isInstallment ? "Valor da parcela" : "Valor"}
-                </FieldLabel>
-                <Controller
-                  control={control}
-                  name="valor"
-                  render={({ field }) => (
-                    <CurrencyInput
-                      id="transaction-valor"
-                      value={field.value}
-                      onChange={field.onChange}
-                      large
-                      autoFocus
-                      aria-invalid={Boolean(formState.errors.valor)}
-                    />
-                  )}
-                />
-                <FieldError message={formState.errors.valor?.message} />
-              </div>
+              {!isMobile && (
+                <div className="col-span-1 space-y-1 sm:col-span-2">
+                  <FieldLabel htmlFor="transaction-valor">
+                    {isInstallment ? "Valor da parcela" : "Valor"}
+                  </FieldLabel>
+                  <Controller
+                    control={control}
+                    name="valor"
+                    render={({ field }) => (
+                      <CurrencyInput
+                        id="transaction-valor"
+                        value={field.value}
+                        onChange={field.onChange}
+                        large
+                        autoFocus
+                        aria-invalid={Boolean(formState.errors.valor)}
+                      />
+                    )}
+                  />
+                  <FieldError message={formState.errors.valor?.message} />
+                </div>
+              )}
 
-              <div className="col-span-1 space-y-1 sm:col-span-2">
+              <div
+                className={cn(
+                  "space-y-1",
+                  isMobile ? "col-span-2" : "col-span-1 sm:col-span-2",
+                )}
+              >
                 <FieldLabel htmlFor="transaction-data">Data</FieldLabel>
                 <Controller
                   control={control}
@@ -783,7 +921,7 @@ export function TransactionFormDialog({
                 <FieldError message={formState.errors.data?.message} />
               </div>
 
-              {!isCard && (
+              {!isCard && !isMobile && (
                 <div className="col-span-2 space-y-1 sm:col-span-2">
                   <FieldLabel htmlFor="transaction-pago">Pago</FieldLabel>
                   <div
@@ -817,25 +955,27 @@ export function TransactionFormDialog({
                 <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:col-span-6">
                   <div className="space-y-1">
                     <FieldLabel htmlFor="transaction-conta">Origem</FieldLabel>
-                    <NativeSelect
-                      id="transaction-conta"
-                      aria-invalid={Boolean(formState.errors.contaId)}
-                      {...register("contaId", {
-                        onChange: () => setAccountTouched(true),
-                      })}
-                    >
-                      {!hasAccounts && <option value="">Nenhuma conta</option>}
-                      {formData.accounts.map((account) => (
-                        <option
-                          key={account.id}
-                          value={account.id}
-                          disabled={account.arquivada && account.id !== contaId}
-                        >
-                          {account.nome}
-                          {account.arquivada ? " (arquivada)" : ""}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                    <Controller
+                      control={control}
+                      name="contaId"
+                      render={({ field }) => (
+                        <SourceSelect
+                          id="transaction-conta"
+                          value={field.value ? `conta:${field.value}` : ""}
+                          onChange={(next) => {
+                            setAccountTouched(true);
+                            field.onChange(
+                              next.slice("conta:".length) || null,
+                            );
+                          }}
+                          accounts={formData.accounts}
+                          cards={[]}
+                          accountsOnly
+                          title="Conta de origem"
+                          aria-invalid={Boolean(formState.errors.contaId)}
+                        />
+                      )}
+                    />
                     <FieldError message={formState.errors.contaId?.message} />
                   </div>
 
@@ -852,33 +992,22 @@ export function TransactionFormDialog({
                       control={control}
                       name="contaDestinoId"
                       render={({ field }) => (
-                        <NativeSelect
+                        <SourceSelect
                           id="transaction-destino"
-                          value={field.value ?? ""}
-                          onChange={(event) =>
-                            field.onChange(event.target.value || null)
+                          value={field.value ? `conta:${field.value}` : ""}
+                          onChange={(next) =>
+                            field.onChange(next.slice("conta:".length) || null)
                           }
+                          accounts={formData.accounts}
+                          cards={[]}
+                          accountsOnly
+                          excludeAccountId={contaId}
+                          title="Conta de destino"
+                          placeholder="Selecione"
                           aria-invalid={Boolean(
                             formState.errors.contaDestinoId,
                           )}
-                        >
-                          <option value="">Selecione</option>
-                          {formData.accounts
-                            .filter((account) => account.id !== contaId)
-                            .map((account) => (
-                              <option
-                                key={account.id}
-                                value={account.id}
-                                disabled={
-                                  account.arquivada &&
-                                  account.id !== field.value
-                                }
-                              >
-                                {account.nome}
-                                {account.arquivada ? " (arquivada)" : ""}
-                              </option>
-                            ))}
-                        </NativeSelect>
+                        />
                       )}
                     />
                     <FieldError
@@ -892,7 +1021,7 @@ export function TransactionFormDialog({
                     <FieldLabel htmlFor="transaction-conta">
                       Conta/Cartão
                     </FieldLabel>
-                    <NativeSelect
+                    <SourceSelect
                       id="transaction-conta"
                       value={
                         cartaoId
@@ -904,42 +1033,11 @@ export function TransactionFormDialog({
                       aria-invalid={Boolean(
                         formState.errors.contaId || formState.errors.cartaoId,
                       )}
-                      onChange={(event) => handleSourceChange(event.target.value)}
-                    >
-                      {!hasAccounts &&
-                        formData.cards.filter((card) => !card.arquivado)
-                          .length === 0 && (
-                          <option value="">Nenhuma conta ou cartão</option>
-                        )}
-                      <optgroup label="Contas">
-                        {formData.accounts.map((account) => (
-                          <option
-                            key={account.id}
-                            value={`conta:${account.id}`}
-                            disabled={
-                              account.arquivada && account.id !== contaId
-                            }
-                          >
-                            {account.nome}
-                            {account.arquivada ? " (arquivada)" : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Cartões">
-                        {formData.cards.map((card) => (
-                          <option
-                            key={card.id}
-                            value={`cartao:${card.id}`}
-                            disabled={
-                              card.arquivado && card.id !== cartaoId
-                            }
-                          >
-                            {card.nome}
-                            {card.arquivado ? " (arquivado)" : ""}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </NativeSelect>
+                      onChange={handleSourceChange}
+                      accounts={formData.accounts}
+                      cards={formData.cards}
+                      emptyLabel="Nenhuma conta ou cartão"
+                    />
                     <FieldError message={formState.errors.contaId?.message} />
                     <FieldError message={formState.errors.cartaoId?.message} />
 
@@ -1226,30 +1324,20 @@ export function TransactionFormDialog({
                 </Accordion>
 
                 <Accordion open={activeChip === "tags"}>
-                  {formData.tags.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">
-                      Nenhuma tag.{" "}
-                      <Link
-                        href="/configuracoes/categorias"
-                        className="underline hover:text-foreground"
-                      >
-                        Criar tags
-                      </Link>
-                    </p>
-                  ) : (
-                    <Controller
-                      control={control}
-                      name="tagIds"
-                      render={({ field }) => (
+                  <Controller
+                    control={control}
+                    name="tagIds"
+                    render={({ field }) => (
+                      <div className="space-y-2">
                         <div className="flex max-h-32 flex-wrap gap-1.5 overflow-y-auto">
-                          {formData.tags.map((tag) => {
+                          {[...formData.tags, ...extraTags].map((tag) => {
                             const checked = field.value.includes(tag.id);
                             return (
                               <label
                                 key={tag.id}
                                 htmlFor={`transaction-tag-${tag.id}`}
                                 className={cn(
-                                  "flex h-9 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors",
+                                  "flex h-12 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-xs transition-colors sm:h-9",
                                   checked
                                     ? "border-primary/40 bg-primary/10 text-primary"
                                     : "border-border hover:bg-accent",
@@ -1272,71 +1360,172 @@ export function TransactionFormDialog({
                               </label>
                             );
                           })}
+                          {formData.tags.length === 0 && extraTags.length === 0 && (
+                            <p className="text-xs text-muted-foreground">
+                              Nenhuma tag ainda.
+                            </p>
+                          )}
                         </div>
-                      )}
-                    />
-                  )}
-                  <FieldError message={formState.errors.tagIds?.message} />
+
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={newTagName}
+                            onChange={(event) =>
+                              setNewTagName(event.target.value)
+                            }
+                            placeholder="Nova tag"
+                            aria-label="Nome da nova tag"
+                            className="h-11"
+                            onKeyDown={(event) => {
+                              if (event.key !== "Enter") return;
+                              event.preventDefault();
+                              void handleCreateTag(field.value, field.onChange);
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-11 w-11 shrink-0"
+                            aria-label="Criar tag"
+                            disabled={creatingTag || !newTagName.trim()}
+                            onClick={() =>
+                              void handleCreateTag(field.value, field.onChange)
+                            }
+                          >
+                            {creatingTag ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Plus className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                        <FieldError message={formState.errors.tagIds?.message} />
+                      </div>
+                    )}
+                  />
                 </Accordion>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                {mode === "edit" && transaction && onRequestDelete && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="h-11 w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                    aria-label="Excluir lançamento"
-                    title="Excluir lançamento"
-                    onClick={() => onRequestDelete(transaction)}
-                    disabled={formState.isSubmitting}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                )}
-
-                {mode === "create" && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 gap-1.5 px-2 text-xs sm:h-9"
-                    onClick={() => void onSubmitAndNew()}
-                    disabled={formState.isSubmitting || !hasAccounts}
-                  >
-                    {formState.isSubmitting ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <CopyPlus className="h-3.5 w-3.5" />
-                    )}
-                    Salvar e criar outro
-                  </Button>
-                )}
-
-                <span className="hidden whitespace-nowrap text-[10px] text-muted-foreground sm:inline">
-                  Enter salva · Ctrl/Cmd+Enter{" "}
-                  {mode === "create" ? "cria outro" : "salva"}
-                </span>
+          {isMobile ? (
+            <div className="shrink-0 border-t border-border bg-card px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+              <NumericKeypad
+                value={valor}
+                onChange={(cents) =>
+                  setValue("valor", cents, {
+                    shouldValidate: true,
+                    shouldDirty: true,
+                  })
+                }
+                className="mx-auto max-w-sm"
+              />
+              <div className="mx-auto mt-2 flex max-w-sm items-center justify-between gap-2">
+                <div className="flex items-center gap-1">
+                  {mode === "edit" && transaction && onRequestDelete && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-12 w-12 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Excluir lançamento"
+                      onClick={() => onRequestDelete(transaction)}
+                      disabled={formState.isSubmitting}
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  )}
+                  {mode === "create" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-12 w-12"
+                      aria-label="Salvar e criar outro"
+                      title="Salvar e criar outro"
+                      onClick={() => void onSubmitAndNew()}
+                      disabled={formState.isSubmitting || !hasAccounts}
+                    >
+                      {formState.isSubmitting ? (
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                      ) : (
+                        <CopyPlus className="h-5 w-5" />
+                      )}
+                    </Button>
+                  )}
+                </div>
+                <Button
+                  type="submit"
+                  className="pressable h-16 w-16 rounded-2xl"
+                  aria-label="Salvar lançamento"
+                  disabled={formState.isSubmitting || !hasAccounts}
+                >
+                  {formState.isSubmitting ? (
+                    <Loader2 className="h-7 w-7 animate-spin" />
+                  ) : (
+                    <Check className="h-8 w-8" />
+                  )}
+                </Button>
               </div>
-
-              <Button
-                type="submit"
-                className="min-w-[140px]"
-                disabled={formState.isSubmitting || !hasAccounts}
-              >
-                {formState.isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4" />
-                )}
-                Salvar
-              </Button>
             </div>
-          </div>
+          ) : (
+            <div className="border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex min-w-0 items-center gap-2">
+                  {mode === "edit" && transaction && onRequestDelete && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="h-11 w-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      aria-label="Excluir lançamento"
+                      title="Excluir lançamento"
+                      onClick={() => onRequestDelete(transaction)}
+                      disabled={formState.isSubmitting}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  )}
+
+                  {mode === "create" && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-11 gap-1.5 px-2 text-xs sm:h-9"
+                      onClick={() => void onSubmitAndNew()}
+                      disabled={formState.isSubmitting || !hasAccounts}
+                    >
+                      {formState.isSubmitting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <CopyPlus className="h-3.5 w-3.5" />
+                      )}
+                      Salvar e criar outro
+                    </Button>
+                  )}
+
+                  <span className="hidden whitespace-nowrap text-[10px] text-muted-foreground sm:inline">
+                    Enter salva · Ctrl/Cmd+Enter{" "}
+                    {mode === "create" ? "cria outro" : "salva"}
+                  </span>
+                </div>
+
+                <Button
+                  type="submit"
+                  className="min-w-[140px]"
+                  disabled={formState.isSubmitting || !hasAccounts}
+                >
+                  {formState.isSubmitting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
         </form>
       </DialogContent>
 

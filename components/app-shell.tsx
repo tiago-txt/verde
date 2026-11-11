@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -7,6 +8,8 @@ import {
   BarChart3,
   CreditCard,
   LayoutDashboard,
+  PanelLeftClose,
+  PanelLeftOpen,
   Plus,
   Settings,
   Target,
@@ -16,7 +19,6 @@ import {
 import { Brand } from "@/components/brand";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
-import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -42,18 +44,6 @@ const MOBILE_NAV: NavItem[] = [
   { href: "/configuracoes", label: "Perfil", icon: Settings },
 ];
 
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Visão geral",
-  "/lancamentos": "Lançamentos",
-  "/relatorios": "Relatórios",
-  "/limite-de-gastos": "Orçamentos",
-  "/limites": "Orçamentos",
-  "/contas": "Contas",
-  "/cartoes": "Cartões",
-  "/configuracoes": "Configurações",
-  "/configuracoes/categorias": "Categorias e tags",
-};
-
 function isActive(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
 }
@@ -65,26 +55,101 @@ type AppShellProps = {
 
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
-  const pageTitle = pathname.startsWith("/cartoes/")
-    ? "Fatura do cartão"
-    : (PAGE_TITLES[pathname] ?? "Verde");
+  const [collapsed, setCollapsed] = useState(false);
   const isTransactionsPage = pathname.startsWith("/lancamentos");
   const hideFloatingNew =
     pathname === "/" ||
-    isTransactionsPage ||
     pathname.startsWith("/limite-de-gastos") ||
     pathname.startsWith("/relatorios") ||
     pathname.startsWith("/cartoes");
 
+  useEffect(() => {
+    const stored = localStorage.getItem("verde-sidebar-collapsed");
+    setCollapsed(
+      stored !== null ? stored === "1" : window.innerWidth < 1024,
+    );
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      collapsed ? "72px" : "260px",
+    );
+    return () => {
+      document.documentElement.style.removeProperty("--sidebar-width");
+    };
+  }, [collapsed]);
+
+  useEffect(() => {
+    function handleKey(event: KeyboardEvent) {
+      if (event.key !== "[") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target &&
+        (["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) ||
+          target.isContentEditable)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setCollapsed((current) => {
+        const next = !current;
+        localStorage.setItem("verde-sidebar-collapsed", next ? "1" : "0");
+        return next;
+      });
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, []);
+
+  function toggleSidebar() {
+    setCollapsed((current) => {
+      const next = !current;
+      localStorage.setItem("verde-sidebar-collapsed", next ? "1" : "0");
+      return next;
+    });
+  }
+
   return (
     <div className="min-h-dvh bg-background">
-      {/* Sidebar desktop */}
-      <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-sidebar lg:flex">
-        <div className="flex h-16 items-center border-b border-border/70 px-5">
-          <Brand />
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-sidebar transition-[width] duration-200 lg:flex",
+          collapsed ? "w-[72px]" : "w-[260px]",
+        )}
+      >
+        <div
+          className={cn(
+            "azulejo relative flex h-16 items-center border-b border-border/70",
+            collapsed ? "justify-center px-2" : "justify-between px-4",
+          )}
+        >
+          {collapsed ? <Brand compact /> : <Brand />}
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            title={collapsed ? "Expandir menu ([)" : "Recolher menu ([)"}
+            className={cn(
+              "grid h-10 w-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
+              collapsed && "absolute -right-3 top-5 border border-border bg-card shadow-md",
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="h-5 w-5" />
+            ) : (
+              <PanelLeftClose className="h-5 w-5" />
+            )}
+          </button>
         </div>
 
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4" aria-label="Navegação principal">
+        <nav
+          className={cn(
+            "flex-1 space-y-1 overflow-y-auto py-4",
+            collapsed ? "px-2" : "px-3",
+          )}
+          aria-label="Navegação principal"
+        >
           {NAV_ITEMS.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -92,93 +157,96 @@ export function AppShell({ user, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 aria-current={active ? "page" : undefined}
+                title={collapsed ? item.label : undefined}
                 className={cn(
-                  "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+                  "relative flex h-12 items-center rounded-xl text-sm font-medium transition-colors",
+                  collapsed ? "justify-center px-0" : "gap-3 px-3",
                   active
-                    ? "bg-primary/10 text-primary"
+                    ? "bg-primary/15 text-primary shadow-[inset_0_0_0_1px_hsl(var(--gold)/.35)]"
                     : "text-sidebar-foreground/75 hover:bg-accent hover:text-sidebar-foreground",
                 )}
               >
                 <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
-                {item.label}
+                {!collapsed && <span className="truncate">{item.label}</span>}
+                {active && (
+                  <span
+                    className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-gold"
+                    aria-hidden="true"
+                  />
+                )}
               </Link>
             );
           })}
         </nav>
 
-        <div className="space-y-1 border-t border-border/70 p-3">
+        <div
+          className={cn(
+            "space-y-1 border-t border-border/70 p-2",
+            collapsed && "flex flex-col items-center",
+          )}
+        >
           <Link
             href="/configuracoes"
+            aria-current={
+              pathname.startsWith("/configuracoes") ? "page" : undefined
+            }
+            title={collapsed ? "Configurações" : undefined}
             className={cn(
-              "flex h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition-colors",
+              "flex h-12 items-center rounded-xl text-sm font-medium transition-colors",
+              collapsed ? "w-12 justify-center" : "gap-3 px-3",
               pathname.startsWith("/configuracoes")
-                ? "bg-primary/10 text-primary"
+                ? "bg-primary/15 text-primary"
                 : "text-sidebar-foreground/75 hover:bg-accent hover:text-sidebar-foreground",
             )}
           >
             <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
-            Configurações
+            {!collapsed && "Configurações"}
           </Link>
-          <UserMenu
-            nome={user.nome}
-            email={user.email}
-            isAdmin={user.isAdmin}
-          />
+          <div
+            className={cn(
+              "flex items-center gap-1",
+              collapsed ? "flex-col" : "justify-between",
+            )}
+          >
+            <ThemeToggle />
+            <UserMenu
+              nome={user.nome}
+              email={user.email}
+              isAdmin={user.isAdmin}
+              compact={collapsed}
+            />
+          </div>
         </div>
       </aside>
 
-      <div className="lg:pl-64">
-        {/* Topbar */}
-        <header className="sticky top-0 z-30 flex h-14 items-center justify-between gap-3 border-b border-border/70 bg-background/85 px-4 backdrop-blur lg:h-16 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="lg:hidden">
-              <Brand compact />
-            </div>
-            <h1 className="hidden truncate text-sm font-medium text-muted-foreground lg:block">
-              {pageTitle}
-            </h1>
-            <span className="truncate text-base font-semibold lg:hidden">
-              {pageTitle}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <Button asChild size="sm" className="hidden md:inline-flex">
-              <Link href="/lancamentos?novo=1">
-                <Plus className="h-4 w-4" />
-                Novo lançamento
-              </Link>
-            </Button>
-            <ThemeToggle />
-            <div className="lg:hidden">
-              <UserMenu
-                nome={user.nome}
-                email={user.email}
-                isAdmin={user.isAdmin}
-                compact
-              />
-            </div>
-          </div>
-        </header>
-
-        <main className="mx-auto w-full max-w-7xl px-4 pb-32 pt-5 lg:px-8 lg:pb-12 lg:pt-8">
+      <div className="transition-[padding] duration-200 lg:pl-[var(--sidebar-width,260px)]">
+        <main className="mx-auto w-full max-w-7xl px-4 pb-40 pt-4 lg:px-8 lg:pb-28 lg:pt-7">
           {children}
         </main>
       </div>
 
-      {/* Botão flutuante (mobile) — na tela de lançamentos o "+" fica no cabeçalho
-          para não conflitar com a barra de resumo fixa. */}
-      {!hideFloatingNew && (
-        <Link
-          href="/lancamentos?novo=1"
-          aria-label="Novo lançamento"
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-14 w-14 place-items-center rounded-full bg-primary text-primary-foreground shadow-lg shadow-primary/20 transition-transform active:scale-95 lg:hidden"
-        >
-          <Plus className="h-7 w-7" aria-hidden="true" />
-        </Link>
-      )}
+      {!hideFloatingNew &&
+        (isTransactionsPage ? (
+          <button
+            type="button"
+            aria-label="Novo lançamento"
+            onClick={() =>
+              window.dispatchEvent(new Event("verde:new-transaction"))
+            }
+            className="verde-fab pressable fixed bottom-[calc(8.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
+          >
+            <Plus className="h-8 w-8" aria-hidden="true" />
+          </button>
+        ) : (
+          <Link
+            href="/lancamentos?novo=1"
+            aria-label="Novo lançamento"
+            className="verde-fab pressable fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
+          >
+            <Plus className="h-8 w-8" aria-hidden="true" />
+          </Link>
+        ))}
 
-      {/* Bottom navigation (mobile) */}
       <nav
         aria-label="Navegação principal"
         className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar/95 backdrop-blur lg:hidden"
@@ -192,11 +260,17 @@ export function AppShell({ user, children }: AppShellProps) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-11 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors",
+                  "relative flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                <item.icon className="h-5 w-5" aria-hidden="true" />
+                {active && (
+                  <span
+                    className="absolute top-0 h-0.5 w-8 rounded-full bg-gold"
+                    aria-hidden="true"
+                  />
+                )}
+                <item.icon className="h-6 w-6" aria-hidden="true" />
                 {item.label}
               </Link>
             );

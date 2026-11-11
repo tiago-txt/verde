@@ -213,12 +213,12 @@ export function EvolutionChart({
         >
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={data} margin={{ left: 0, right: 4, top: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#26332b" />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
               <XAxis
                 dataKey="mes"
                 tickFormatter={(value) => formatMonthShort(String(value))}
                 tick={{ fill: "#94a3b8", fontSize: 11 }}
-                axisLine={{ stroke: "#26332b" }}
+                axisLine={{ stroke: "hsl(var(--border))" }}
                 tickLine={false}
               />
               <YAxis
@@ -251,7 +251,7 @@ export function EvolutionChart({
                 }
               />
               <Bar dataKey="receitas" fill="#34d399" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="despesas" fill="#f87171" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="despesas" fill="#e0765b" radius={[3, 3, 0, 0]} />
               <Line
                 type="monotone"
                 dataKey="saldo"

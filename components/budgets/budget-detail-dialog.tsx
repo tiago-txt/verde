@@ -109,7 +109,7 @@ export function BudgetDetailDialog({
             <DialogHeader>
               <div className="flex items-center gap-3">
                 <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
                   style={{ backgroundColor: `${summary.cor}22`, color: summary.cor }}
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />

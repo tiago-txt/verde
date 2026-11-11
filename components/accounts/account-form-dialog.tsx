@@ -11,6 +11,7 @@ import { DEFAULT_COLOR } from "@/lib/colors";
 import { accountInputSchema, type AccountInput } from "@/lib/validation/accounts";
 import { createAccountAction, updateAccountAction } from "@/lib/actions/accounts";
 import { Button } from "@/components/ui/button";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import {
   Dialog,
   DialogContent,
@@ -48,6 +49,7 @@ export function AccountFormDialog({
   onSaved,
 }: AccountFormDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
+  const isMobile = useIsMobile();
 
   const form = useForm<AccountInput>({
     resolver: zodResolver(accountInputSchema) as Resolver<AccountInput>,
@@ -108,7 +110,7 @@ export function AccountFormDialog({
             <Input
               id="account-nome"
               placeholder="Ex.: Conta corrente Itaú"
-              autoFocus
+              autoFocus={!isMobile}
               aria-invalid={Boolean(formState.errors.nome)}
               {...register("nome")}
             />

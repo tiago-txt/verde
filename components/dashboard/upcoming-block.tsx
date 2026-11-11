@@ -76,7 +76,7 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
           className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center"
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted">
               {item.kind === "invoice" ? (
                 <CreditCard className="h-4 w-4" aria-hidden="true" />
               ) : (

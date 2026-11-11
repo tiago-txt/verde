@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { MonthYearPanel } from "./month-year-panel";
 import {
@@ -19,12 +19,15 @@ type CalendarPanelProps = {
   value: string | null;
   onSelect: (iso: string) => void;
   onClose: () => void;
+  /** Mobile: a seleção vira rascunho até o usuário confirmar em OK. */
+  confirmMode?: boolean;
 };
 
 export function CalendarPanel({
   value,
   onSelect,
   onClose,
+  confirmMode = false,
 }: CalendarPanelProps) {
   const today = todayISO();
   const [viewMonth, setViewMonth] = useState(
@@ -53,7 +56,7 @@ export function CalendarPanel({
 
   function select(iso: string) {
     onSelect(iso);
-    onClose();
+    if (!confirmMode) onClose();
   }
 
   function moveFocus(iso: string) {
@@ -128,10 +131,11 @@ export function CalendarPanel({
         <button
           type="button"
           onClick={() => setMonthMode((current) => !current)}
-          className="min-h-11 rounded-md px-3 text-sm font-semibold capitalize hover:bg-accent"
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-3 text-sm font-semibold capitalize hover:bg-accent"
           aria-label="Escolher mês e ano"
         >
           {formatMonthTitle(viewMonth)}
+          <ChevronDown className="h-4 w-4 text-muted-foreground" />
         </button>
 
         <Button
@@ -164,7 +168,7 @@ export function CalendarPanel({
                 key={weekday}
                 className="grid h-8 place-items-center text-[11px] font-medium text-muted-foreground"
               >
-                {weekday}
+                {confirmMode ? weekday.slice(0, 1) : weekday}
               </div>
             ))}
             {cells.map((cell) => {
@@ -200,18 +204,15 @@ export function CalendarPanel({
             })}
           </div>
 
-          <div className="flex items-center justify-between border-t border-border px-1 pt-2">
+          <div className="flex items-center justify-end border-t border-border px-1 pt-2">
             <Button
               type="button"
-              variant="ghost"
-              className="h-11"
+              variant="outline"
+              className="h-10 rounded-full px-4"
               onClick={() => select(today)}
             >
               Hoje
             </Button>
-            <span className="text-[11px] text-muted-foreground">
-              {formatMonthTitle(viewMonth)}
-            </span>
           </div>
         </>
       )}

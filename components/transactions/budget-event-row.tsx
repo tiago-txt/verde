@@ -32,7 +32,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
     >
       <span
         className={cn(
-          "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-full",
+          "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl",
           isProvision ? "bg-primary/10 text-primary" : "bg-success/10 text-success",
         )}
       >

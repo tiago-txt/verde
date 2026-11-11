@@ -3,9 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, Search } from "lucide-react";
+import { Check, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -295,9 +294,9 @@ export function BudgetFormDialog({
                 />
               </div>
 
-              <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+              <div className="grid max-h-60 grid-cols-4 gap-1.5 overflow-y-auto rounded-xl border border-border p-2 sm:grid-cols-6">
                 {categories.length === 0 ? (
-                  <p className="px-2 py-3 text-xs text-muted-foreground">
+                  <p className="col-span-full px-2 py-3 text-xs text-muted-foreground">
                     Nenhuma categoria de despesa encontrada.
                   </p>
                 ) : (
@@ -308,52 +307,50 @@ export function BudgetFormDialog({
                       category.blockedByBudgetId !== budget?.id &&
                       !checked;
                     return (
-                      <label
+                      <button
                         key={category.id}
-                        htmlFor={`budget-cat-${category.id}`}
+                        type="button"
+                        role="checkbox"
+                        aria-checked={checked}
+                        disabled={blocked}
+                        onClick={() => {
+                          const current = form.getValues("categoriaIds");
+                          form.setValue(
+                            "categoriaIds",
+                            checked
+                              ? current.filter((id) => id !== category.id)
+                              : [...current, category.id],
+                            { shouldValidate: true, shouldDirty: true },
+                          );
+                        }}
                         className={cn(
-                          "flex min-h-11 cursor-pointer items-center gap-2 rounded-md px-2 text-sm transition-colors",
+                          "relative flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
                           checked
-                            ? "bg-primary/10 text-primary"
-                            : "hover:bg-accent",
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border hover:bg-accent",
                           blocked && "cursor-not-allowed opacity-50",
                         )}
                       >
-                        <Checkbox
-                          id={`budget-cat-${category.id}`}
-                          checked={checked}
-                          disabled={blocked}
-                          onCheckedChange={(value) => {
-                            const current = form.getValues("categoriaIds");
-                            form.setValue(
-                              "categoriaIds",
-                              value
-                                ? [...current, category.id]
-                                : current.filter((id) => id !== category.id),
-                              { shouldValidate: true, shouldDirty: true },
-                            );
-                          }}
-                        />
                         <CategoryIcon
                           icon={category.icone}
                           color={category.cor}
-                          className="h-6 w-6"
-                          iconClassName="h-3.5 w-3.5"
+                          className="h-9 w-9"
+                          iconClassName="h-4 w-4"
                         />
-                        <span className="min-w-0 flex-1 truncate">
+                        <span className="line-clamp-2 text-[11px] leading-tight">
                           {category.nome}
-                          {category.categoriaPaiId && (
-                            <span className="ml-1 text-[10px] text-muted-foreground">
-                              subcategoria
-                            </span>
-                          )}
                         </span>
                         {blocked && (
-                          <span className="shrink-0 text-[10px] text-muted-foreground">
+                          <span className="text-[9px] text-muted-foreground">
                             em {category.blockedBy}
                           </span>
                         )}
-                      </label>
+                        {checked && (
+                          <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
+                            <Check className="h-2.5 w-2.5" />
+                          </span>
+                        )}
+                      </button>
                     );
                   })
                 )}

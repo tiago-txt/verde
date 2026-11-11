@@ -99,12 +99,12 @@ export function MonthlyCategoryChart({
       >
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={series.points} margin={{ left: 0, right: 4, top: 8 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#26332b" />
+            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
             <XAxis
               dataKey="mes"
               tickFormatter={(value) => formatMonthShort(String(value))}
               tick={{ fill: "#94a3b8", fontSize: 11 }}
-              axisLine={{ stroke: "#26332b" }}
+              axisLine={{ stroke: "hsl(var(--border))" }}
               tickLine={false}
             />
             <YAxis

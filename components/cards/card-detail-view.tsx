@@ -181,7 +181,7 @@ export function CardDetailView({
         </Link>
 
         <span
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-full"
+          className="tile grid h-12 w-12 shrink-0 place-items-center rounded-xl"
           style={{ backgroundColor: `${detail.card.cor}22`, color: detail.card.cor }}
         >
           <Icon className="h-6 w-6" aria-hidden="true" />
@@ -396,7 +396,7 @@ export function CardDetailView({
                     href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&detalhe=${purchase.id}&dias=31`}
                     className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40"
                   >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-muted">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted">
                       <CreditCard className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                     </span>
                     <span className="min-w-0 flex-1">
