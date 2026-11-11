@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/schema";
 import { getCategoryById } from "@/lib/db/queries/categories";
 import { getSystemCategoryIds } from "@/lib/db/queries/categories";
+import { getBudgetNoticeForTransactions } from "@/lib/db/queries/budgets";
 import { ensureRecurrencesForMonth } from "@/lib/db/queries/transactions";
 import { idsForCategoryChange } from "@/lib/finance/batch";
 import { resolveCategoryId } from "@/lib/finance/categories";
@@ -295,7 +296,16 @@ export async function createTransactionAction(
   }
 
   revalidateTransactions();
-  return { ok: true, id };
+  return {
+    ok: true,
+    id,
+    budgetNotice:
+      data.tipo === "despesa"
+        ? (getBudgetNoticeForTransactions([
+            { categoriaId, data: data.data },
+          ]) ?? undefined)
+        : undefined,
+  };
 }
 
 export async function updateTransactionAction(
@@ -514,7 +524,16 @@ export async function updateTransactionAction(
   }
 
   revalidateTransactions();
-  return { ok: true, id: data.id };
+  return {
+    ok: true,
+    id: data.id,
+    budgetNotice:
+      data.tipo === "despesa"
+        ? (getBudgetNoticeForTransactions([
+            { categoriaId, data: data.data },
+          ]) ?? undefined)
+        : undefined,
+  };
 }
 
 export async function deleteTransactionAction(input: {
@@ -697,7 +716,16 @@ export async function duplicateTransactionAction(
   });
 
   revalidateTransactions();
-  return { ok: true, id: newId };
+  return {
+    ok: true,
+    id: newId,
+    budgetNotice:
+      existing.tipo === "despesa"
+        ? (getBudgetNoticeForTransactions([
+            { categoriaId: duplicatedCategoryId, data: existing.data },
+          ]) ?? undefined)
+        : undefined,
+  };
 }
 
 export async function setTransactionPaidAction(input: {
@@ -776,6 +804,7 @@ export async function bulkChangeCategoryAction(input: {
       tipo: transactions.tipo,
       pago: transactions.pago,
       categoriaId: transactions.categoriaId,
+      data: transactions.data,
     })
     .from(transactions)
     .where(
@@ -806,7 +835,22 @@ export async function bulkChangeCategoryAction(input: {
 
   revalidateTransactions();
   revalidatePath("/configuracoes/categorias");
-  return { ok: true, count: applicable.length, ignored: ignored.length };
+  return {
+    ok: true,
+    count: applicable.length,
+    ignored: ignored.length,
+    budgetNotice:
+      category.tipo === "despesa"
+        ? (getBudgetNoticeForTransactions(
+            rows
+              .filter((row) => applicable.includes(row.id))
+              .map((row) => ({
+                categoriaId: category.id,
+                data: row.data,
+              })),
+          ) ?? undefined)
+        : undefined,
+  };
 }
 
 export async function bulkAddTagAction(input: {

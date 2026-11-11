@@ -8,7 +8,9 @@ import {
   getTransactionFormData,
   listMonthTransactions,
 } from "@/lib/db/queries/transactions";
+import { getBudgetEventsForMonth, getBudgetEventsForDayBalances } from "@/lib/db/queries/budgets";
 import { todayISO } from "@/lib/dates";
+import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
 import { parseTransactionFilters } from "@/lib/finance/filters";
 
 export const metadata: Metadata = { title: "Lançamentos" };
@@ -27,7 +29,11 @@ export default async function LancamentosPage({
 
   const transactions = listMonthTransactions(filters);
   const formData = getTransactionFormData();
-  const dayBalances = getDayBalances(filters.mes);
+  const budgetEvents = getBudgetEventsForMonth(filters.mes, filters);
+  const dayBalances = aplicarEventosAoSalsoDia(
+    getDayBalances(filters.mes),
+    getBudgetEventsForDayBalances(filters.mes),
+  );
   const detail = filters.detalhe
     ? getTransactionDetail(filters.detalhe)
     : null;
@@ -43,6 +49,7 @@ export default async function LancamentosPage({
     <TransactionsPageClient
       filters={filters}
       transactions={transactions}
+      budgetEvents={budgetEvents}
       formData={formData}
       detail={detail}
       dayBalances={dayBalances}

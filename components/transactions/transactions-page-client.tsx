@@ -50,7 +50,10 @@ import { ScopeDialog } from "./scope-dialog";
 import { TransactionDetailsPanel } from "./transaction-details-panel";
 import { TransactionFormDialog } from "./transaction-form-dialog";
 import { TransactionRow } from "./transaction-row";
+import { BudgetEventRow } from "./budget-event-row";
+import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
+import { useToast } from "@/components/ui/toast";
 import {
   bulkAddTagAction,
   bulkChangeCategoryAction,
@@ -65,6 +68,7 @@ import type {
   TransactionFormData,
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
+import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import {
   addMonths,
   currentMonth,
@@ -78,6 +82,7 @@ import {
   type TransactionFilters,
 } from "@/lib/finance/filters";
 import { dayLabel, groupTransactionsByDay } from "@/lib/finance/day-labels";
+import { aplicarEventosAoResumo } from "@/lib/finance/budgets";
 import { summarizeTransactions } from "@/lib/finance/summary";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -143,6 +148,7 @@ function optimisticReducer(
 type TransactionsPageClientProps = {
   filters: TransactionFilters;
   transactions: TransactionListItem[];
+  budgetEvents: BudgetEventView[];
   formData: TransactionFormData;
   detail: TransactionDetail | null;
   dayBalances: Record<string, number>;
@@ -151,9 +157,16 @@ type TransactionsPageClientProps = {
   initialNew: boolean;
 };
 
+type TransactionDayGroup = {
+  day: string;
+  items: TransactionListItem[];
+  events: BudgetEventView[];
+};
+
 export function TransactionsPageClient({
   filters,
   transactions,
+  budgetEvents,
   formData,
   detail,
   dayBalances,
@@ -162,6 +175,7 @@ export function TransactionsPageClient({
   initialNew,
 }: TransactionsPageClientProps) {
   const router = useRouter();
+  const { toast } = useToast();
   const [optimisticTransactions, applyOptimistic] = useOptimistic(
     transactions,
     optimisticReducer,
@@ -188,6 +202,8 @@ export function TransactionsPageClient({
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [overdueOpen, setOverdueOpen] = useState(false);
+  const [selectedBudgetEvent, setSelectedBudgetEvent] =
+    useState<BudgetEventView | null>(null);
 
   useEffect(() => {
     if (initialNew) setCreateOpen(true);
@@ -233,14 +249,34 @@ export function TransactionsPageClient({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [detail, optimisticTransactions, filters, router]);
 
-  const groups = useMemo(
-    () => groupTransactionsByDay(optimisticTransactions),
-    [optimisticTransactions],
-  );
+  const groups = useMemo<TransactionDayGroup[]>(() => {
+    const base = groupTransactionsByDay(optimisticTransactions);
+    const map = new Map<string, TransactionDayGroup>(
+      base.map((group) => [
+        group.day,
+        { day: group.day, items: group.items, events: [] },
+      ]),
+    );
+
+    for (const event of budgetEvents) {
+      let group = map.get(event.data);
+      if (!group) {
+        group = { day: event.data, items: [], events: [] };
+        map.set(event.data, group);
+      }
+      group.events.push(event);
+    }
+
+    return [...map.values()].sort((a, b) => a.day.localeCompare(b.day));
+  }, [optimisticTransactions, budgetEvents]);
   const visibleGroups = groups.slice(0, filters.dias);
   const summary = useMemo(
-    () => summarizeTransactions(optimisticTransactions),
-    [optimisticTransactions],
+    () =>
+      aplicarEventosAoResumo(
+        summarizeTransactions(optimisticTransactions),
+        budgetEvents,
+      ),
+    [optimisticTransactions, budgetEvents],
   );
   const hasMoreDays = groups.length > filters.dias;
   const activeFilters = hasActiveFilters(filters);
@@ -330,6 +366,12 @@ export function TransactionsPageClient({
     if (!result.ok) {
       setFlash(result.error);
       return;
+    }
+    if (result.budgetNotice) {
+      toast({
+        description: result.budgetNotice.message,
+        tone: result.budgetNotice.tone,
+      });
     }
     router.refresh();
   }
@@ -514,6 +556,12 @@ export function TransactionsPageClient({
           ? `${result.count} lançamento(s) atualizado(s); ${result.ignored} ignorado(s) por tipo/transferência.`
           : `${result.count} lançamento(s) atualizado(s).`,
       );
+      if (result.budgetNotice) {
+        toast({
+          description: result.budgetNotice.message,
+          tone: result.budgetNotice.tone,
+        });
+      }
       router.refresh();
     });
   }
@@ -745,9 +793,9 @@ export function TransactionsPageClient({
       ) : (
         <div className="space-y-4">
           {visibleGroups.map((group) => {
-            const allSelected = group.items.every((item) =>
-              selectedIds.has(item.id),
-            );
+            const allSelected =
+              group.items.length > 0 &&
+              group.items.every((item) => selectedIds.has(item.id));
             const someSelected = group.items.some((item) =>
               selectedIds.has(item.id),
             );
@@ -765,7 +813,7 @@ export function TransactionsPageClient({
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
-                    {selectionMode && (
+                    {selectionMode && group.items.length > 0 && (
                       <Checkbox
                         checked={
                           allSelected
@@ -789,6 +837,9 @@ export function TransactionsPageClient({
                   </div>
                   <span className="shrink-0 text-xs text-muted-foreground">
                     {group.items.length} lançamento(s)
+                    {group.events.length > 0
+                      ? ` · ${group.events.length} orçamento(s)`
+                      : ""}
                   </span>
                 </div>
 
@@ -808,14 +859,22 @@ export function TransactionsPageClient({
                       onTogglePaid={handleTogglePaid}
                     />
                   ))}
+
+                  {group.events.map((event) => (
+                    <BudgetEventRow
+                      key={event.id}
+                      event={event}
+                      onOpen={setSelectedBudgetEvent}
+                    />
+                  ))}
                 </div>
 
                 <div
                   className="flex items-center justify-between gap-2 border-t border-border bg-muted/20 px-3 py-2 sm:px-4"
-                  title="Saldo acumulado real das contas até este dia, sem filtros."
+                  title="Saldo previsto acumulado das contas até este dia, incluindo provisões e sobras de orçamento."
                 >
                   <span className="text-xs text-muted-foreground">
-                    Saldo no dia
+                    Saldo previsto no dia
                   </span>
                   <span
                     className={cn(
@@ -874,6 +933,29 @@ export function TransactionsPageClient({
         onDuplicate={handleDetailDuplicate}
         onNavigate={navigateDetail}
         onTogglePaid={handleDetailTogglePaid}
+      />
+
+      <BudgetDetailDialog
+        detail={
+          selectedBudgetEvent
+            ? {
+                resumo: selectedBudgetEvent.resumo,
+                transactions: selectedBudgetEvent.transactions,
+              }
+            : null
+        }
+        open={Boolean(selectedBudgetEvent)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedBudgetEvent(null);
+        }}
+        onEdit={() => {
+          if (!selectedBudgetEvent) return;
+          const { ciclo, id } = selectedBudgetEvent.resumo;
+          setSelectedBudgetEvent(null);
+          router.push(
+            `/limite-de-gastos?ciclo=${ciclo}&orcamento=${id}`,
+          );
+        }}
       />
 
       <ScopeDialog

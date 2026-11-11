@@ -1,4 +1,5 @@
 import { AppShell } from "@/components/app-shell";
+import { ToastProvider } from "@/components/ui/toast";
 import { requireUser } from "@/lib/auth/current-user";
 
 export default async function AppLayout({
@@ -7,10 +8,12 @@ export default async function AppLayout({
   const user = await requireUser();
 
   return (
-    <AppShell
-      user={{ nome: user.nome, email: user.email, isAdmin: user.isAdmin }}
-    >
-      {children}
-    </AppShell>
+    <ToastProvider>
+      <AppShell
+        user={{ nome: user.nome, email: user.email, isAdmin: user.isAdmin }}
+      >
+        {children}
+      </AppShell>
+    </ToastProvider>
   );
 }

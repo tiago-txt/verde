@@ -14,6 +14,7 @@ import {
   Repeat,
   StickyNote,
   Tags as TagsIcon,
+  Target,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
@@ -33,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useToast } from "@/components/ui/toast";
 import { CategorySelect } from "./category-select";
 import { CurrencyInput } from "@/components/currency-input";
 import { DatePicker } from "@/components/calendar/date-picker";
@@ -41,6 +43,10 @@ import {
   createTransactionAction,
   updateTransactionAction,
 } from "@/lib/actions/transactions";
+import {
+  getBudgetHintAction,
+  type BudgetHint,
+} from "@/lib/actions/budgets";
 import type {
   RecentDescription,
   TransactionFormData,
@@ -252,7 +258,9 @@ export function TransactionFormDialog({
   const [activeChip, setActiveChip] = useState<
     "repetir" | "obs" | "tags" | null
   >(null);
+  const [budgetHint, setBudgetHint] = useState<BudgetHint | null>(null);
   const skipConfirmRef = useRef(false);
+  const { toast } = useToast();
 
   useSheetViewport(open);
 
@@ -335,6 +343,45 @@ export function TransactionFormDialog({
   const obsHasValue = Boolean(observacao?.trim());
   const tagsHasValue = tagIds.length > 0;
 
+  useEffect(() => {
+    if (!open || tipo !== "despesa") {
+      setBudgetHint(null);
+      return;
+    }
+
+    const effectiveCategoryId =
+      categoriaId ??
+      formData.categories.find(
+        (category) => category.isSystem && category.tipo === "despesa",
+      )?.id ??
+      null;
+
+    if (!effectiveCategoryId) {
+      setBudgetHint(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void getBudgetHintAction({
+        categoriaId: effectiveCategoryId,
+        data,
+        excludeTransactionId: transaction?.id ?? null,
+      })
+        .then((hint) => {
+          if (!cancelled) setBudgetHint(hint);
+        })
+        .catch(() => {
+          if (!cancelled) setBudgetHint(null);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories]);
+
   const repetitionChipLabel =
     mode === "edit"
       ? isInstallment
@@ -408,6 +455,13 @@ export function TransactionFormDialog({
     if (!result.ok) {
       setServerError(result.error);
       return;
+    }
+
+    if (result.budgetNotice) {
+      toast({
+        description: result.budgetNotice.message,
+        tone: result.budgetNotice.tone,
+      });
     }
 
     if (mode === "edit") {
@@ -812,6 +866,28 @@ export function TransactionFormDialog({
                     <FieldError
                       message={formState.errors.categoriaId?.message}
                     />
+                    {budgetHint && (
+                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                        <Target
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          Orçamento{" "}
+                          <span className="font-medium text-foreground">
+                            {budgetHint.nome}
+                          </span>{" "}
+                          · restam {formatCurrency(budgetHint.restante)}
+                          {valor > budgetHint.restante && (
+                            <span className="font-medium text-destructive">
+                              {" "}
+                              · Vai estourar em{" "}
+                              {formatCurrency(valor - budgetHint.restante)}
+                            </span>
+                          )}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </>
               )}

@@ -29,7 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Visão geral", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { href: "/limites", label: "Limite de gastos", icon: Target },
+  { href: "/limite-de-gastos", label: "Orçamentos", icon: Target },
   { href: "/contas", label: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
 ];
@@ -38,7 +38,7 @@ const MOBILE_NAV: NavItem[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { href: "/limites", label: "Limites", icon: Target },
+  { href: "/limite-de-gastos", label: "Orçamentos", icon: Target },
   { href: "/configuracoes", label: "Perfil", icon: Settings },
 ];
 
@@ -46,7 +46,8 @@ const PAGE_TITLES: Record<string, string> = {
   "/": "Visão geral",
   "/lancamentos": "Lançamentos",
   "/relatorios": "Relatórios",
-  "/limites": "Limite de gastos",
+  "/limite-de-gastos": "Orçamentos",
+  "/limites": "Orçamentos",
   "/contas": "Contas",
   "/cartoes": "Cartões",
   "/configuracoes": "Configurações",
@@ -66,6 +67,8 @@ export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const pageTitle = PAGE_TITLES[pathname] ?? "Verde";
   const isTransactionsPage = pathname.startsWith("/lancamentos");
+  const hideFloatingNew =
+    isTransactionsPage || pathname.startsWith("/limite-de-gastos");
 
   return (
     <div className="min-h-dvh bg-background">
@@ -159,7 +162,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
       {/* Botão flutuante (mobile) — na tela de lançamentos o "+" fica no cabeçalho
           para não conflitar com a barra de resumo fixa. */}
-      {!isTransactionsPage && (
+      {!hideFloatingNew && (
         <Link
           href="/lancamentos?novo=1"
           aria-label="Novo lançamento"

@@ -183,6 +183,7 @@ export const transactions = sqliteTable(
     index("transactions_tipo_idx").on(table.tipo),
     index("transactions_pago_idx").on(table.pago),
     index("transactions_data_pago_idx").on(table.data, table.pago),
+    index("transactions_data_categoria_idx").on(table.data, table.categoriaId),
     // Garante idempotência da geração de recorrências (inclusive após soft delete).
     uniqueIndex("transactions_recorrencia_data_unique").on(
       table.recorrenciaId,
@@ -220,21 +221,79 @@ export const transactionTags = sqliteTable(
   ],
 );
 
-/** Limite de gastos por categoria e mês (YYYY-MM). */
+/** Orçamento-envelope com ciclo (tipo fatura). */
 export const budgets = sqliteTable(
   "budgets",
   {
     id: id(),
+    nome: text("nome").notNull().default(""),
+    valorPadrao: integer("valor_padrao_centavos").notNull().default(0),
+    diaFechamento: integer("dia_fechamento").notNull().default(1),
+    antecedenciaCiclos: integer("antecedencia_ciclos").notNull().default(0),
+    contaId: text("conta_id").references(() => accounts.id, {
+      onDelete: "set null",
+    }),
+    /** Primeiro ciclo de vigência (YYYY-MM). */
+    dataInicio: text("data_inicio").notNull().default(""),
+    /** Último ciclo de vigência (YYYY-MM), inclusive. */
+    dataFim: text("data_fim"),
+    cor: text("cor").notNull().default("#34d399"),
+    icone: text("icone").notNull().default("Target"),
+    arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),
+    ...timestamps,
+    /** @deprecated legado da Etapa 1 (limite por categoria/mês). */
     categoriaId: text("categoria_id")
       .notNull()
       .references(() => categories.id, { onDelete: "cascade" }),
+    /** @deprecated legado da Etapa 1. */
     mes: text("mes").notNull(),
+    /** @deprecated legado da Etapa 1. */
     valorLimite: integer("valor_limite").notNull(),
+  },
+  (table) => [
+    index("budgets_arquivado_idx").on(table.arquivado),
+    check("budgets_valor_check", sql`${table.valorLimite} >= 0`),
+    check(
+      "budgets_fechamento_check",
+      sql`${table.diaFechamento} between 1 and 31`,
+    ),
+    check(
+      "budgets_antecedencia_check",
+      sql`${table.antecedenciaCiclos} in (0, 1)`,
+    ),
+  ],
+);
+
+export const budgetCategories = sqliteTable(
+  "budget_categories",
+  {
+    budgetId: text("budget_id")
+      .notNull()
+      .references(() => budgets.id, { onDelete: "cascade" }),
+    categoryId: text("category_id")
+      .notNull()
+      .references(() => categories.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.budgetId, table.categoryId] }),
+    index("budget_categories_category_idx").on(table.categoryId),
+  ],
+);
+
+/** Valor específico de um ciclo (YYYY-MM) sem alterar o padrão. */
+export const budgetOverrides = sqliteTable(
+  "budget_overrides",
+  {
+    budgetId: text("budget_id")
+      .notNull()
+      .references(() => budgets.id, { onDelete: "cascade" }),
+    ciclo: text("ciclo").notNull(),
+    valorCentavos: integer("valor_centavos").notNull(),
     ...timestamps,
   },
   (table) => [
-    uniqueIndex("budgets_categoria_mes_unique").on(table.categoriaId, table.mes),
-    check("budgets_valor_check", sql`${table.valorLimite} >= 0`),
+    primaryKey({ columns: [table.budgetId, table.ciclo] }),
+    check("budget_overrides_valor_check", sql`${table.valorCentavos} >= 0`),
   ],
 );
 
@@ -252,3 +311,6 @@ export type Recurrence = typeof recurrences.$inferSelect;
 export type NewRecurrence = typeof recurrences.$inferInsert;
 export type Tag = typeof tags.$inferSelect;
 export type Budget = typeof budgets.$inferSelect;
+export type NewBudget = typeof budgets.$inferInsert;
+export type BudgetCategory = typeof budgetCategories.$inferSelect;
+export type BudgetOverride = typeof budgetOverrides.$inferSelect;

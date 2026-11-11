@@ -1,10 +1,12 @@
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { accounts, transactions, type Account } from "@/lib/db/schema";
+import { currentMonth } from "@/lib/dates";
 import {
   computeAccountBalances,
   type BalanceTransaction,
 } from "@/lib/finance/balance";
+import { getBudgetAccountDeltasForMonth } from "./budgets";
 
 export type AccountWithBalance = Account & {
   saldoAtual: number;
@@ -45,6 +47,12 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
     transactionRows as BalanceTransaction[],
     "previsto",
   );
+
+  // Provisões (−) e sobras (+) do mês corrente afetam apenas o previsto.
+  const budgetDeltas = getBudgetAccountDeltasForMonth(currentMonth());
+  for (const [accountId, delta] of budgetDeltas) {
+    previsto.set(accountId, (previsto.get(accountId) ?? 0) + delta);
+  }
 
   return accountRows.map((account) => ({
     ...account,

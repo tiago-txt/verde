@@ -25,6 +25,7 @@ export const ICON_NAMES = [
   "Tv",
   "Smartphone",
   "TrendingUp",
+  "Target",
   "Briefcase",
   "Receipt",
   "HandCoins",

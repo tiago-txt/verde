@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { ChevronDown, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { MonthSummary } from "@/lib/finance/summary";
+import type { MonthSummaryWithBudgets } from "@/lib/finance/budgets";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type TransactionsSummaryFooterProps = {
-  summary: MonthSummary;
+  summary: MonthSummaryWithBudgets;
 };
 
 function Value({
@@ -87,7 +87,7 @@ export function TransactionsSummaryFooter({
           </div>
 
           {expanded && (
-            <div className="mt-3 grid grid-cols-4 gap-4 border-t border-border pt-3">
+            <div className="mt-3 grid grid-cols-3 gap-4 border-t border-border pt-3 lg:grid-cols-6">
               <Value
                 label="Entradas"
                 value={summary.entradasPrevistas}
@@ -115,6 +115,18 @@ export function TransactionsSummaryFooter({
                 value={aPagar}
                 tone="text-warning"
                 hint={`a receber ${formatCurrency(aReceber)}`}
+              />
+              <Value
+                label="Orçamentos a gastar"
+                value={summary.provisoesOrcamento}
+                tone="text-warning"
+                hint="provisões"
+              />
+              <Value
+                label="Sobras previstas"
+                value={summary.sobrasOrcamento}
+                tone="text-success"
+                hint="no fechamento"
               />
             </div>
           )}
@@ -165,11 +177,25 @@ export function TransactionsSummaryFooter({
           </div>
 
           {expanded && (
-            <div className="mt-2 grid grid-cols-4 gap-2 border-t border-border pt-2">
-              <Value label="Previsto" value={summary.saldoPrevisto} />
-              <Value label="Pago" value={summary.saldoRealizado} />
-              <Value label="A pagar" value={aPagar} tone="text-warning" />
-              <Value label="A receber" value={aReceber} tone="text-success" />
+            <div className="mt-2 space-y-2 border-t border-border pt-2">
+              <div className="grid grid-cols-4 gap-2">
+                <Value label="Previsto" value={summary.saldoPrevisto} />
+                <Value label="Pago" value={summary.saldoRealizado} />
+                <Value label="A pagar" value={aPagar} tone="text-warning" />
+                <Value label="A receber" value={aReceber} tone="text-success" />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <Value
+                  label="Orçamentos a gastar"
+                  value={summary.provisoesOrcamento}
+                  tone="text-warning"
+                />
+                <Value
+                  label="Sobras previstas"
+                  value={summary.sobrasOrcamento}
+                  tone="text-success"
+                />
+              </div>
             </div>
           )}
         </div>
