@@ -17,7 +17,7 @@ export type { BudgetOrigin, BudgetReserveDate } from "@/lib/db/schema";
  * `dia_fechamento` do mês seguinte.
  */
 
-export const BUDGET_EVENT_KINDS = ["provisao", "sobra"] as const;
+export const BUDGET_EVENT_KINDS = ["provisao", "sobra", "estouro"] as const;
 export type BudgetEventKind = (typeof BUDGET_EVENT_KINDS)[number];
 
 export type BudgetCycleConfig = {
@@ -363,11 +363,26 @@ export function eventosDoCiclo(
   ciclo: string,
   gasto: number,
   overrides?: BudgetOverrides,
+  dataEstouro?: string,
 ): BudgetEvent[] {
   if (!orcamentoVigenteNoCiclo(budget, ciclo)) return [];
 
   const result = calcularCiclo(budget, ciclo, gasto, overrides);
-  if (result.estouro > 0 || result.restante <= 0) return [];
+
+  // Estouro continua visível como indicador, mas não é provisão nem sobra e
+  // não altera saldos/previsto (o gasto real já está nos lançamentos).
+  if (result.estouro > 0) {
+    return [
+      {
+        tipo: "estouro",
+        data: dataEstouro ?? result.inicio,
+        valor: result.estouro,
+        ciclo,
+      },
+    ];
+  }
+
+  if (result.restante <= 0) return [];
 
   if (budget.dataDaReserva === "vencimento_da_fatura") {
     // A reserva nasce no vencimento da fatura e não gera liberação.
@@ -401,7 +416,8 @@ export function resumirEventos(eventos: BudgetEvent[]): {
   let sobras = 0;
   for (const event of eventos) {
     if (event.tipo === "provisao") provisoes += event.valor;
-    else sobras += event.valor;
+    else if (event.tipo === "sobra") sobras += event.valor;
+    // "estouro" é apenas indicador visual; não entra no resumo.
   }
   return { provisoes, sobras, liquido: sobras - provisoes };
 }
@@ -444,6 +460,7 @@ export function aplicarEventosAoSalsoDia(
 ): Record<string, number> {
   const deltas = new Map<string, number>();
   for (const event of eventos) {
+    if (event.tipo === "estouro") continue;
     const delta = event.tipo === "provisao" ? -event.valor : event.valor;
     deltas.set(event.data, (deltas.get(event.data) ?? 0) + delta);
   }
@@ -480,7 +497,12 @@ export function eventoPassaFiltros(
 
   if (filters.tipo) {
     if (filters.tipo === "transferencia") return false;
-    if (event.tipo === "provisao" && filters.tipo !== "despesa") return false;
+    if (
+      (event.tipo === "provisao" || event.tipo === "estouro") &&
+      filters.tipo !== "despesa"
+    ) {
+      return false;
+    }
     if (event.tipo === "sobra" && filters.tipo !== "receita") return false;
   }
 

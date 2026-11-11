@@ -526,11 +526,23 @@ export function getBudgetEventsForMonth(
     if (!data) continue;
 
     const summary = toCycleSummary(budget, ciclo, data);
+    let dataEstouro: string | undefined;
+    if (summary.estouro > 0) {
+      let acumulado = 0;
+      for (const transaction of data.transactions) {
+        acumulado += transaction.valor;
+        if (acumulado > summary.limite) {
+          dataEstouro = transaction.data;
+          break;
+        }
+      }
+    }
     const cycleEvents = eventosDoCiclo(
       cycleConfigFromBudget(budget),
       ciclo,
       data.info.gasto,
       budget.overrides,
+      dataEstouro,
     );
 
     for (const event of cycleEvents) {
@@ -546,7 +558,10 @@ export function getBudgetEventsForMonth(
         data: event.data,
         valor: event.valor,
         status:
-          event.tipo === "sobra" && event.data < today ? "apurada" : null,
+          (event.tipo === "sobra" || event.tipo === "estouro") &&
+          event.data < today
+            ? "apurada"
+            : null,
         resumo: summary,
         transactions: data.transactions,
       });
@@ -605,6 +620,7 @@ export function getBudgetAccountDeltasForMonth(
   const deltas = new Map<string, number>();
 
   for (const event of events) {
+    if (event.tipoEvento === "estouro") continue;
     const contaId = event.resumo.contaId;
     if (!contaId) continue;
     const delta = event.tipoEvento === "provisao" ? -event.valor : event.valor;

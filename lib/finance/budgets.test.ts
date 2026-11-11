@@ -203,8 +203,42 @@ describe("eventos de provisão e sobra", () => {
     });
   });
 
-  it("estouro não gera provisão nem sobra", () => {
-    expect(eventosDoCiclo(budget, "2026-11", 82000)).toEqual([]);
+  it("estouro gera apenas o indicador de estouro", () => {
+    expect(eventosDoCiclo(budget, "2026-11", 82000)).toEqual([
+      {
+        tipo: "estouro",
+        data: "2026-11-10",
+        valor: 12000,
+        ciclo: "2026-11",
+      },
+    ]);
+  });
+
+  it("o indicador de estouro não afeta provisões, sobras nem saldos", () => {
+    const events = eventosDoCiclo(budget, "2026-11", 82000);
+    expect(resumirEventos(events)).toEqual({
+      provisoes: 0,
+      sobras: 0,
+      liquido: 0,
+    });
+
+    const saldos = { "2026-11-09": 100_000, "2026-11-10": 100_000 };
+    expect(aplicarEventosAoSalsoDia(saldos, events)).toEqual(saldos);
+
+    const resumo = aplicarEventosAoResumo(
+      {
+        entradasPagas: 0,
+        saidasPagas: 0,
+        entradasPrevistas: 0,
+        saidasPrevistas: 0,
+        saldoRealizado: 0,
+        saldoPrevisto: 0,
+      },
+      events,
+    );
+    expect(resumo.provisoesOrcamento).toBe(0);
+    expect(resumo.sobrasOrcamento).toBe(0);
+    expect(resumo.saldoPrevisto).toBe(0);
   });
 
   it("gasto igual ao limite não gera eventos", () => {
@@ -462,13 +496,20 @@ describe("filtros da tela de lançamentos", () => {
     contaId: "conta-1",
   };
   const sobra = { ...provision, tipo: "sobra" as const };
+  const estouro = { ...provision, tipo: "estouro" as const };
 
-  it("provisão só aparece em despesa; sobra só em receita", () => {
+  it("provisão e estouro só aparecem em despesa; sobra só em receita", () => {
     expect(
       eventoPassaFiltros(provision, { ...filters, tipo: "despesa" }),
     ).toBe(true);
     expect(
       eventoPassaFiltros(provision, { ...filters, tipo: "receita" }),
+    ).toBe(false);
+    expect(
+      eventoPassaFiltros(estouro, { ...filters, tipo: "despesa" }),
+    ).toBe(true);
+    expect(
+      eventoPassaFiltros(estouro, { ...filters, tipo: "receita" }),
     ).toBe(false);
     expect(
       eventoPassaFiltros(sobra, { ...filters, tipo: "receita" }),
@@ -593,9 +634,16 @@ describe("reserva no vencimento da fatura", () => {
     expect(events[0]?.data).toBe("2026-12-20");
   });
 
-  it("não reserva nada no estouro ou no limite exato", () => {
+  it("não reserva nada no limite exato, mas mantém o indicador no estouro", () => {
     expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 70000)).toEqual([]);
-    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 82000)).toEqual([]);
+    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 82000)).toEqual([
+      {
+        tipo: "estouro",
+        data: "2026-11-10",
+        valor: 12000,
+        ciclo: "2026-11",
+      },
+    ]);
   });
 
   it("mantém o indicador (gasto/limite) igual ao modo atual", () => {
@@ -697,7 +745,14 @@ describe("origens e invariante do envelope", () => {
       "todas",
     );
     expect(gasto).toBe(85000);
-    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", gasto)).toEqual([]);
+    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", gasto)).toEqual([
+      {
+        tipo: "estouro",
+        data: "2026-11-10",
+        valor: 15000,
+        ciclo: "2026-11",
+      },
+    ]);
   });
 
   it("gasto em dinheiro dentro do ciclo consome o envelope", () => {

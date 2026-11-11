@@ -59,7 +59,9 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
 - **Orçamentos com ciclo** (`/limite-de-gastos`): envelope por categorias com dia
   de fechamento, valor por ciclo, overrides, vigências e eventos virtuais de
-  provisão/sobra no previsto, sem alterar o realizado.
+  provisão/sobra no previsto, sem alterar o realizado. Quando o envelope estoura,
+  a tela de lançamentos mantém um indicador **“Estouro do orçamento”** na data em
+  que o limite foi ultrapassado, sem duplicar o gasto no saldo.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
   pagamento de fatura por transferência (parcial ou total, com desfazer).
@@ -428,7 +430,7 @@ npm test
 npm run build
 ```
 
-Testes atuais (276): formatação/parse de BRL, datas/meses, máscara e parsing
+Testes atuais (278): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
 geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e

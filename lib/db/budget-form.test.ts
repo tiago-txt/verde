@@ -8,9 +8,13 @@ import {
   type TestDatabase,
   type TestUser,
 } from "./testing";
-import { users, budgets, budgetCategories, type User } from "./schema";
+import { users, accounts, budgets, budgetCategories, transactions, type User } from "./schema";
 import { createBudgetAction } from "@/lib/actions/budgets";
-import { getBudgetFormData } from "./queries/budgets";
+import {
+  getBudgetAccountDeltasForMonth,
+  getBudgetEventsForMonth,
+  getBudgetFormData,
+} from "./queries/budgets";
 import { listAllCategories } from "./queries/categories";
 import { addMonths, currentMonth } from "@/lib/dates";
 
@@ -211,8 +215,90 @@ describe("categorias no formulário de orçamento", () => {
     ).toBe(false);
   });
 
-  it("o próprio orçamento não bloqueia suas categorias", async () => {
+  it("mantém o indicador de estouro com a data em que o limite foi ultrapassado", async () => {
     const mercado = categoryIdByName("Mercado");
+    const accountId = crypto.randomUUID();
+    testDb.db
+      .insert(accounts)
+      .values({
+        id: accountId,
+        workspaceId: user.workspaceId,
+        nome: "Conta do orçamento",
+        tipo: "corrente",
+      })
+      .run();
+
+    setCurrent(user);
+    const budget = await createBudgetAction({
+      nome: "Alimentação",
+      valorPadrao: 50_000,
+      diaFechamento: 1,
+      antecedenciaCiclos: 0,
+      dataDaReserva: "inicio_do_ciclo",
+      diaVencimento: 1,
+      origens: "todas",
+      categoriaIds: [mercado],
+      contaId: accountId,
+      cartaoId: null,
+      cor: "#34d399",
+      icone: "Target",
+      dataInicio: currentMonth(),
+      dataFim: null,
+    });
+    if (!budget.ok) throw new Error(budget.error);
+
+    const first = `${currentMonth()}-05`;
+    const second = `${currentMonth()}-15`;
+    for (const [data, valor] of [
+      [first, 30_000],
+      [second, 30_000],
+    ] as const) {
+      testDb.db
+        .insert(transactions)
+        .values({
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa",
+          descricao: "Compra",
+          valor,
+          data,
+          pago: true,
+          contaId: accountId,
+          categoriaId: mercado,
+        })
+        .run();
+    }
+
+    const events = getBudgetEventsForMonth(user.workspaceId, currentMonth(), {
+      mes: currentMonth(),
+      tipo: null,
+      contas: [],
+      categorias: [],
+      tags: [],
+      status: "todos",
+      q: null,
+      dias: 31,
+      detalhe: null,
+      cartoes: [],
+      comprasCartao: true,
+      de: null,
+      ate: null,
+    });
+
+    const estouro = events.find((event) => event.tipoEvento === "estouro");
+    expect(estouro).toBeTruthy();
+    expect(estouro?.valor).toBe(10_000);
+    expect(estouro?.data).toBe(second);
+    expect(estouro?.resumo.estouro).toBe(10_000);
+    expect(estouro?.resumo.restante).toBe(0);
+
+    // O indicador não é provisão/sobra e não altera o saldo previsto.
+    expect(
+      getBudgetAccountDeltasForMonth(user.workspaceId, currentMonth()).size,
+    ).toBe(0);
+  });
+
+  it("o próprio orçamento não bloqueia suas categorias", async () => {    const mercado = categoryIdByName("Mercado");
     const budgetId = await createBudget({
       nome: "Alimentação",
       dataInicio: currentMonth(),
