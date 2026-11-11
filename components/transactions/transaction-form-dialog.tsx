@@ -284,6 +284,7 @@ export function TransactionFormDialog({
   const [extraTags, setExtraTags] = useState<{ id: string; nome: string }[]>([]);
   const [newTagName, setNewTagName] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
+  const [keypadOpen, setKeypadOpen] = useState(true);
   const skipConfirmRef = useRef(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -340,6 +341,7 @@ export function TransactionFormDialog({
     setConfirmCloseOpen(false);
     setDescriptionOpen(false);
     setAccountTouched(false);
+    setKeypadOpen(true);
     reset(buildDefaults(transaction, formData, mode, initialCartaoId));
   }, [open, transaction, formData, mode, reset, initialCartaoId]);
 
@@ -547,6 +549,7 @@ export function TransactionFormDialog({
       reset(buildDefaults(null, formData, "create", initialCartaoId));
       setActiveChip(null);
       setServerError(null);
+      setKeypadOpen(true);
       onSaved();
       requestAnimationFrame(() => {
         document.getElementById("transaction-valor")?.focus();
@@ -642,10 +645,10 @@ export function TransactionFormDialog({
   const hasAccounts = formData.accounts.length > 0;
   const headerTone =
     tipo === "receita"
-      ? "bg-primary text-primary-foreground"
+      ? "bg-primary text-white"
       : tipo === "transferencia"
-        ? "bg-info text-info-foreground"
-        : "bg-destructive text-destructive-foreground";
+        ? "bg-info text-white"
+        : "bg-destructive text-white";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -712,10 +715,20 @@ export function TransactionFormDialog({
               )}
 
               <div className="flex items-center justify-center gap-3 py-2">
-                <p className="tabular flex items-baseline gap-1.5 text-5xl font-bold">
+                <button
+                  type="button"
+                  onClick={() => setKeypadOpen((current) => !current)}
+                  aria-label={
+                    keypadOpen
+                      ? "Concluir valor"
+                      : "Editar valor com o teclado"
+                  }
+                  aria-expanded={keypadOpen}
+                  className="tabular flex items-baseline gap-1.5 rounded-xl px-1 py-1 text-5xl font-bold transition-colors hover:bg-black/10"
+                >
                   <span className="text-xl font-medium opacity-80">R$</span>
                   {keypadDisplay(valor)}
-                </p>
+                </button>
                 {!isCard && (
                   <button
                     type="button"
@@ -797,7 +810,10 @@ export function TransactionFormDialog({
             </div>
           )}
 
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div
+            className="flex-1 overflow-y-auto p-4 sm:p-5"
+            onPointerDownCapture={() => setKeypadOpen(false)}
+          >
             <FormError message={serverError} />
 
             {!hasAccounts && (
@@ -1107,7 +1123,7 @@ export function TransactionFormDialog({
                 </>
               )}
 
-              <div className="col-span-2 flex items-center gap-2 overflow-x-auto pb-0.5 sm:col-span-6">
+              <div className="col-span-2 flex flex-wrap items-center gap-2 pb-0.5 sm:col-span-6">
                 {(mode === "create" || isGrouped) && (
                   <AdvancedChip
                     icon={Repeat}
@@ -1411,17 +1427,39 @@ export function TransactionFormDialog({
 
           {isMobile ? (
             <div className="shrink-0 border-t border-border bg-card px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
-              <NumericKeypad
-                value={valor}
-                onChange={(cents) =>
-                  setValue("valor", cents, {
-                    shouldValidate: true,
-                    shouldDirty: true,
-                  })
-                }
-                className="mx-auto max-w-sm"
-              />
-              <div className="mx-auto mt-2 flex max-w-sm items-center justify-between gap-2">
+              {keypadOpen && (
+                <>
+                  <div className="mx-auto mb-1 flex max-w-sm items-center justify-between px-1">
+                    <span className="text-[11px] text-muted-foreground">
+                      Valor em reais
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setKeypadOpen(false)}
+                      className="inline-flex h-11 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      Concluir
+                      <ChevronDown className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <NumericKeypad
+                    value={valor}
+                    onChange={(cents) =>
+                      setValue("valor", cents, {
+                        shouldValidate: true,
+                        shouldDirty: true,
+                      })
+                    }
+                    className="mx-auto max-w-sm"
+                  />
+                </>
+              )}
+              <div
+                className={cn(
+                  "mx-auto flex max-w-sm items-center justify-between gap-2",
+                  keypadOpen && "mt-2",
+                )}
+              >
                 <div className="flex items-center gap-1">
                   {mode === "edit" && transaction && onRequestDelete && (
                     <Button

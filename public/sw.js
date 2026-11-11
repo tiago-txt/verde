@@ -1,4 +1,4 @@
-const CACHE_VERSION = "verde-v2";
+const CACHE_VERSION = "verde-v3";
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const ASSET_CACHE = `${CACHE_VERSION}-assets`;
 const SHELL = ["/offline", "/icons/icon-192.png", "/icons/icon-512.png", "/manifest.webmanifest"];

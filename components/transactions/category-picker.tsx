@@ -110,7 +110,7 @@ export function CategoryPicker({
         </div>
       )}
 
-      <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto p-0.5 sm:grid-cols-6">
+      <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto overflow-x-hidden p-0.5 sm:grid-cols-6">
         {!parent && !query && (
           <button
             type="button"
@@ -126,7 +126,7 @@ export function CategoryPicker({
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
               <CircleEllipsis className="h-4 w-4" />
             </span>
-            <span className="line-clamp-2 text-[11px] leading-tight">
+            <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
               Outros (padrão)
             </span>
             {value === null && (
@@ -156,7 +156,7 @@ export function CategoryPicker({
                 className="h-9 w-9"
                 iconClassName="h-4 w-4"
               />
-              <span className="line-clamp-2 text-[11px] leading-tight">
+              <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
                 {option.nome}
               </span>
               {selected && (

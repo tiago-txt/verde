@@ -6,6 +6,8 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   CreditCard,
   Search,
   Shapes,
@@ -284,6 +286,7 @@ function CategoryFilter({
   compact?: boolean;
 }) {
   const [search, setSearch] = useState("");
+  const [parentId, setParentId] = useState<string | null>(null);
   const activeCategories = useMemo(
     () => categories.filter((category) => !category.deletedAt),
     [categories],
@@ -292,21 +295,33 @@ function CategoryFilter({
   const roots = activeCategories.filter(
     (category) => !category.categoriaPaiId,
   );
-  const ordered = [
-    ...roots,
-    ...roots.flatMap((root) =>
-      activeCategories.filter(
-        (category) => category.categoriaPaiId === root.id,
-      ),
-    ),
-  ];
-  const visible = ordered.filter(
+  const parent = parentId
+    ? (activeCategories.find((category) => category.id === parentId) ?? null)
+    : null;
+  const children = parent
+    ? activeCategories.filter(
+        (category) => category.categoriaPaiId === parent.id,
+      )
+    : [];
+  const filtered = activeCategories.filter(
     (category) => !query || category.nome.toLowerCase().includes(query),
   );
+  const visible = query ? filtered : parent ? children : roots;
+
+  function pick(category: TransactionFormData["categories"][number]) {
+    const hasChildren = activeCategories.some(
+      (item) => item.categoriaPaiId === category.id,
+    );
+    if (hasChildren && !query) {
+      setParentId(category.id);
+      return;
+    }
+    onChange(toggleId(selected, category.id));
+  }
 
   return (
-    <div className="space-y-2">
-      <div className="relative">
+    <div className="flex min-h-0 flex-col gap-2">
+      <div className="relative shrink-0">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={search}
@@ -317,11 +332,42 @@ function CategoryFilter({
         />
       </div>
 
+      {parent && !query && (
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            className="h-9 w-9 shrink-0"
+            aria-label="Voltar para categorias"
+            onClick={() => setParentId(null)}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="h-9 min-w-0 flex-1 justify-start gap-2 text-xs"
+            onClick={() => onChange(toggleId(selected, parent.id))}
+          >
+            <CategoryIcon
+              icon={parent.icone}
+              color={parent.cor}
+              className="h-6 w-6"
+              iconClassName="h-3 w-3"
+            />
+            <span className="truncate">
+              {selected.includes(parent.id) ? "Remover" : "Usar"} {parent.nome}
+            </span>
+          </Button>
+        </div>
+      )}
+
       <div
         className={cn(
-          "grid gap-1.5 overflow-y-auto p-0.5",
+          "grid min-h-0 grid-cols-4 gap-1.5 overflow-y-auto overflow-x-hidden p-0.5 pr-1",
           compact ? "max-h-64" : "max-h-72",
-          "grid-cols-4 sm:grid-cols-6",
+          "sm:grid-cols-6",
         )}
       >
         {visible.length === 0 ? (
@@ -331,14 +377,24 @@ function CategoryFilter({
         ) : (
           visible.map((category) => {
             const checked = selected.includes(category.id);
+            const hasChildren =
+              !category.categoriaPaiId &&
+              activeCategories.some(
+                (item) => item.categoriaPaiId === category.id,
+              );
+            const parentName = category.categoriaPaiId
+              ? (activeCategories.find(
+                  (item) => item.id === category.categoriaPaiId,
+                )?.nome ?? null)
+              : null;
             return (
               <button
                 key={category.id}
                 type="button"
-                onClick={() => onChange(toggleId(selected, category.id))}
+                onClick={() => pick(category)}
                 aria-pressed={checked}
                 className={cn(
-                  "relative flex min-h-[72px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
+                  "relative flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border px-1 py-2 text-center transition-colors",
                   checked
                     ? "border-primary/50 bg-primary/10 text-primary"
                     : "border-border hover:bg-accent",
@@ -350,13 +406,19 @@ function CategoryFilter({
                   className="h-9 w-9"
                   iconClassName="h-4 w-4"
                 />
-                <span className="line-clamp-2 text-[11px] leading-tight">
+                <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
                   {category.nome}
                 </span>
-                {category.categoriaPaiId && (
-                  <span className="absolute left-1 top-1 text-[9px] text-muted-foreground">
-                    ↳
+                {query && parentName && (
+                  <span className="w-full truncate text-[9px] text-muted-foreground">
+                    {parentName}
                   </span>
+                )}
+                {hasChildren && !query && (
+                  <ChevronRight
+                    className="absolute bottom-1 right-1 h-3 w-3 text-muted-foreground"
+                    aria-hidden="true"
+                  />
                 )}
                 {checked && (
                   <span className="absolute right-1 top-1 grid h-4 w-4 place-items-center rounded-full bg-primary text-primary-foreground">
@@ -476,13 +538,16 @@ function CategoryFilterButton({
           <ChevronDown className="h-3.5 w-3.5 opacity-60" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[380px] p-3">
+      <PopoverContent
+        align="start"
+        className="w-[min(92vw,440px)] overflow-hidden p-3"
+      >
         <CategoryFilter
           categories={categories}
           selected={selected}
           onChange={onChange}
         />
-        <div className="mt-2 flex justify-end">
+        <div className="mt-2 flex shrink-0 justify-end border-t border-border pt-2">
           <Button
             type="button"
             size="sm"

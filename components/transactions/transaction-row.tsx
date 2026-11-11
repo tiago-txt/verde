@@ -3,7 +3,6 @@
 import { useRef, useState } from "react";
 import {
   ArrowLeftRight,
-  Copy,
   CreditCard,
   Pencil,
   Repeat,
@@ -14,7 +13,6 @@ import {
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryIcon } from "@/components/category-icon";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
@@ -376,61 +374,6 @@ export function TransactionRow({
                 <ThumbsDown className="h-6 w-6" />
               )}
             </button>
-          )}
-
-          {!selectionMode && (
-            <div className="hidden items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 lg:flex">
-              {!isCardPurchase && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10"
-                  aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
-                  onClick={() => onTogglePaid(transaction, !paid)}
-                >
-                  {paid ? (
-                    <ThumbsDown className="h-4 w-4" />
-                  ) : (
-                    <ThumbsUp className="h-4 w-4" />
-                  )}
-                </Button>
-              )}
-              {!transaction.faturaChave && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10"
-                  aria-label="Editar lançamento"
-                  onClick={() => onEdit(transaction)}
-                >
-                  <Pencil className="h-4 w-4" />
-                </Button>
-              )}
-              {!transaction.faturaChave && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-10 w-10"
-                  aria-label="Duplicar lançamento"
-                  onClick={() => onDuplicate(transaction)}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              )}
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-10 w-10 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                aria-label="Excluir lançamento"
-                onClick={() => onDelete(transaction)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
           )}
         </div>
       </div>

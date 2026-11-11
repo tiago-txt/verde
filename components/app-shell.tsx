@@ -120,27 +120,34 @@ export function AppShell({ user, children }: AppShellProps) {
       >
         <div
           className={cn(
-            "azulejo relative flex h-16 items-center border-b border-border/70",
+            "azulejo relative flex h-16 shrink-0 items-center border-b border-border/70",
             collapsed ? "justify-center px-2" : "justify-between px-4",
           )}
         >
-          {collapsed ? <Brand compact /> : <Brand />}
-          <button
-            type="button"
-            onClick={toggleSidebar}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-            title={collapsed ? "Expandir menu ([)" : "Recolher menu ([)"}
-            className={cn(
-              "grid h-10 w-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-              collapsed && "absolute -right-3 top-5 border border-border bg-card shadow-md",
-            )}
-          >
-            {collapsed ? (
+          {collapsed ? (
+            <button
+              type="button"
+              onClick={toggleSidebar}
+              aria-label="Expandir menu"
+              title="Expandir menu ([)"
+              className="grid h-11 w-11 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            >
               <PanelLeftOpen className="h-5 w-5" />
-            ) : (
-              <PanelLeftClose className="h-5 w-5" />
-            )}
-          </button>
+            </button>
+          ) : (
+            <>
+              <Brand />
+              <button
+                type="button"
+                onClick={toggleSidebar}
+                aria-label="Recolher menu"
+                title="Recolher menu ([)"
+                className="grid h-10 w-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              >
+                <PanelLeftClose className="h-5 w-5" />
+              </button>
+            </>
+          )}
         </div>
 
         <nav
@@ -233,7 +240,7 @@ export function AppShell({ user, children }: AppShellProps) {
             onClick={() =>
               window.dispatchEvent(new Event("verde:new-transaction"))
             }
-            className="verde-fab pressable fixed bottom-[calc(8.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
+            className="verde-fab pressable fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
           >
             <Plus className="h-8 w-8" aria-hidden="true" />
           </button>

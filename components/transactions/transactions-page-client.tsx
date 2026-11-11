@@ -9,7 +9,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import {
-  CalendarDays,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
@@ -375,6 +374,17 @@ export function TransactionsPageClient({
     });
   }
 
+  function goToToday() {
+    const month = currentMonth();
+    if (filters.mes !== month) {
+      changeMonth(month);
+      return;
+    }
+    document
+      .getElementById(`day-${today}`)
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   function openDetails(transaction: TransactionListItem) {
     go({ ...filters, detalhe: transaction.id });
   }
@@ -699,7 +709,7 @@ export function TransactionsPageClient({
 
   return (
     <div className="space-y-4 pb-48 lg:pb-28">
-      <div className="flex items-center gap-1 lg:gap-3">
+      <div className="flex items-center gap-1 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
         <div className="hidden min-w-0 lg:block">
           <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>
           <p className="text-sm text-muted-foreground">
@@ -707,7 +717,7 @@ export function TransactionsPageClient({
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 lg:justify-end lg:gap-1">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex-none lg:gap-1">
           <Button
             type="button"
             variant="ghost"
@@ -735,7 +745,7 @@ export function TransactionsPageClient({
           </Button>
         </div>
 
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 lg:justify-end">
           <Button
             type="button"
             variant="outline"
@@ -800,18 +810,6 @@ export function TransactionsPageClient({
 
           <Button
             type="button"
-            variant="outline"
-            size="icon"
-            className="hidden h-11 w-11 lg:inline-flex"
-            aria-label="Ir para hoje"
-            title="Ir para hoje"
-            onClick={() => changeMonth(currentMonth())}
-          >
-            <CalendarDays className="h-4 w-4" />
-          </Button>
-
-          <Button
-            type="button"
             className="hidden h-11 lg:inline-flex"
             onClick={() => setCreateOpen(true)}
             aria-label="Novo lançamento"
@@ -854,7 +852,7 @@ export function TransactionsPageClient({
                 Marcar vencidos como pagos ({overdueIds.length})
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onSelect={() => changeMonth(currentMonth())}>
+              <DropdownMenuItem onSelect={() => goToToday()}>
                 Ir para hoje
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -942,7 +940,8 @@ export function TransactionsPageClient({
             return (
               <div
                 key={group.day}
-                className="overflow-hidden rounded-xl border border-border bg-card"
+                id={`day-${group.day}`}
+                className="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card"
               >
                 <div
                   className={cn(

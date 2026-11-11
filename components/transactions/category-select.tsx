@@ -116,7 +116,10 @@ export function CategorySelect({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverAnchor asChild>{trigger}</PopoverAnchor>
-      <PopoverContent align="start" className="w-[420px] p-3">
+      <PopoverContent
+        align="start"
+        className="w-[min(92vw,460px)] overflow-hidden p-3"
+      >
         {panel}
       </PopoverContent>
     </Popover>
