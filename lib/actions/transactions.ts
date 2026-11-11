@@ -351,7 +351,7 @@ export async function createTransactionAction(
     budgetNotice:
       data.tipo === "despesa"
         ? (getBudgetNoticeForTransactions([
-            { categoriaId, data: data.data },
+            { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
           ]) ?? undefined)
         : undefined,
   };
@@ -593,7 +593,7 @@ export async function updateTransactionAction(
     budgetNotice:
       data.tipo === "despesa"
         ? (getBudgetNoticeForTransactions([
-            { categoriaId, data: data.data },
+            { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
           ]) ?? undefined)
         : undefined,
   };
@@ -789,7 +789,11 @@ export async function duplicateTransactionAction(
     budgetNotice:
       existing.tipo === "despesa"
         ? (getBudgetNoticeForTransactions([
-            { categoriaId: duplicatedCategoryId, data: existing.data },
+            {
+              categoriaId: duplicatedCategoryId,
+              data: existing.data,
+              cartaoId: existing.cartaoId ?? null,
+            },
           ]) ?? undefined)
         : undefined,
   };
@@ -893,6 +897,7 @@ export async function bulkChangeCategoryAction(input: {
       tipo: transactions.tipo,
       pago: transactions.pago,
       categoriaId: transactions.categoriaId,
+      cartaoId: transactions.cartaoId,
       data: transactions.data,
     })
     .from(transactions)
@@ -936,6 +941,7 @@ export async function bulkChangeCategoryAction(input: {
               .map((row) => ({
                 categoriaId: category.id,
                 data: row.data,
+                cartaoId: row.cartaoId,
               })),
           ) ?? undefined)
         : undefined,

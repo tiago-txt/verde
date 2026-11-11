@@ -30,6 +30,8 @@ import {
   eventoPassaFiltros,
   expandirCategorias,
   limiteDoCiclo,
+  transacaoConsomeOrcamento,
+  type BudgetCycleConfig,
   type BudgetCycleInfo,
   type BudgetEventKind,
   type BudgetCategoryUsage,
@@ -51,6 +53,9 @@ export type BudgetCategoryInfo = {
 
 export type BudgetWithCategories = Budget & {
   contaNome: string | null;
+  cartaoNome: string | null;
+  cartaoFechamento: number | null;
+  cartaoVencimento: number | null;
   categories: BudgetCategoryInfo[];
   overrides: Record<string, number>;
 };
@@ -112,6 +117,7 @@ export type BudgetCardOption = {
   cor: string;
   icone: string;
   diaFechamento: number;
+  diaVencimento: number;
   arquivado: boolean;
 };
 
@@ -145,15 +151,40 @@ function pairKey(budgetId: string, ciclo: string): string {
   return `${budgetId}:${ciclo}`;
 }
 
+function cycleConfigFromBudget(
+  budget: BudgetWithCategories,
+): BudgetCycleConfig {
+  return {
+    valorPadrao: budget.valorPadrao,
+    diaFechamento: budget.diaFechamento,
+    antecedenciaCiclos: budget.antecedenciaCiclos,
+    dataInicio: budget.dataInicio,
+    dataFim: budget.dataFim,
+    arquivado: budget.arquivado,
+    dataDaReserva: budget.dataDaReserva,
+    diaVencimento: budget.diaVencimento,
+    origens: budget.origens,
+    cartaoFechamento: budget.cartaoFechamento,
+    cartaoVencimento: budget.cartaoVencimento,
+  };
+}
+
 /** Carrega orçamentos + categorias + overrides em 3 consultas (sem N+1). */
 export function listBudgetsWithCategories(options?: {
   incluirArquivados?: boolean;
 }): BudgetWithCategories[] {
   const db = getDb();
   const rows = db
-    .select({ budget: budgets, contaNome: accounts.nome })
+    .select({
+      budget: budgets,
+      contaNome: accounts.nome,
+      cartaoNome: creditCards.nome,
+      cartaoFechamento: creditCards.diaFechamento,
+      cartaoVencimento: creditCards.diaVencimento,
+    })
     .from(budgets)
     .leftJoin(accounts, eq(budgets.contaId, accounts.id))
+    .leftJoin(creditCards, eq(budgets.cartaoId, creditCards.id))
     .where(options?.incluirArquivados ? undefined : eq(budgets.arquivado, false))
     .orderBy(asc(budgets.arquivado), asc(budgets.nome))
     .all();
@@ -210,9 +241,12 @@ export function listBudgetsWithCategories(options?: {
     overridesByBudget.set(row.budgetId, map);
   }
 
-  return rows.map(({ budget, contaNome }) => ({
+  return rows.map(({ budget, contaNome, cartaoNome, cartaoFechamento, cartaoVencimento }) => ({
     ...budget,
     contaNome,
+    cartaoNome,
+    cartaoFechamento,
+    cartaoVencimento,
     categories: categoriesByBudget.get(budget.id) ?? [],
     overrides: overridesByBudget.get(budget.id) ?? {},
   }));
@@ -241,14 +275,7 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
     );
     expandedByBudget.set(budget.id, expanded);
     const interval = calcularCiclo(
-      {
-        valorPadrao: budget.valorPadrao,
-        diaFechamento: budget.diaFechamento,
-        antecedenciaCiclos: budget.antecedenciaCiclos,
-        dataInicio: budget.dataInicio,
-        dataFim: budget.dataFim,
-        arquivado: budget.arquivado,
-      },
+      cycleConfigFromBudget(budget),
       ciclo,
       0,
       budget.overrides,
@@ -272,6 +299,7 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
       categoriaCor: categories.cor,
       categoriaIcone: categories.icone,
       tipo: transactions.tipo,
+      cartaoId: transactions.cartaoId,
       deletedAt: transactions.deletedAt,
     })
     .from(transactions)
@@ -293,14 +321,7 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
     if (!expanded) continue;
 
     const info = calcularCiclo(
-      {
-        valorPadrao: budget.valorPadrao,
-        diaFechamento: budget.diaFechamento,
-        antecedenciaCiclos: budget.antecedenciaCiclos,
-        dataInicio: budget.dataInicio,
-        dataFim: budget.dataFim,
-        arquivado: budget.arquivado,
-      },
+      cycleConfigFromBudget(budget),
       ciclo,
       0,
       budget.overrides,
@@ -310,6 +331,7 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
       (row) =>
         row.categoriaId &&
         expanded.has(row.categoriaId) &&
+        transacaoConsomeOrcamento(budget.origens, row.cartaoId) &&
         row.data >= info.inicio &&
         row.data <= info.fim,
     );
@@ -320,11 +342,13 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
         valor: row.valor,
         data: row.data,
         categoriaId: row.categoriaId,
+        cartaoId: row.cartaoId,
         deletedAt: row.deletedAt,
       })),
       expanded,
       info.inicio,
       info.fim,
+      budget.origens,
     );
 
     result.set(pairKey(budget.id, ciclo), {
@@ -475,14 +499,7 @@ export function getBudgetEventsForMonth(
 
     const summary = toCycleSummary(budget, ciclo, data);
     const cycleEvents = eventosDoCiclo(
-      {
-        valorPadrao: budget.valorPadrao,
-        diaFechamento: budget.diaFechamento,
-        antecedenciaCiclos: budget.antecedenciaCiclos,
-        dataInicio: budget.dataInicio,
-        dataFim: budget.dataFim,
-        arquivado: budget.arquivado,
-      },
+      cycleConfigFromBudget(budget),
       ciclo,
       data.info.gasto,
       budget.overrides,
@@ -679,6 +696,7 @@ export function getBudgetFormData(): BudgetFormData {
         cor: creditCards.cor,
         icone: creditCards.icone,
         diaFechamento: creditCards.diaFechamento,
+        diaVencimento: creditCards.diaVencimento,
         arquivado: creditCards.arquivado,
       })
       .from(creditCards)
@@ -701,7 +719,11 @@ export type BudgetNotice = {
  * Recebe os pares categoria+data já persistidos.
  */
 export function getBudgetNoticeForTransactions(
-  items: { categoriaId: string | null; data: string }[],
+  items: {
+    categoriaId: string | null;
+    data: string;
+    cartaoId?: string | null;
+  }[],
 ): BudgetNotice | null {
   const relevant = items.filter((item) => item.categoriaId);
   if (relevant.length === 0) return null;
@@ -730,6 +752,7 @@ export function getBudgetNoticeForTransactions(
         budget.categories.map((category) => category.id),
       );
       if (!item.categoriaId || !expanded.has(item.categoriaId)) continue;
+      if (!transacaoConsomeOrcamento(budget.origens, item.cartaoId)) continue;
 
       const key = pairKey(budget.id, ciclo);
       if (notices.has(key)) continue;

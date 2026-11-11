@@ -404,6 +404,7 @@ export function TransactionFormDialog({
       void getBudgetHintAction({
         categoriaId: effectiveCategoryId,
         data,
+        cartaoId: cartaoId ?? null,
         excludeTransactionId: transaction?.id ?? null,
       })
         .then((hint) => {
@@ -418,7 +419,7 @@ export function TransactionFormDialog({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories]);
+  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId]);
 
   const repetitionChipLabel =
     mode === "edit"

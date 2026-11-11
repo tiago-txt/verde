@@ -51,6 +51,10 @@ function relevantChange(
   if (budget.diaFechamento !== values.diaFechamento) return true;
   if (budget.dataInicio !== values.dataInicio) return true;
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
+  if (budget.dataDaReserva !== values.dataDaReserva) return true;
+  if (budget.diaVencimento !== values.diaVencimento) return true;
+  if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
+  if (budget.origens !== values.origens) return true;
   const before = budget.categories.map((category) => category.id).sort();
   const after = [...values.categoriaIds].sort();
   return (
@@ -67,6 +71,10 @@ function onlyValueChange(
     budget.diaFechamento === values.diaFechamento &&
     budget.dataInicio === values.dataInicio &&
     (budget.dataFim ?? null) === (values.dataFim ?? null) &&
+    budget.dataDaReserva === values.dataDaReserva &&
+    budget.diaVencimento === values.diaVencimento &&
+    (budget.cartaoId ?? null) === (values.cartaoId ?? null) &&
+    budget.origens === values.origens &&
     budget.categories.length === values.categoriaIds.length &&
     budget.categories.every((category) =>
       values.categoriaIds.includes(category.id),
@@ -357,8 +365,10 @@ export function BudgetsView({
                     </div>
                     <p className="text-[11px] text-muted-foreground">
                       {formatDate(summary.inicio).slice(0, 5)} a{" "}
-                      {formatDate(summary.fim).slice(0, 5)} · fecha{" "}
-                      {formatDate(summary.fechamento).slice(0, 5)}
+                      {formatDate(summary.fim).slice(0, 5)} ·{" "}
+                      {summary.dataDaReserva === "vencimento_da_fatura"
+                        ? `reserva em ${formatDate(summary.reservaEm).slice(0, 5)}`
+                        : `fecha ${formatDate(summary.fechamento).slice(0, 5)}`}
                     </p>
                   </div>
                 </div>

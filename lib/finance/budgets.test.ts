@@ -9,6 +9,7 @@ import {
   cicloDaData,
   ciclosRelevantesParaMes,
   dataDeFechamento,
+  datasDaFaturaDoCiclo,
   encontrarConflitoDeCategorias,
   eventosDoCiclo,
   eventoPassaFiltros,
@@ -17,9 +18,12 @@ import {
   limiteDoCiclo,
   orcamentoVigenteNoCiclo,
   resumirEventos,
+  transacaoConsomeOrcamento,
+  vencimentoDaReserva,
   type BudgetCycleConfig,
   type BudgetSpendingTransaction,
 } from "./budgets";
+import { datasDaFatura, faturaDaCompra } from "./cards";
 import type { MonthSummary } from "./summary";
 
 const budget: BudgetCycleConfig = {
@@ -114,6 +118,7 @@ describe("intervaloDoCiclo e dataDeFechamento", () => {
 
   it("lista ciclos relevantes para o mês", () => {
     expect(ciclosRelevantesParaMes("2026-11")).toEqual([
+      "2026-09",
       "2026-10",
       "2026-11",
       "2026-12",
@@ -501,5 +506,208 @@ describe("filtros da tela de lançamentos", () => {
     expect(
       eventoPassaFiltros(provision, { ...filters, tags: ["tag-1"] }),
     ).toBe(false);
+  });
+});
+
+const reservaNoVencimento: BudgetCycleConfig = {
+  ...budget,
+  dataDaReserva: "vencimento_da_fatura",
+  diaVencimento: 20,
+};
+
+describe("reserva no vencimento da fatura", () => {
+  it("data a reserva no vencimento e mostra a janela da fatura", () => {
+    const datas = datasDaFaturaDoCiclo("2026-11", reservaNoVencimento);
+    expect(datas).toEqual({
+      chave: "2026-12",
+      inicio: "2026-11-10",
+      fechamento: "2026-12-10",
+      vencimento: "2026-12-20",
+    });
+    expect(vencimentoDaReserva("2026-11", reservaNoVencimento)).toBe(
+      "2026-12-20",
+    );
+  });
+
+  it("vencimento no mês seguinte quando o dia é menor que o fechamento", () => {
+    const config = { ...reservaNoVencimento, diaVencimento: 5 };
+    const datas = datasDaFaturaDoCiclo("2026-11", config);
+    expect(datas.vencimento).toBe("2027-01-05");
+    expect(datas.inicio).toBe("2026-11-10");
+    expect(datas.fechamento).toBe("2026-12-10");
+  });
+
+  it("usa o cartão vinculado quando existir", () => {
+    const config = {
+      ...reservaNoVencimento,
+      diaVencimento: 1,
+      cartaoFechamento: 15,
+      cartaoVencimento: 22,
+    };
+    const datas = datasDaFaturaDoCiclo("2026-11", config);
+    expect(datas).toMatchObject({
+      inicio: "2026-11-15",
+      fechamento: "2026-12-15",
+      vencimento: "2026-12-22",
+    });
+  });
+
+  it("segue a mesma regra de lib/finance/cards.ts", () => {
+    const card = { diaFechamento: 10, diaVencimento: 20 };
+    const fim = intervaloDoCiclo("2026-11", 10).fim;
+    const chave = faturaDaCompra(fim, card);
+    expect(vencimentoDaReserva("2026-11", reservaNoVencimento)).toBe(
+      datasDaFatura(chave, card).vencimento,
+    );
+  });
+
+  it("lida com meses curtos e ano bissexto", () => {
+    const config = {
+      ...reservaNoVencimento,
+      diaFechamento: 1,
+      diaVencimento: 31,
+    };
+    expect(vencimentoDaReserva("2027-01", config)).toBe("2027-02-28");
+    expect(vencimentoDaReserva("2028-01", config)).toBe("2028-02-29");
+  });
+
+  it("gera só a reserva, sem liberação", () => {
+    const events = eventosDoCiclo(reservaNoVencimento, "2026-11", 30000);
+    expect(events).toEqual([
+      {
+        tipo: "provisao",
+        data: "2026-12-20",
+        valor: 40000,
+        ciclo: "2026-11",
+      },
+    ]);
+    expect(events.some((event) => event.tipo === "sobra")).toBe(false);
+  });
+
+  it("ignora a antecedência neste modo", () => {
+    const events = eventosDoCiclo(
+      { ...reservaNoVencimento, antecedenciaCiclos: 1 },
+      "2026-11",
+      30000,
+    );
+    expect(events[0]?.data).toBe("2026-12-20");
+  });
+
+  it("não reserva nada no estouro ou no limite exato", () => {
+    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 70000)).toEqual([]);
+    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 82000)).toEqual([]);
+  });
+
+  it("mantém o indicador (gasto/limite) igual ao modo atual", () => {
+    const atual = calcularCiclo(budget, "2026-11", 30000);
+    const novo = calcularCiclo(reservaNoVencimento, "2026-11", 30000);
+    expect(novo.gasto).toBe(atual.gasto);
+    expect(novo.limite).toBe(atual.limite);
+    expect(novo.restante).toBe(atual.restante);
+    expect(novo.estouro).toBe(atual.estouro);
+    expect(novo.percentual).toBe(atual.percentual);
+    expect(atual.reservaEm).toBe("2026-11-10");
+    expect(novo.reservaEm).toBe("2026-12-20");
+  });
+
+  it("desloca a reserva a cada ciclo (periodicidade)", () => {
+    expect(datasDaFaturaDoCiclo("2026-11", reservaNoVencimento).vencimento).toBe(
+      "2026-12-20",
+    );
+    expect(datasDaFaturaDoCiclo("2026-12", reservaNoVencimento).vencimento).toBe(
+      "2027-01-20",
+    );
+  });
+
+  it("regressão: modo atual continua com provisão e sobra", () => {
+    const events = eventosDoCiclo(
+      { ...budget, dataDaReserva: "inicio_do_ciclo" },
+      "2026-11",
+      30000,
+    );
+    expect(events).toEqual([
+      { tipo: "provisao", data: "2026-11-10", valor: 40000, ciclo: "2026-11" },
+      { tipo: "sobra", data: "2026-12-10", valor: 40000, ciclo: "2026-11" },
+    ]);
+  });
+});
+
+describe("origens e invariante do envelope", () => {
+  const inicio = "2026-11-10";
+  const fim = "2026-12-09";
+  const categories = new Set(["mercado"]);
+  const transactions: BudgetSpendingTransaction[] = [
+    tx("2026-11-15", 20000, "mercado"),
+    tx("2026-11-20", 30000, "mercado", { cartaoId: "card-1" }),
+  ];
+
+  it("filtra por origem", () => {
+    expect(
+      calcularGastoDoCiclo(transactions, categories, inicio, fim, "todas"),
+    ).toBe(50000);
+    expect(
+      calcularGastoDoCiclo(transactions, categories, inicio, fim, "cartao"),
+    ).toBe(30000);
+    expect(
+      calcularGastoDoCiclo(transactions, categories, inicio, fim, "contas"),
+    ).toBe(20000);
+    expect(transacaoConsomeOrcamento("cartao", null)).toBe(false);
+    expect(transacaoConsomeOrcamento("contas", "card-1")).toBe(false);
+    expect(transacaoConsomeOrcamento("todas", "card-1")).toBe(true);
+  });
+
+  it("gasto em conta + cartão + reserva == limite", () => {
+    const gasto = calcularGastoDoCiclo(
+      transactions,
+      categories,
+      inicio,
+      fim,
+      "todas",
+    );
+    const events = eventosDoCiclo(reservaNoVencimento, "2026-11", gasto);
+    const reserva = events[0]?.valor ?? 0;
+
+    expect(20000 + 30000 + reserva).toBe(70000);
+    expect(reserva).toBe(20000);
+  });
+
+  it("somente cartão: fatura + reserva == limite", () => {
+    const gastoCartao = calcularGastoDoCiclo(
+      transactions,
+      categories,
+      inicio,
+      fim,
+      "cartao",
+    );
+    const config = { ...reservaNoVencimento, origens: "cartao" as const };
+    const events = eventosDoCiclo(config, "2026-11", gastoCartao);
+    expect(gastoCartao + (events[0]?.valor ?? 0)).toBe(70000);
+  });
+
+  it("estouro com gasto misto não reserva e não duplica", () => {
+    const estouro: BudgetSpendingTransaction[] = [
+      tx("2026-11-15", 40000, "mercado"),
+      tx("2026-11-20", 45000, "mercado", { cartaoId: "card-1" }),
+    ];
+    const gasto = calcularGastoDoCiclo(
+      estouro,
+      categories,
+      inicio,
+      fim,
+      "todas",
+    );
+    expect(gasto).toBe(85000);
+    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", gasto)).toEqual([]);
+  });
+
+  it("gasto em dinheiro dentro do ciclo consome o envelope", () => {
+    const dinheiro = [
+      tx("2026-11-10", 10000, "mercado"),
+      tx("2026-12-09", 5000, "mercado"),
+      tx("2026-12-10", 9000, "mercado"),
+    ];
+    expect(
+      calcularGastoDoCiclo(dinheiro, categories, inicio, fim, "contas"),
+    ).toBe(15000);
   });
 });

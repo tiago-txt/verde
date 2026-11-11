@@ -23,6 +23,7 @@ import {
   encontrarConflitoDeCategorias,
   expandirCategorias,
   orcamentoVigenteNoCiclo,
+  transacaoConsomeOrcamento,
   type BudgetCategoryUsage,
 } from "@/lib/finance/budgets";
 import { getTransactionRaw } from "@/lib/db/queries/transactions";
@@ -146,6 +147,10 @@ function detectRelevantChange(
   if (existing.diaFechamento !== data.diaFechamento) return true;
   if (existing.dataInicio !== data.dataInicio) return true;
   if ((existing.dataFim ?? null) !== (data.dataFim ?? null)) return true;
+  if (existing.dataDaReserva !== data.dataDaReserva) return true;
+  if (existing.diaVencimento !== data.diaVencimento) return true;
+  if ((existing.cartaoId ?? null) !== (data.cartaoId ?? null)) return true;
+  if (existing.origens !== data.origens) return true;
 
   const before = existing.categories.map((category) => category.id).sort();
   const after = [...data.categoriaIds].sort();
@@ -171,6 +176,10 @@ function insertNewVersion(
       valorPadrao: data.valorPadrao,
       diaFechamento: data.diaFechamento,
       antecedenciaCiclos: data.antecedenciaCiclos,
+      dataDaReserva: data.dataDaReserva,
+      diaVencimento: data.diaVencimento,
+      origens: data.origens,
+      cartaoId: data.cartaoId ?? null,
       contaId: data.contaId ?? source.contaId,
       dataInicio: start,
       dataFim: data.dataFim,
@@ -234,6 +243,10 @@ export async function createBudgetAction(
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
           antecedenciaCiclos: data.antecedenciaCiclos,
+          dataDaReserva: data.dataDaReserva,
+          diaVencimento: data.diaVencimento,
+          origens: data.origens,
+          cartaoId: data.cartaoId ?? null,
           // Conta de reserva padrão: a mais usada/principal.
           contaId: data.contaId ?? getDefaultBudgetAccountId(),
           dataInicio: data.dataInicio,
@@ -298,6 +311,10 @@ export async function updateBudgetAction(
       existing.diaFechamento === data.diaFechamento &&
       existing.dataInicio === data.dataInicio &&
       (existing.dataFim ?? null) === (data.dataFim ?? null) &&
+      existing.dataDaReserva === data.dataDaReserva &&
+      existing.diaVencimento === data.diaVencimento &&
+      (existing.cartaoId ?? null) === (data.cartaoId ?? null) &&
+      existing.origens === data.origens &&
       existing.categories.length === data.categoriaIds.length &&
       existing.categories.every((category) =>
         data.categoriaIds.includes(category.id),
@@ -389,6 +406,10 @@ export async function updateBudgetAction(
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
           antecedenciaCiclos: data.antecedenciaCiclos,
+          dataDaReserva: data.dataDaReserva,
+          diaVencimento: data.diaVencimento,
+          origens: data.origens,
+          cartaoId: data.cartaoId ?? null,
           contaId: data.contaId ?? existing.contaId,
           dataInicio: start,
           dataFim: data.dataFim,
@@ -553,6 +574,7 @@ export type BudgetHint = {
 export async function getBudgetHintAction(input: {
   categoriaId: string;
   data: string;
+  cartaoId?: string | null;
   excludeTransactionId?: string | null;
 }): Promise<BudgetHint | null> {
   await requireUser();
@@ -561,12 +583,13 @@ export async function getBudgetHintAction(input: {
     .object({
       categoriaId: idSchema,
       data: isoDateSchema,
+      cartaoId: idSchema.nullable().optional(),
       excludeTransactionId: idSchema.nullable().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return null;
 
-  const { categoriaId, data, excludeTransactionId } = parsed.data;
+  const { categoriaId, data, cartaoId, excludeTransactionId } = parsed.data;
   const categoryRows = getDb()
     .select({ id: categories.id, categoriaPaiId: categories.categoriaPaiId })
     .from(categories)
@@ -582,6 +605,7 @@ export async function getBudgetHintAction(input: {
       budget.categories.map((category) => category.id),
     );
     if (!expanded.has(categoriaId)) continue;
+    if (!transacaoConsomeOrcamento(budget.origens, cartaoId)) continue;
 
     const detail = getBudgetCycleDetail(budget.id, ciclo);
     if (!detail) return null;
@@ -594,6 +618,7 @@ export async function getBudgetHintAction(input: {
         transaction.tipo === "despesa" &&
         transaction.categoriaId &&
         expanded.has(transaction.categoriaId) &&
+        transacaoConsomeOrcamento(budget.origens, transaction.cartaoId) &&
         transaction.data >= detail.resumo.inicio &&
         transaction.data <= detail.resumo.fim
       ) {

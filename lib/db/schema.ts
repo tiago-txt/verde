@@ -50,6 +50,17 @@ export const CARD_BRANDS = [
 ] as const;
 export type CardBrand = (typeof CARD_BRANDS)[number];
 
+/** Quando a reserva do envelope sai da conta. */
+export const BUDGET_RESERVE_DATES = [
+  "inicio_do_ciclo",
+  "vencimento_da_fatura",
+] as const;
+export type BudgetReserveDate = (typeof BUDGET_RESERVE_DATES)[number];
+
+/** Origens de gasto que consomem o envelope. */
+export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
+export type BudgetOrigin = (typeof BUDGET_ORIGINS)[number];
+
 /** Campos copiados para cada lançamento gerado por uma recorrência. */
 export type RecurrenceTemplate = {
   tipo: TransactionType;
@@ -260,7 +271,21 @@ export const budgets = sqliteTable(
     valorPadrao: integer("valor_padrao_centavos").notNull().default(0),
     diaFechamento: integer("dia_fechamento").notNull().default(1),
     antecedenciaCiclos: integer("antecedencia_ciclos").notNull().default(0),
+    /** `inicio_do_ciclo` (padrão) ou `vencimento_da_fatura`. */
+    dataDaReserva: text("data_da_reserva", { enum: BUDGET_RESERVE_DATES })
+      .notNull()
+      .default("inicio_do_ciclo"),
+    /** Vencimento próprio quando não há cartão vinculado. */
+    diaVencimento: integer("dia_vencimento").notNull().default(1),
+    /** Origens que consomem: todas, somente cartão ou somente contas. */
+    origens: text("origens", { enum: BUDGET_ORIGINS })
+      .notNull()
+      .default("todas"),
     contaId: text("conta_id").references(() => accounts.id, {
+      onDelete: "set null",
+    }),
+    /** Cartão vinculado: define fechamento/vencimento da fatura da reserva. */
+    cartaoId: text("cartao_id").references(() => creditCards.id, {
       onDelete: "set null",
     }),
     /** Primeiro ciclo de vigência (YYYY-MM). */
@@ -290,6 +315,18 @@ export const budgets = sqliteTable(
     check(
       "budgets_antecedencia_check",
       sql`${table.antecedenciaCiclos} in (0, 1)`,
+    ),
+    check(
+      "budgets_data_reserva_check",
+      sql`${table.dataDaReserva} in ('inicio_do_ciclo', 'vencimento_da_fatura')`,
+    ),
+    check(
+      "budgets_dia_vencimento_check",
+      sql`${table.diaVencimento} between 1 and 31`,
+    ),
+    check(
+      "budgets_origens_check",
+      sql`${table.origens} in ('todas', 'cartao', 'contas')`,
     ),
   ],
 );

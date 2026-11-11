@@ -1,6 +1,13 @@
 import { addDaysISO, addMonths, dateInMonth } from "@/lib/dates";
-import type { TransactionType } from "@/lib/db/schema";
+import type {
+  BudgetOrigin,
+  BudgetReserveDate,
+  TransactionType,
+} from "@/lib/db/schema";
 import type { MonthSummary } from "./summary";
+
+export { BUDGET_ORIGINS, BUDGET_RESERVE_DATES } from "@/lib/db/schema";
+export type { BudgetOrigin, BudgetReserveDate } from "@/lib/db/schema";
 
 /**
  * Regras puras dos orçamentos-envelope com ciclo (tipo fatura de cartão).
@@ -20,6 +27,15 @@ export type BudgetCycleConfig = {
   dataInicio: string;
   dataFim: string | null;
   arquivado?: boolean;
+  /** `inicio_do_ciclo` (padrão) ou `vencimento_da_fatura`. */
+  dataDaReserva?: BudgetReserveDate;
+  /** Vencimento próprio, usado quando não há cartão vinculado. */
+  diaVencimento?: number;
+  /** Origens de gasto que consomem o envelope. */
+  origens?: BudgetOrigin;
+  /** Fechamento/vencimento do cartão vinculado, quando houver. */
+  cartaoFechamento?: number | null;
+  cartaoVencimento?: number | null;
 };
 
 export type BudgetCycleInfo = {
@@ -28,6 +44,8 @@ export type BudgetCycleInfo = {
   fim: string;
   /** Data de fechamento/acerto (dia de fechamento do mês seguinte). */
   fechamento: string;
+  /** Data em que a reserva entra no previsto. */
+  reservaEm: string;
   limite: number;
   gasto: number;
   restante: number;
@@ -76,6 +94,7 @@ export type BudgetSpendingTransaction = {
   valor: number;
   data: string;
   categoriaId: string | null;
+  cartaoId?: string | null;
   pago?: boolean;
   deletedAt?: Date | number | null;
 };
@@ -114,9 +133,76 @@ export function dataDeFechamento(
   return dateInMonth(addMonths(ciclo, 1), normalizarDia(diaFechamento));
 }
 
-/** Ciclos que podem gerar evento em um mês (anterior, atual e seguinte). */
+/** Vencimento da fatura que recebe as compras do ciclo (mesma regra dos cartões). */
+export function datasDaFaturaDoCiclo(
+  ciclo: string,
+  budget: Pick<
+    BudgetCycleConfig,
+    | "diaFechamento"
+    | "diaVencimento"
+    | "cartaoFechamento"
+    | "cartaoVencimento"
+  >,
+): { chave: string; inicio: string; fechamento: string; vencimento: string } {
+  const diaFechamento = normalizarDia(
+    budget.cartaoFechamento ?? budget.diaFechamento,
+  );
+  const diaVencimento = normalizarDia(
+    budget.cartaoVencimento ?? budget.diaVencimento ?? budget.diaFechamento,
+  );
+  const { fim } = intervaloDoCiclo(ciclo, budget.diaFechamento);
+  const cicloCompra = cicloDaData(fim, diaFechamento);
+  const mesFechamento = addMonths(cicloCompra, 1);
+  const chave =
+    diaVencimento > diaFechamento
+      ? mesFechamento
+      : addMonths(mesFechamento, 1);
+
+  const mesFechamentoFatura =
+    diaVencimento > diaFechamento ? chave : addMonths(chave, -1);
+  const fechamento = dateInMonth(mesFechamentoFatura, diaFechamento);
+  const cicloFatura = cicloDaData(addDaysISO(fechamento, -1), diaFechamento);
+  const { inicio } = intervaloDoCiclo(cicloFatura, diaFechamento);
+
+  return {
+    chave,
+    inicio,
+    fechamento,
+    vencimento: dateInMonth(chave, diaVencimento),
+  };
+}
+
+/** Data em que a reserva do ciclo entra no previsto. */
+export function vencimentoDaReserva(
+  ciclo: string,
+  budget: Pick<
+    BudgetCycleConfig,
+    | "diaFechamento"
+    | "diaVencimento"
+    | "cartaoFechamento"
+    | "cartaoVencimento"
+  >,
+): string {
+  return datasDaFaturaDoCiclo(ciclo, budget).vencimento;
+}
+
+/** A origem do lançamento consome o envelope? */
+export function transacaoConsomeOrcamento(
+  origens: BudgetOrigin | undefined,
+  cartaoId: string | null | undefined,
+): boolean {
+  if (origens === "cartao") return Boolean(cartaoId);
+  if (origens === "contas") return !cartaoId;
+  return true;
+}
+
+/**
+ * Ciclos que podem gerar evento em um mês. Inclui M-2 porque, no modo
+ * `vencimento_da_fatura`, a reserva pode cair dois meses depois do ciclo
+ * (vencimento menor que o fechamento).
+ */
 export function ciclosRelevantesParaMes(mes: string): string[] {
-  return [addMonths(mes, -1), mes, addMonths(mes, 1)];
+  return [addMonths(mes, -2), addMonths(mes, -1), mes, addMonths(mes, 1)];
 }
 
 export function orcamentoVigenteNoCiclo(
@@ -226,6 +312,7 @@ export function calcularGastoDoCiclo(
   categoriaIds: ReadonlySet<string>,
   inicio: string,
   fim: string,
+  origens: BudgetOrigin = "todas",
 ): number {
   let total = 0;
   for (const transaction of transactions) {
@@ -233,6 +320,7 @@ export function calcularGastoDoCiclo(
     if (transaction.tipo !== "despesa") continue;
     if (!transaction.categoriaId) continue;
     if (!categoriaIds.has(transaction.categoriaId)) continue;
+    if (!transacaoConsomeOrcamento(origens, transaction.cartaoId)) continue;
     if (transaction.data < inicio || transaction.data > fim) continue;
     total += transaction.valor;
   }
@@ -256,6 +344,10 @@ export function calcularCiclo(
     inicio,
     fim,
     fechamento: dataDeFechamento(ciclo, budget.diaFechamento),
+    reservaEm:
+      budget.dataDaReserva === "vencimento_da_fatura"
+        ? vencimentoDaReserva(ciclo, budget)
+        : inicio,
     limite,
     gasto,
     restante,
@@ -276,6 +368,18 @@ export function eventosDoCiclo(
 
   const result = calcularCiclo(budget, ciclo, gasto, overrides);
   if (result.estouro > 0 || result.restante <= 0) return [];
+
+  if (budget.dataDaReserva === "vencimento_da_fatura") {
+    // A reserva nasce no vencimento da fatura e não gera liberação.
+    return [
+      {
+        tipo: "provisao",
+        data: result.reservaEm,
+        valor: result.restante,
+        ciclo,
+      },
+    ];
+  }
 
   const provisionDate =
     budget.antecedenciaCiclos === 1
