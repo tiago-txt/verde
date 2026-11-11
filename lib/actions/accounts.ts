@@ -1,10 +1,10 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import { accounts } from "@/lib/db/schema";
 import {
   countTransactionsForAccount,
@@ -24,7 +24,8 @@ function revalidateAccounts() {
 export async function createAccountAction(
   input: AccountInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
 
   const parsed = accountInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -35,10 +36,17 @@ export async function createAccountAction(
   }
 
   const id = crypto.randomUUID();
-  getDb()
-    .insert(accounts)
-    .values({ id, ...parsed.data })
-    .run();
+  try {
+    db.insert(accounts)
+      .values({ id, workspaceId: user.workspaceId, ...parsed.data })
+      .run();
+  } catch (error) {
+    console.error("[verde] erro ao criar conta:", error);
+    return {
+      ok: false,
+      error: "Já existe uma conta com esse nome.",
+    };
+  }
 
   revalidateAccounts();
   return { ok: true, id };
@@ -48,7 +56,8 @@ export async function updateAccountAction(
   id: string,
   input: AccountInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsedId = idSchema.safeParse(id);
   const parsed = accountInputSchema.safeParse(input);
@@ -62,14 +71,18 @@ export async function updateAccountAction(
     };
   }
 
-  const existing = getAccountById(parsedId.data);
+  const existing = getAccountById(user.workspaceId, parsedId.data);
   if (!existing) return { ok: false, error: "Conta não encontrada." };
 
-  getDb()
-    .update(accounts)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(accounts.id, parsedId.data))
-    .run();
+  try {
+    db.update(accounts)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(and(eq(accounts.id, parsedId.data), ws(accounts.workspaceId)))
+      .run();
+  } catch (error) {
+    console.error("[verde] erro ao atualizar conta:", error);
+    return { ok: false, error: "Já existe uma conta com esse nome." };
+  }
 
   revalidateAccounts();
   return { ok: true, id: parsedId.data };
@@ -79,20 +92,22 @@ export async function setAccountArchivedAction(
   id: string,
   arquivada: boolean,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({ id: idSchema, arquivada: z.boolean() })
     .safeParse({ id, arquivada });
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
 
-  const existing = getAccountById(parsed.data.id);
+  const existing = getAccountById(user.workspaceId, parsed.data.id);
   if (!existing) return { ok: false, error: "Conta não encontrada." };
 
-  getDb()
-    .update(accounts)
+  db.update(accounts)
     .set({ arquivada: parsed.data.arquivada, updatedAt: new Date() })
-    .where(eq(accounts.id, parsed.data.id))
+    .where(
+      and(eq(accounts.id, parsed.data.id), ws(accounts.workspaceId)),
+    )
     .run();
 
   revalidateAccounts();
@@ -100,15 +115,19 @@ export async function setAccountArchivedAction(
 }
 
 export async function deleteAccountAction(id: string): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsedId = idSchema.safeParse(id);
   if (!parsedId.success) return { ok: false, error: "Conta inválida." };
 
-  const existing = getAccountById(parsedId.data);
+  const existing = getAccountById(user.workspaceId, parsedId.data);
   if (!existing) return { ok: false, error: "Conta não encontrada." };
 
-  const transactionCount = countTransactionsForAccount(parsedId.data);
+  const transactionCount = countTransactionsForAccount(
+    user.workspaceId,
+    parsedId.data,
+  );
   if (transactionCount > 0) {
     return {
       ok: false,
@@ -117,7 +136,9 @@ export async function deleteAccountAction(id: string): Promise<ActionResult> {
     };
   }
 
-  getDb().delete(accounts).where(eq(accounts.id, parsedId.data)).run();
+  db.delete(accounts)
+    .where(and(eq(accounts.id, parsedId.data), ws(accounts.workspaceId)))
+    .run();
   revalidateAccounts();
   return { ok: true };
 }

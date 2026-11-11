@@ -8,8 +8,8 @@ import { getLatestImportBatch } from "@/lib/db/queries/data-export";
 export const metadata: Metadata = { title: "Dados" };
 
 export default async function DadosPage() {
-  await requireUser();
-  const latestImport = getLatestImportBatch();
+  const user = await requireUser();
+  const latestImport = getLatestImportBatch(user.workspaceId);
 
   return (
     <div className="space-y-3">

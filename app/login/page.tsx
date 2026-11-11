@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Leaf, Server, ShieldCheck, Smartphone } from "lucide-react";
 import { Brand } from "@/components/brand";
@@ -34,6 +35,7 @@ export default async function LoginPage({
   searchParams: Promise<{ next?: string }>;
 }) {
   const { next } = await searchParams;
+  const allowSignup = process.env.ALLOW_SIGNUP === "true";
 
   // Só redireciona se o usuário do token ainda existir no banco. Isso evita
   // loop / ↔ /login quando o cookie é de outro banco/usuário removido.
@@ -106,6 +108,18 @@ export default async function LoginPage({
           </div>
 
           <LoginForm next={next} />
+
+          {allowSignup && (
+            <p className="text-center text-sm text-muted-foreground">
+              Ainda não tem conta?{" "}
+              <Link
+                href="/cadastro"
+                className="font-medium text-primary hover:underline"
+              >
+                Criar conta
+              </Link>
+            </p>
+          )}
 
           <div className="rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
             Primeiro acesso? O usuário inicial é criado a partir de{" "}

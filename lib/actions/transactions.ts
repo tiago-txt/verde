@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
 import { addDaysISO } from "@/lib/dates";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   categories,
@@ -36,7 +36,7 @@ import {
 } from "@/lib/validation/transactions";
 import type { ActionResult } from "./result";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof scopedDb>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 function fail(error: string, code?: string): ActionResult {
@@ -56,19 +56,36 @@ function normalizeObservation(value: string | null): string | null {
   return trimmed ? trimmed : null;
 }
 
-function insertTags(tx: Tx, transactionId: string, tagIds: string[]) {
+function insertTags(
+  tx: Tx,
+  workspaceId: string,
+  transactionId: string,
+  tagIds: string[],
+) {
   if (tagIds.length === 0) return;
   tx.insert(transactionTags)
-    .values(tagIds.map((tagId) => ({ transactionId, tagId })))
+    .values(
+      tagIds.map((tagId) => ({ workspaceId, transactionId, tagId })),
+    )
     .onConflictDoNothing()
     .run();
 }
 
-function replaceTags(tx: Tx, transactionId: string, tagIds: string[]) {
+function replaceTags(
+  tx: Tx,
+  workspaceId: string,
+  transactionId: string,
+  tagIds: string[],
+) {
   tx.delete(transactionTags)
-    .where(eq(transactionTags.transactionId, transactionId))
+    .where(
+      and(
+        eq(transactionTags.transactionId, transactionId),
+        eq(transactionTags.workspaceId, workspaceId),
+      ),
+    )
     .run();
-  insertTags(tx, transactionId, tagIds);
+  insertTags(tx, workspaceId, transactionId, tagIds);
 }
 
 type AllowedReferences = {
@@ -78,6 +95,7 @@ type AllowedReferences = {
 };
 
 function validateReferences(
+  workspaceId: string,
   data: Pick<
     TransactionFormValues,
     | "tipo"
@@ -89,7 +107,7 @@ function validateReferences(
   >,
   allowed?: AllowedReferences,
 ): string | null {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
 
   if (data.tipo === "transferencia") {
     if (!data.contaId) return "Escolha a conta de origem.";
@@ -97,7 +115,13 @@ function validateReferences(
     const account = db
       .select({ id: accounts.id, arquivada: accounts.arquivada })
       .from(accounts)
-      .where(and(eq(accounts.id, data.contaId), isNull(accounts.deletedAt)))
+      .where(
+        and(
+          eq(accounts.id, data.contaId),
+          ws(accounts.workspaceId),
+          isNull(accounts.deletedAt),
+        ),
+      )
       .get();
 
     if (!account) return "Conta não encontrada.";
@@ -116,6 +140,7 @@ function validateReferences(
       .where(
         and(
           eq(accounts.id, data.contaDestinoId),
+          ws(accounts.workspaceId),
           isNull(accounts.deletedAt),
         ),
       )
@@ -132,6 +157,7 @@ function validateReferences(
       .where(
         and(
           eq(creditCards.id, data.cartaoId),
+          ws(creditCards.workspaceId),
           isNull(creditCards.deletedAt),
         ),
       )
@@ -148,7 +174,13 @@ function validateReferences(
     const account = db
       .select({ id: accounts.id, arquivada: accounts.arquivada })
       .from(accounts)
-      .where(and(eq(accounts.id, data.contaId), isNull(accounts.deletedAt)))
+      .where(
+        and(
+          eq(accounts.id, data.contaId),
+          ws(accounts.workspaceId),
+          isNull(accounts.deletedAt),
+        ),
+      )
       .get();
 
     if (!account) return "Conta não encontrada.";
@@ -167,7 +199,12 @@ function validateReferences(
         deletedAt: categories.deletedAt,
       })
       .from(categories)
-      .where(eq(categories.id, data.categoriaId))
+      .where(
+        and(
+          eq(categories.id, data.categoriaId),
+          ws(categories.workspaceId),
+        ),
+      )
       .get();
 
     if (!category) return "Categoria não encontrada.";
@@ -183,7 +220,9 @@ function validateReferences(
     const found = db
       .select({ id: tags.id })
       .from(tags)
-      .where(inArray(tags.id, data.tagIds))
+      .where(
+        and(ws(tags.workspaceId), inArray(tags.id, data.tagIds)),
+      )
       .all();
 
     if (found.length !== new Set(data.tagIds).size) {
@@ -197,7 +236,9 @@ function validateReferences(
 export async function createTransactionAction(
   input: TransactionFormValues,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = createTransactionSchema.safeParse(input);
   if (!parsed.success) {
@@ -207,7 +248,7 @@ export async function createTransactionAction(
   const data = parsed.data;
   const categoriaId = resolveCategoryId(
     { tipo: data.tipo, categoriaId: data.categoriaId },
-    getSystemCategoryIds(),
+    getSystemCategoryIds(workspaceId),
   );
   if (data.tipo !== "transferencia" && !categoriaId) {
     return fail(
@@ -215,7 +256,10 @@ export async function createTransactionAction(
     );
   }
 
-  const referenceError = validateReferences({ ...data, categoriaId });
+  const referenceError = validateReferences(workspaceId, {
+    ...data,
+    categoriaId,
+  });
   if (referenceError) return fail(referenceError);
 
   const id = crypto.randomUUID();
@@ -228,7 +272,7 @@ export async function createTransactionAction(
     data.tipo === "transferencia" ? data.contaDestinoId : null;
 
   try {
-    getDb().transaction((tx) => {
+    db.transaction((tx) => {
       if (data.repeticao === "fixa") {
         const recurrenceId = crypto.randomUUID();
         const template: RecurrenceTemplate = {
@@ -247,6 +291,7 @@ export async function createTransactionAction(
         tx.insert(recurrences)
           .values({
             id: recurrenceId,
+            workspaceId,
             frequencia: data.frequencia,
             dataInicio: data.data,
             dataFim: data.dataFim,
@@ -258,6 +303,7 @@ export async function createTransactionAction(
         tx.insert(transactions)
           .values({
             id,
+            workspaceId,
             tipo: data.tipo,
             descricao: data.descricao,
             valor: data.valor,
@@ -272,7 +318,7 @@ export async function createTransactionAction(
           })
           .run();
 
-        insertTags(tx, id, data.tagIds);
+        insertTags(tx, workspaceId, id, data.tagIds);
       } else if (data.repeticao === "parcelada") {
         const groupId = crypto.randomUUID();
         const plan = buildInstallmentPlan({
@@ -287,6 +333,7 @@ export async function createTransactionAction(
           tx.insert(transactions)
             .values({
               id: installmentId,
+              workspaceId,
               tipo: data.tipo,
               descricao: data.descricao,
               valor: item.valor,
@@ -303,12 +350,13 @@ export async function createTransactionAction(
             })
             .run();
 
-          insertTags(tx, installmentId, data.tagIds);
+          insertTags(tx, workspaceId, installmentId, data.tagIds);
         }
       } else {
         tx.insert(transactions)
           .values({
             id,
+            workspaceId,
             tipo: data.tipo,
             descricao: data.descricao,
             valor: data.valor,
@@ -322,7 +370,7 @@ export async function createTransactionAction(
           })
           .run();
 
-        insertTags(tx, id, data.tagIds);
+        insertTags(tx, workspaceId, id, data.tagIds);
       }
     });
   } catch (error) {
@@ -336,7 +384,7 @@ export async function createTransactionAction(
 
   if (data.repeticao === "fixa") {
     try {
-      ensureRecurrencesForMonth(data.data.slice(0, 7));
+      ensureRecurrencesForMonth(workspaceId, data.data.slice(0, 7));
     } catch (error) {
       // A primeira ocorrência já foi criada; a geração é idempotente e será
       // tentada novamente ao abrir a tela de lançamentos.
@@ -350,7 +398,7 @@ export async function createTransactionAction(
     id,
     budgetNotice:
       data.tipo === "despesa"
-        ? (getBudgetNoticeForTransactions([
+        ? (getBudgetNoticeForTransactions(workspaceId, [
             { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
           ]) ?? undefined)
         : undefined,
@@ -360,7 +408,9 @@ export async function createTransactionAction(
 export async function updateTransactionAction(
   input: UpdateTransactionInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = transactionUpdateSchema.safeParse(input);
   if (!parsed.success) {
@@ -368,11 +418,16 @@ export async function updateTransactionAction(
   }
 
   const data = parsed.data;
-  const db = getDb();
   const existing = db
     .select()
     .from(transactions)
-    .where(and(eq(transactions.id, data.id), isNull(transactions.deletedAt)))
+    .where(
+      and(
+        eq(transactions.id, data.id),
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+      ),
+    )
     .get();
 
   if (!existing) return fail("Lançamento não encontrado.");
@@ -400,7 +455,7 @@ export async function updateTransactionAction(
 
   const categoriaId = resolveCategoryId(
     { tipo: data.tipo, categoriaId: data.categoriaId },
-    getSystemCategoryIds(),
+    getSystemCategoryIds(workspaceId),
   );
   if (data.tipo !== "transferencia" && !categoriaId) {
     return fail(
@@ -409,6 +464,7 @@ export async function updateTransactionAction(
   }
 
   const referenceError = validateReferences(
+    workspaceId,
     { ...data, categoriaId },
     {
       contaIds: new Set(
@@ -462,9 +518,14 @@ export async function updateTransactionAction(
       if (!isGrouped) {
         tx.update(transactions)
           .set(updateValuesWithDate)
-          .where(eq(transactions.id, data.id))
+          .where(
+            and(
+              eq(transactions.id, data.id),
+              eq(transactions.workspaceId, workspaceId),
+            ),
+          )
           .run();
-        replaceTags(tx, data.id, data.tagIds);
+        replaceTags(tx, workspaceId, data.id, data.tagIds);
         return;
       }
 
@@ -479,6 +540,7 @@ export async function updateTransactionAction(
             .where(
               and(
                 eq(transactions.recorrenciaId, recurrenceId),
+                eq(transactions.workspaceId, workspaceId),
                 isNull(transactions.deletedAt),
               ),
             )
@@ -494,11 +556,16 @@ export async function updateTransactionAction(
         if (ids.length > 0) {
           tx.update(transactions)
             .set(groupedUpdateValues)
-            .where(inArray(transactions.id, ids))
+            .where(
+              and(
+                inArray(transactions.id, ids),
+                eq(transactions.workspaceId, workspaceId),
+              ),
+            )
             .run();
 
           for (const transactionId of ids) {
-            replaceTags(tx, transactionId, data.tagIds);
+            replaceTags(tx, workspaceId, transactionId, data.tagIds);
           }
         }
 
@@ -506,7 +573,12 @@ export async function updateTransactionAction(
           const recurrence = tx
             .select()
             .from(recurrences)
-            .where(eq(recurrences.id, recurrenceId))
+            .where(
+              and(
+                eq(recurrences.id, recurrenceId),
+                eq(recurrences.workspaceId, workspaceId),
+              ),
+            )
             .get();
 
           if (recurrence) {
@@ -526,7 +598,12 @@ export async function updateTransactionAction(
 
             tx.update(recurrences)
               .set({ template, updatedAt: new Date() })
-              .where(eq(recurrences.id, recurrenceId))
+              .where(
+                and(
+                  eq(recurrences.id, recurrenceId),
+                  eq(recurrences.workspaceId, workspaceId),
+                ),
+              )
               .run();
           }
         }
@@ -546,6 +623,7 @@ export async function updateTransactionAction(
             .where(
               and(
                 eq(transactions.parcelaGrupoId, groupId),
+                eq(transactions.workspaceId, workspaceId),
                 isNull(transactions.deletedAt),
               ),
             )
@@ -568,11 +646,16 @@ export async function updateTransactionAction(
         if (ids.length > 0) {
           tx.update(transactions)
             .set(groupedUpdateValues)
-            .where(inArray(transactions.id, ids))
+            .where(
+              and(
+                inArray(transactions.id, ids),
+                eq(transactions.workspaceId, workspaceId),
+              ),
+            )
             .run();
 
           for (const transactionId of ids) {
-            replaceTags(tx, transactionId, data.tagIds);
+            replaceTags(tx, workspaceId, transactionId, data.tagIds);
           }
         }
       }
@@ -592,7 +675,7 @@ export async function updateTransactionAction(
     id: data.id,
     budgetNotice:
       data.tipo === "despesa"
-        ? (getBudgetNoticeForTransactions([
+        ? (getBudgetNoticeForTransactions(workspaceId, [
             { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
           ]) ?? undefined)
         : undefined,
@@ -603,7 +686,9 @@ export async function deleteTransactionAction(input: {
   id: string;
   scope?: "single" | "future" | "all";
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({
@@ -614,11 +699,16 @@ export async function deleteTransactionAction(input: {
   if (!parsed.success) return fail("Lançamento inválido.");
 
   const { id, scope = "single" } = parsed.data;
-  const db = getDb();
   const existing = db
     .select()
     .from(transactions)
-    .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
+    .where(
+      and(
+        eq(transactions.id, id),
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+      ),
+    )
     .get();
 
   if (!existing) return fail("Lançamento não encontrado.");
@@ -632,7 +722,12 @@ export async function deleteTransactionAction(input: {
       if (scope === "single") {
         tx.update(transactions)
           .set({ deletedAt: now })
-          .where(eq(transactions.id, id))
+          .where(
+            and(
+              eq(transactions.id, id),
+              eq(transactions.workspaceId, workspaceId),
+            ),
+          )
           .run();
         return;
       }
@@ -643,6 +738,7 @@ export async function deleteTransactionAction(input: {
           .where(
             and(
               eq(transactions.recorrenciaId, recurrenceId),
+              eq(transactions.workspaceId, workspaceId),
               gte(transactions.data, existing.data),
               isNull(transactions.deletedAt),
             ),
@@ -655,7 +751,12 @@ export async function deleteTransactionAction(input: {
             dataFim: addDaysISO(existing.data, -1),
             updatedAt: now,
           })
-          .where(eq(recurrences.id, recurrenceId))
+          .where(
+            and(
+              eq(recurrences.id, recurrenceId),
+              eq(recurrences.workspaceId, workspaceId),
+            ),
+          )
           .run();
         return;
       }
@@ -665,6 +766,7 @@ export async function deleteTransactionAction(input: {
         .where(
           and(
             eq(transactions.recorrenciaId, recurrenceId),
+            eq(transactions.workspaceId, workspaceId),
             isNull(transactions.deletedAt),
           ),
         )
@@ -672,7 +774,12 @@ export async function deleteTransactionAction(input: {
 
       tx.update(recurrences)
         .set({ ativo: false, updatedAt: now })
-        .where(eq(recurrences.id, recurrenceId))
+        .where(
+          and(
+            eq(recurrences.id, recurrenceId),
+            eq(recurrences.workspaceId, workspaceId),
+          ),
+        )
         .run();
       return;
     }
@@ -683,7 +790,12 @@ export async function deleteTransactionAction(input: {
       if (scope === "single") {
         tx.update(transactions)
           .set({ deletedAt: now })
-          .where(eq(transactions.id, id))
+          .where(
+            and(
+              eq(transactions.id, id),
+              eq(transactions.workspaceId, workspaceId),
+            ),
+          )
           .run();
         return;
       }
@@ -692,11 +804,13 @@ export async function deleteTransactionAction(input: {
         scope === "future"
           ? and(
               eq(transactions.parcelaGrupoId, groupId),
+              eq(transactions.workspaceId, workspaceId),
               gte(transactions.parcelaAtual, existing.parcelaAtual ?? 1),
               isNull(transactions.deletedAt),
             )
           : and(
               eq(transactions.parcelaGrupoId, groupId),
+              eq(transactions.workspaceId, workspaceId),
               isNull(transactions.deletedAt),
             );
 
@@ -706,7 +820,12 @@ export async function deleteTransactionAction(input: {
 
     tx.update(transactions)
       .set({ deletedAt: now })
-      .where(eq(transactions.id, id))
+      .where(
+        and(
+          eq(transactions.id, id),
+          eq(transactions.workspaceId, workspaceId),
+        ),
+      )
       .run();
   });
 
@@ -717,17 +836,22 @@ export async function deleteTransactionAction(input: {
 export async function duplicateTransactionAction(
   id: string,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsedId = idSchema.safeParse(id);
   if (!parsedId.success) return fail("Lançamento inválido.");
 
-  const db = getDb();
   const existing = db
     .select()
     .from(transactions)
     .where(
-      and(eq(transactions.id, parsedId.data), isNull(transactions.deletedAt)),
+      and(
+        eq(transactions.id, parsedId.data),
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+      ),
     )
     .get();
 
@@ -740,7 +864,12 @@ export async function duplicateTransactionAction(
   const tagRows = db
     .select({ tagId: transactionTags.tagId })
     .from(transactionTags)
-    .where(eq(transactionTags.transactionId, parsedId.data))
+    .where(
+      and(
+        eq(transactionTags.transactionId, parsedId.data),
+        ws(transactionTags.workspaceId),
+      ),
+    )
     .all();
 
   const duplicatedCategoryId =
@@ -749,7 +878,7 @@ export async function duplicateTransactionAction(
       : existing.categoriaId ??
         resolveCategoryId(
           { tipo: existing.tipo, categoriaId: null },
-          getSystemCategoryIds(),
+          getSystemCategoryIds(workspaceId),
         );
 
   const newId = crypto.randomUUID();
@@ -758,6 +887,7 @@ export async function duplicateTransactionAction(
     tx.insert(transactions)
       .values({
         id: newId,
+        workspaceId,
         tipo: existing.tipo,
         descricao: existing.descricao,
         valor: existing.valor,
@@ -777,6 +907,7 @@ export async function duplicateTransactionAction(
 
     insertTags(
       tx,
+      workspaceId,
       newId,
       tagRows.map((row) => row.tagId),
     );
@@ -788,7 +919,7 @@ export async function duplicateTransactionAction(
     id: newId,
     budgetNotice:
       existing.tipo === "despesa"
-        ? (getBudgetNoticeForTransactions([
+        ? (getBudgetNoticeForTransactions(workspaceId, [
             {
               categoriaId: duplicatedCategoryId,
               data: existing.data,
@@ -803,14 +934,15 @@ export async function setTransactionPaidAction(input: {
   id: string;
   pago: boolean;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({ id: idSchema, pago: z.boolean() })
     .safeParse(input);
   if (!parsed.success) return fail("Lançamento inválido.");
 
-  const existing = getDb()
+  const existing = db
     .select({
       id: transactions.id,
       cartaoId: transactions.cartaoId,
@@ -819,6 +951,7 @@ export async function setTransactionPaidAction(input: {
     .where(
       and(
         eq(transactions.id, parsed.data.id),
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
       ),
     )
@@ -831,12 +964,13 @@ export async function setTransactionPaidAction(input: {
     );
   }
 
-  const result = getDb()
+  const result = db
     .update(transactions)
     .set({ pago: parsed.data.pago, updatedAt: new Date() })
     .where(
       and(
         eq(transactions.id, parsed.data.id),
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
       ),
     )
@@ -854,18 +988,20 @@ export async function bulkSetPaidAction(input: {
   ids: string[];
   pago: boolean;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({ ids: batchIdsSchema, pago: z.boolean() })
     .safeParse(input);
   if (!parsed.success) return fail("Seleção inválida.");
 
-  const result = getDb()
+  const result = db
     .update(transactions)
     .set({ pago: parsed.data.pago, updatedAt: new Date() })
     .where(
       and(
+        ws(transactions.workspaceId),
         inArray(transactions.id, parsed.data.ids),
         isNull(transactions.deletedAt),
         isNull(transactions.cartaoId),
@@ -881,17 +1017,19 @@ export async function bulkChangeCategoryAction(input: {
   ids: string[];
   categoriaId: string;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({ ids: batchIdsSchema, categoriaId: idSchema })
     .safeParse(input);
   if (!parsed.success) return fail("Seleção inválida.");
 
-  const category = getCategoryById(parsed.data.categoriaId);
+  const category = getCategoryById(workspaceId, parsed.data.categoriaId);
   if (!category) return fail("Categoria não encontrada.");
 
-  const rows = getDb()
+  const rows = db
     .select({
       id: transactions.id,
       tipo: transactions.tipo,
@@ -903,6 +1041,7 @@ export async function bulkChangeCategoryAction(input: {
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         inArray(transactions.id, parsed.data.ids),
         isNull(transactions.deletedAt),
       ),
@@ -920,10 +1059,15 @@ export async function bulkChangeCategoryAction(input: {
     };
   }
 
-  getDb().transaction((tx) => {
+  db.transaction((tx) => {
     tx.update(transactions)
       .set({ categoriaId: category.id, updatedAt: new Date() })
-      .where(inArray(transactions.id, applicable))
+      .where(
+        and(
+          inArray(transactions.id, applicable),
+          eq(transactions.workspaceId, workspaceId),
+        ),
+      )
       .run();
   });
 
@@ -936,6 +1080,7 @@ export async function bulkChangeCategoryAction(input: {
     budgetNotice:
       category.tipo === "despesa"
         ? (getBudgetNoticeForTransactions(
+            workspaceId,
             rows
               .filter((row) => applicable.includes(row.id))
               .map((row) => ({
@@ -952,25 +1097,33 @@ export async function bulkAddTagAction(input: {
   ids: string[];
   tagId: string;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({ ids: batchIdsSchema, tagId: idSchema })
     .safeParse(input);
   if (!parsed.success) return fail("Seleção inválida.");
 
-  const tag = getDb()
+  const tag = db
     .select({ id: tags.id })
     .from(tags)
-    .where(eq(tags.id, parsed.data.tagId))
+    .where(
+      and(
+        eq(tags.id, parsed.data.tagId),
+        ws(tags.workspaceId),
+      ),
+    )
     .get();
   if (!tag) return fail("Tag não encontrada.");
 
-  const existing = getDb()
+  const existing = db
     .select({ id: transactions.id })
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         inArray(transactions.id, parsed.data.ids),
         isNull(transactions.deletedAt),
       ),
@@ -979,10 +1132,11 @@ export async function bulkAddTagAction(input: {
 
   if (existing.length === 0) return fail("Nenhum lançamento encontrado.");
 
-  getDb().transaction((tx) => {
+  db.transaction((tx) => {
     tx.insert(transactionTags)
       .values(
         existing.map((row) => ({
+          workspaceId,
           transactionId: row.id,
           tagId: tag.id,
         })),
@@ -999,16 +1153,18 @@ export async function bulkAddTagAction(input: {
 export async function bulkDeleteTransactionsAction(input: {
   ids: string[];
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z.object({ ids: batchIdsSchema }).safeParse(input);
   if (!parsed.success) return fail("Seleção inválida.");
 
-  const result = getDb()
+  const result = db
     .update(transactions)
     .set({ deletedAt: new Date() })
     .where(
       and(
+        ws(transactions.workspaceId),
         inArray(transactions.id, parsed.data.ids),
         isNull(transactions.deletedAt),
       ),

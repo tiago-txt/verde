@@ -14,11 +14,11 @@ export default async function RelatoriosPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   const params = await searchParams;
   const filters = parseReportFilters(params);
-  const data = getReportData(filters);
+  const data = getReportData(user.workspaceId, filters);
 
   return (
     <ReportsView
@@ -29,10 +29,10 @@ export default async function RelatoriosPage({
       originReport={data.originReport}
       totals={data.totals}
       previousRange={data.previousRange}
-      accounts={listAllAccounts()}
-      cards={listCardsForFilter()}
-      categories={listAllCategories()}
-      tags={listTags()}
+      accounts={listAllAccounts(user.workspaceId)}
+      cards={listCardsForFilter(user.workspaceId)}
+      categories={listAllCategories(user.workspaceId)}
+      tags={listTags(user.workspaceId)}
     />
   );
 }

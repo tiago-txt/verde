@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   budgetCategories,
@@ -32,35 +32,65 @@ export type ExportedTransaction = {
   tags: string[];
 };
 
-const account = accounts;
-const contaDestino = accounts;
-
-export function exportAllData() {
-  const db = getDb();
+export function exportAllData(workspaceId: string) {
+  const { db, ws } = scopedDb(workspaceId);
   return {
     app: "verde",
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
     data: {
-      accounts: db.select().from(accounts).all(),
-      creditCards: db.select().from(creditCards).all(),
-      categories: db.select().from(categories).all(),
-      tags: db.select().from(tags).all(),
-      transactions: db.select().from(transactions).all(),
-      transactionTags: db.select().from(transactionTags).all(),
-      recurrences: db.select().from(recurrences).all(),
-      budgets: db.select().from(budgets).all(),
-      budgetCategories: db.select().from(budgetCategories).all(),
-      budgetOverrides: db.select().from(budgetOverrides).all(),
+      accounts: db
+        .select()
+        .from(accounts)
+        .where(ws(accounts.workspaceId))
+        .all(),
+      creditCards: db
+        .select()
+        .from(creditCards)
+        .where(ws(creditCards.workspaceId))
+        .all(),
+      categories: db
+        .select()
+        .from(categories)
+        .where(ws(categories.workspaceId))
+        .all(),
+      tags: db.select().from(tags).where(ws(tags.workspaceId)).all(),
+      transactions: db
+        .select()
+        .from(transactions)
+        .where(ws(transactions.workspaceId))
+        .all(),
+      transactionTags: db
+        .select()
+        .from(transactionTags)
+        .where(ws(transactionTags.workspaceId))
+        .all(),
+      recurrences: db
+        .select()
+        .from(recurrences)
+        .where(ws(recurrences.workspaceId))
+        .all(),
+      budgets: db.select().from(budgets).where(ws(budgets.workspaceId)).all(),
+      budgetCategories: db
+        .select()
+        .from(budgetCategories)
+        .where(ws(budgetCategories.workspaceId))
+        .all(),
+      budgetOverrides: db
+        .select()
+        .from(budgetOverrides)
+        .where(ws(budgetOverrides.workspaceId))
+        .all(),
     },
   };
 }
 
 export function listTransactionsForExport(
+  workspaceId: string,
   from: string,
   to: string,
 ): ExportedTransaction[] {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const rows = db
     .select({
       id: transactions.id,
@@ -81,6 +111,7 @@ export function listTransactionsForExport(
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         gte(transactions.data, from),
         lte(transactions.data, to),
@@ -93,6 +124,7 @@ export function listTransactionsForExport(
     db
       .select({ id: accounts.id, nome: accounts.nome })
       .from(accounts)
+      .where(ws(accounts.workspaceId))
       .all()
       .map((row) => [row.id, row.nome]),
   );
@@ -100,6 +132,7 @@ export function listTransactionsForExport(
     db
       .select({ id: creditCards.id, nome: creditCards.nome })
       .from(creditCards)
+      .where(ws(creditCards.workspaceId))
       .all()
       .map((row) => [row.id, row.nome]),
   );
@@ -107,10 +140,14 @@ export function listTransactionsForExport(
     db
       .select({ id: categories.id, nome: categories.nome })
       .from(categories)
+      .where(ws(categories.workspaceId))
       .all()
       .map((row) => [row.id, row.nome]),
   );
-  const tagMap = getTagsForTransactions(rows.map((row) => row.id));
+  const tagMap = getTagsForTransactions(
+    workspaceId,
+    rows.map((row) => row.id),
+  );
 
   return rows.map((row) => ({
     id: row.id,
@@ -143,8 +180,11 @@ export type LatestImportBatch = {
   count: number;
 };
 
-export function getLatestImportBatch(): LatestImportBatch | null {
-  const row = getDb()
+export function getLatestImportBatch(
+  workspaceId: string,
+): LatestImportBatch | null {
+  const { db, ws } = scopedDb(workspaceId);
+  const row = db
     .select({
       batchId: transactions.importBatchId,
       createdAt: transactions.createdAt,
@@ -153,6 +193,7 @@ export function getLatestImportBatch(): LatestImportBatch | null {
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNotNull(transactions.importBatchId),
         isNull(transactions.deletedAt),
       ),
@@ -162,11 +203,12 @@ export function getLatestImportBatch(): LatestImportBatch | null {
     .get();
 
   if (!row?.batchId) return null;
-  const count = getDb()
+  const count = db
     .select({ count: transactions.id })
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         eq(transactions.importBatchId, row.batchId),
         isNull(transactions.deletedAt),
       ),

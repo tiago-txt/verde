@@ -14,7 +14,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   categories,
@@ -156,12 +156,14 @@ function selectTransactionFields() {
 }
 
 export function getTagsForTransactions(
+  workspaceId: string,
   ids: string[],
 ): Map<string, TransactionTag[]> {
   const map = new Map<string, TransactionTag[]>();
   if (ids.length === 0) return map;
 
-  const rows = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const rows = db
     .select({
       transactionId: transactionTags.transactionId,
       id: tags.id,
@@ -169,7 +171,13 @@ export function getTagsForTransactions(
     })
     .from(transactionTags)
     .innerJoin(tags, eq(transactionTags.tagId, tags.id))
-    .where(inArray(transactionTags.transactionId, ids))
+    .where(
+      and(
+        ws(transactionTags.workspaceId),
+        eq(tags.workspaceId, workspaceId),
+        inArray(transactionTags.transactionId, ids),
+      ),
+    )
     .orderBy(asc(tags.nome))
     .all();
 
@@ -187,14 +195,16 @@ export function getTagsForTransactions(
  * O resumo é calculado no cliente a partir deste resultado (reflete filtros).
  */
 export function listMonthTransactions(
+  workspaceId: string,
   filters: TransactionFilters,
 ): TransactionListItem[] {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const { start, end } =
     filters.de && filters.ate
       ? { start: filters.de, end: filters.ate }
       : monthRange(filters.mes);
   const conditions = [
+    ws(transactions.workspaceId),
     isNull(transactions.deletedAt),
     gte(transactions.data, start),
     lte(transactions.data, end),
@@ -251,6 +261,7 @@ export function listMonthTransactions(
           .from(transactionTags)
           .where(
             and(
+              ws(transactionTags.workspaceId),
               eq(transactionTags.transactionId, transactions.id),
               inArray(transactionTags.tagId, filters.tags),
             ),
@@ -283,7 +294,7 @@ export function listMonthTransactions(
     .orderBy(asc(transactions.data), asc(transactions.createdAt))
     .all();
 
-  const tagMap = getTagsForTransactions(rows.map((row) => row.id));
+  const tagMap = getTagsForTransactions(workspaceId, rows.map((row) => row.id));
 
   return rows.map((row) => ({
     ...row,
@@ -291,8 +302,12 @@ export function listMonthTransactions(
   }));
 }
 
-export function getTransactionById(id: string): TransactionListItem | null {
-  const row = getDb()
+export function getTransactionById(
+  workspaceId: string,
+  id: string,
+): TransactionListItem | null {
+  const { db, ws } = scopedDb(workspaceId);
+  const row = db
     .select(selectTransactionFields())
     .from(transactions)
     .leftJoin(conta, eq(transactions.contaId, conta.id))
@@ -303,20 +318,29 @@ export function getTransactionById(id: string): TransactionListItem | null {
       eq(transactions.cartaoDestinoId, cartaoDestino.id),
     )
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
-    .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
+    .where(
+      and(
+        eq(transactions.id, id),
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+      ),
+    )
     .get();
 
   if (!row) return null;
 
-  const tagMap = getTagsForTransactions([id]);
+  const tagMap = getTagsForTransactions(workspaceId, [id]);
   return { ...row, tags: tagMap.get(id) ?? [] };
 }
 
-export function getTransactionDetail(id: string): TransactionDetail | null {
-  const transaction = getTransactionById(id);
+export function getTransactionDetail(
+  workspaceId: string,
+  id: string,
+): TransactionDetail | null {
+  const transaction = getTransactionById(workspaceId, id);
   if (!transaction) return null;
 
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   let prevId: string | null = null;
   let nextId: string | null = null;
   let occurrenceIndex: number | null = null;
@@ -327,7 +351,12 @@ export function getTransactionDetail(id: string): TransactionDetail | null {
     const recurrence = db
       .select({ frequencia: recurrences.frequencia })
       .from(recurrences)
-      .where(eq(recurrences.id, transaction.recorrenciaId))
+      .where(
+        and(
+          eq(recurrences.id, transaction.recorrenciaId),
+          ws(recurrences.workspaceId),
+        ),
+      )
       .get();
     recorrenciaFrequencia = recurrence?.frequencia ?? null;
 
@@ -336,6 +365,7 @@ export function getTransactionDetail(id: string): TransactionDetail | null {
       .from(transactions)
       .where(
         and(
+          ws(transactions.workspaceId),
           eq(transactions.recorrenciaId, transaction.recorrenciaId),
           isNull(transactions.deletedAt),
         ),
@@ -356,6 +386,7 @@ export function getTransactionDetail(id: string): TransactionDetail | null {
       .from(transactions)
       .where(
         and(
+          ws(transactions.workspaceId),
           eq(transactions.parcelaGrupoId, transaction.parcelaGrupoId),
           isNull(transactions.deletedAt),
         ),
@@ -382,16 +413,23 @@ export function getTransactionDetail(id: string): TransactionDetail | null {
   };
 }
 
-export function getTransactionRaw(id: string) {
-  return getDb()
+export function getTransactionRaw(workspaceId: string, id: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select()
     .from(transactions)
-    .where(and(eq(transactions.id, id), isNull(transactions.deletedAt)))
+    .where(
+      and(
+        eq(transactions.id, id),
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+      ),
+    )
     .get();
 }
 
-export function getTransactionFormData(): TransactionFormData {
-  const db = getDb();
+export function getTransactionFormData(workspaceId: string): TransactionFormData {
+  const { db, ws } = scopedDb(workspaceId);
 
   const lastTransaction = db
     .select({
@@ -399,7 +437,7 @@ export function getTransactionFormData(): TransactionFormData {
       cartaoId: transactions.cartaoId,
     })
     .from(transactions)
-    .where(isNull(transactions.deletedAt))
+    .where(and(ws(transactions.workspaceId), isNull(transactions.deletedAt)))
     .orderBy(desc(transactions.createdAt))
     .limit(1)
     .get();
@@ -416,7 +454,7 @@ export function getTransactionFormData(): TransactionFormData {
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
-    .where(isNull(transactions.deletedAt))
+    .where(and(ws(transactions.workspaceId), isNull(transactions.deletedAt)))
     .orderBy(desc(transactions.createdAt))
     .limit(200)
     .all();
@@ -433,10 +471,10 @@ export function getTransactionFormData(): TransactionFormData {
   }
 
   return {
-    accounts: listAllAccounts(),
-    cards: listCardsForFilter(),
-    categories: listAllCategories(),
-    tags: listTags(),
+    accounts: listAllAccounts(workspaceId),
+    cards: listCardsForFilter(workspaceId),
+    categories: listAllCategories(workspaceId),
+    tags: listTags(workspaceId),
     lastAccountId: lastTransaction?.contaId ?? null,
     lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,
@@ -448,11 +486,14 @@ export function getTransactionFormData(): TransactionFormData {
  * anterior (tudo o que veio antes do primeiro dia do mês).
  * Query agregada única (sem N+1), sempre sem filtros.
  */
-export function getMonthBalances(monthKey: string): {
+export function getMonthBalances(
+  workspaceId: string,
+  monthKey: string,
+): {
   opening: number;
   byDay: Record<string, number>;
 } {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const { end } = monthRange(monthKey);
   const start = `${monthKey}-01`;
 
@@ -462,7 +503,7 @@ export function getMonthBalances(monthKey: string): {
         value: sql<number>`coalesce(sum(${accounts.saldoInicial}), 0)`,
       })
       .from(accounts)
-      .where(isNull(accounts.deletedAt))
+      .where(and(ws(accounts.workspaceId), isNull(accounts.deletedAt)))
       .get()?.value ?? 0;
 
   const deltas = db
@@ -473,6 +514,7 @@ export function getMonthBalances(monthKey: string): {
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         isNull(transactions.cartaoId),
         lte(transactions.data, end),
@@ -494,8 +536,11 @@ export function getMonthBalances(monthKey: string): {
   return { opening, byDay: Object.fromEntries(balances) };
 }
 
-export function getDayBalances(monthKey: string): Record<string, number> {
-  return getMonthBalances(monthKey).byDay;
+export function getDayBalances(
+  workspaceId: string,
+  monthKey: string,
+): Record<string, number> {
+  return getMonthBalances(workspaceId, monthKey).byDay;
 }
 
 /**
@@ -503,20 +548,28 @@ export function getDayBalances(monthKey: string): Record<string, number> {
  * A unique index (recorrencia_id, data) + ON CONFLICT DO NOTHING tornam a
  * operação idempotente, inclusive quando uma ocorrência foi soft-deleted.
  */
-export function ensureRecurrencesForMonth(monthKey: string): void {
-  const db = getDb();
+export function ensureRecurrencesForMonth(
+  workspaceId: string,
+  monthKey: string,
+): void {
+  const { db, ws } = scopedDb(workspaceId);
   const activeRecurrences = db
     .select()
     .from(recurrences)
-    .where(eq(recurrences.ativo, true))
+    .where(
+      and(
+        ws(recurrences.workspaceId),
+        eq(recurrences.ativo, true),
+      ),
+    )
     .all();
 
   if (activeRecurrences.length === 0) return;
 
   const horizon = recurrenceHorizon(monthKey, todayISO());
-  const systemCategoryIds = getSystemCategoryIds();
+  const systemCategoryIds = getSystemCategoryIds(workspaceId);
   const accountIds = new Set(
-    listAllAccounts()
+    listAllAccounts(workspaceId)
       .filter((account) => !account.arquivada)
       .map((account) => account.id),
   );
@@ -524,14 +577,20 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
     db
       .select({ id: creditCards.id })
       .from(creditCards)
-      .where(and(isNull(creditCards.deletedAt), eq(creditCards.arquivado, false)))
+      .where(
+        and(
+          ws(creditCards.workspaceId),
+          isNull(creditCards.deletedAt),
+          eq(creditCards.arquivado, false),
+        ),
+      )
       .all()
       .map((card) => card.id),
   );
   const categoryById = new Map(
-    listAllCategories().map((category) => [category.id, category]),
+    listAllCategories(workspaceId).map((category) => [category.id, category]),
   );
-  const tagIds = new Set(listTags().map((tag) => tag.id));
+  const tagIds = new Set(listTags(workspaceId).map((tag) => tag.id));
 
   db.transaction((tx) => {
     for (const recurrence of activeRecurrences) {
@@ -580,6 +639,7 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
           .insert(transactions)
           .values({
             id: transactionId,
+            workspaceId,
             tipo: template.tipo,
             descricao: template.descricao,
             valor: template.valor,
@@ -602,6 +662,7 @@ export function ensureRecurrencesForMonth(monthKey: string): void {
           tx.insert(transactionTags)
             .values(
               validTagIds.map((tagId) => ({
+                workspaceId,
                 transactionId,
                 tagId,
               })),

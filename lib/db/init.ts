@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import Database from "better-sqlite3";
 import { hashSync } from "bcryptjs";
-import { sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   drizzle,
   type BetterSQLite3Database,
@@ -11,7 +11,7 @@ import { migrate } from "drizzle-orm/better-sqlite3/migrator";
 import { getAdminSeed, getSessionSecret } from "@/lib/env";
 import { getDatabasePath } from "./path";
 import { seedDemoData } from "./seed-demo";
-import { DEFAULT_CATEGORIES, DEFAULT_TAGS } from "./seed-data";
+import { ensureWorkspace, seedWorkspaceDefaults, workspaceNameFor } from "./seed-workspace";
 import * as schema from "./schema";
 
 type DatabaseInstance = BetterSQLite3Database<typeof schema>;
@@ -39,7 +39,6 @@ export function initializeDatabase(): void {
   const sqlite = new Database(dbPath);
   try {
     sqlite.pragma("journal_mode = WAL");
-    sqlite.pragma("foreign_keys = ON");
     sqlite.pragma("busy_timeout = 5000");
 
     const db = drizzle(sqlite, { schema });
@@ -51,7 +50,24 @@ export function initializeDatabase(): void {
       );
     }
 
-    migrate(db, { migrationsFolder });
+    // A migration 0007 reconstrói tabelas para aplicar NOT NULL/FK/unique por
+    // workspace. Sem desligar as FKs, os DROP TABLE disparariam cascatas nos
+    // dados que estão sendo copiados. O migrator roda dentro de BEGIN, então o
+    // PRAGMA precisa ser definido antes dele.
+    sqlite.pragma("foreign_keys = OFF");
+    try {
+      migrate(db, { migrationsFolder });
+    } finally {
+      sqlite.pragma("foreign_keys = ON");
+    }
+
+    const violations = sqlite.pragma("foreign_key_check") as unknown[];
+    if (violations.length > 0) {
+      throw new Error(
+        `Migration concluída com ${violations.length} violação(ões) de chave estrangeira.`,
+      );
+    }
+
     seed(db);
 
     globalForDb.__verdeDbInitialized = true;
@@ -62,90 +78,62 @@ export function initializeDatabase(): void {
 }
 
 function seed(db: DatabaseInstance): void {
-  seedFirstAdmin(db);
-  seedCategories(db);
-  seedTags(db);
+  const adminWorkspaceId = seedFirstAdmin(db);
 
-  if (process.env.SEED_DEMO === "true") {
-    seedDemoData(db);
+  // Categorias/tags padrão são por workspace. Em bancos migrados os dados
+  // existentes já estão no workspace do admin e o seed não duplica nada.
+  const workspaceRows = db
+    .select({ id: schema.workspaces.id })
+    .from(schema.workspaces)
+    .all();
+  for (const workspace of workspaceRows) {
+    seedWorkspaceDefaults(db, workspace.id);
+  }
+
+  if (process.env.SEED_DEMO === "true" && adminWorkspaceId) {
+    seedDemoData(db, adminWorkspaceId);
   }
 }
 
-function seedFirstAdmin(db: DatabaseInstance): void {
-  const result = db
-    .select({ count: sql<number>`count(*)` })
+function seedFirstAdmin(db: DatabaseInstance): string | null {
+  const admin = db
+    .select({ workspaceId: schema.users.workspaceId })
     .from(schema.users)
+    .where(eq(schema.users.role, "admin"))
+    .limit(1)
     .get();
-  const count = result?.count ?? 0;
-  if (count > 0) return;
+  if (admin) return admin.workspaceId;
 
-  const admin = getAdminSeed();
-  if (!admin) {
+  const first = db
+    .select({ workspaceId: schema.users.workspaceId })
+    .from(schema.users)
+    .limit(1)
+    .get();
+  if (first) return first.workspaceId;
+
+  const adminSeed = getAdminSeed();
+  if (!adminSeed) {
     throw new Error(
       "Nenhum usuário cadastrado. Defina ADMIN_EMAIL e ADMIN_PASSWORD nas variáveis de ambiente (.env ou verde.env) para criar o primeiro usuário.",
     );
   }
 
+  const workspaceId = crypto.randomUUID();
+  ensureWorkspace(db, workspaceId, workspaceNameFor(adminSeed.nome));
+
   db.insert(schema.users)
     .values({
-      nome: admin.nome,
-      email: admin.email,
-      senhaHash: hashSync(admin.password, 12),
+      workspaceId,
+      nome: adminSeed.nome,
+      email: adminSeed.email,
+      senhaHash: hashSync(adminSeed.password, 12),
+      role: "admin",
       isAdmin: true,
+      ativo: true,
+      mustChangePassword: false,
     })
     .run();
 
-  console.log(`[verde] Usuário admin criado: ${admin.email}`);
-}
-
-function seedCategories(db: DatabaseInstance): void {
-  const result = db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.categories)
-    .get();
-  if ((result?.count ?? 0) > 0) return;
-
-  db.transaction((tx) => {
-    for (const category of DEFAULT_CATEGORIES) {
-      const parentId = crypto.randomUUID();
-      tx.insert(schema.categories)
-        .values({
-          id: parentId,
-          nome: category.nome,
-          tipo: category.tipo,
-          icone: category.icone,
-          cor: category.cor,
-          isSystem: category.isSystem ?? false,
-        })
-        .run();
-
-      for (const child of category.filhos ?? []) {
-        tx.insert(schema.categories)
-          .values({
-            id: crypto.randomUUID(),
-            nome: child.nome,
-            tipo: category.tipo,
-            icone: child.icone,
-            cor: child.cor,
-            categoriaPaiId: parentId,
-            isSystem: child.isSystem ?? false,
-          })
-          .run();
-      }
-    }
-  });
-
-  console.log("[verde] Categorias padrão criadas");
-}
-
-function seedTags(db: DatabaseInstance): void {
-  const result = db
-    .select({ count: sql<number>`count(*)` })
-    .from(schema.tags)
-    .get();
-  if ((result?.count ?? 0) > 0) return;
-
-  db.insert(schema.tags)
-    .values(DEFAULT_TAGS.map((nome) => ({ nome })))
-    .run();
+  console.log(`[verde] Usuário admin criado: ${adminSeed.email}`);
+  return workspaceId;
 }

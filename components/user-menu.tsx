@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { LogOut, Settings } from "lucide-react";
 import { logoutAction } from "@/lib/actions/auth";
+import { clearClientState } from "@/components/auth/logout-button";
 import { getInitials } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import {
@@ -71,14 +72,17 @@ export function UserMenu({
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
-        <form action={logoutAction}>
-          <DropdownMenuItem asChild>
-            <button type="submit" className="w-full cursor-pointer">
-              <LogOut />
-              Sair
-            </button>
-          </DropdownMenuItem>
-        </form>
+        <DropdownMenuItem
+          onSelect={() => {
+            void (async () => {
+              await clearClientState();
+              await logoutAction();
+            })();
+          }}
+        >
+          <LogOut />
+          Sair
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

@@ -9,10 +9,10 @@ import {
 export const metadata: Metadata = { title: "Categorias e tags" };
 
 export default async function CategoriasPage() {
-  await requireUser();
+  const user = await requireUser();
 
-  const categories = listCategoriesWithCounts();
-  const tags = listTagsWithCounts();
+  const categories = listCategoriesWithCounts(user.workspaceId);
+  const tags = listTagsWithCounts(user.workspaceId);
 
   return <CategoryManager categories={categories} tags={tags} />;
 }

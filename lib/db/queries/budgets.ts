@@ -8,7 +8,7 @@ import {
   lte,
   sql,
 } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   budgetCategories,
@@ -170,10 +170,13 @@ function cycleConfigFromBudget(
 }
 
 /** Carrega orçamentos + categorias + overrides em 3 consultas (sem N+1). */
-export function listBudgetsWithCategories(options?: {
-  incluirArquivados?: boolean;
-}): BudgetWithCategories[] {
-  const db = getDb();
+export function listBudgetsWithCategories(
+  workspaceId: string,
+  options?: {
+    incluirArquivados?: boolean;
+  },
+): BudgetWithCategories[] {
+  const { db, ws } = scopedDb(workspaceId);
   const rows = db
     .select({
       budget: budgets,
@@ -185,7 +188,11 @@ export function listBudgetsWithCategories(options?: {
     .from(budgets)
     .leftJoin(accounts, eq(budgets.contaId, accounts.id))
     .leftJoin(creditCards, eq(budgets.cartaoId, creditCards.id))
-    .where(options?.incluirArquivados ? undefined : eq(budgets.arquivado, false))
+    .where(
+      options?.incluirArquivados
+        ? ws(budgets.workspaceId)
+        : and(ws(budgets.workspaceId), eq(budgets.arquivado, false)),
+    )
     .orderBy(asc(budgets.arquivado), asc(budgets.nome))
     .all();
 
@@ -205,7 +212,12 @@ export function listBudgetsWithCategories(options?: {
     })
     .from(budgetCategories)
     .innerJoin(categories, eq(budgetCategories.categoryId, categories.id))
-    .where(inArray(budgetCategories.budgetId, ids))
+    .where(
+      and(
+        ws(budgetCategories.workspaceId),
+        inArray(budgetCategories.budgetId, ids),
+      ),
+    )
     .orderBy(asc(categories.nome))
     .all();
 
@@ -216,7 +228,12 @@ export function listBudgetsWithCategories(options?: {
       valor: budgetOverrides.valorCentavos,
     })
     .from(budgetOverrides)
-    .where(inArray(budgetOverrides.budgetId, ids))
+    .where(
+      and(
+        ws(budgetOverrides.workspaceId),
+        inArray(budgetOverrides.budgetId, ids),
+      ),
+    )
     .all();
 
   const categoriesByBudget = new Map<string, BudgetCategoryInfo[]>();
@@ -252,12 +269,15 @@ export function listBudgetsWithCategories(options?: {
   }));
 }
 
-function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
-  const db = getDb();
+function loadSpending(
+  workspaceId: string,
+  pairs: SpendingPair[],
+): Map<string, SpendingResult> {
+  const { db, ws } = scopedDb(workspaceId);
   const result = new Map<string, SpendingResult>();
   if (pairs.length === 0) return result;
 
-  const allCategories = listAllCategories().map((category) => ({
+  const allCategories = listAllCategories(workspaceId).map((category) => ({
     id: category.id,
     categoriaPaiId: category.categoriaPaiId,
   }));
@@ -306,6 +326,7 @@ function loadSpending(pairs: SpendingPair[]): Map<string, SpendingResult> {
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         eq(transactions.tipo, "despesa"),
         gte(transactions.data, minStart),
@@ -397,10 +418,11 @@ function toCycleSummary(
 }
 
 export function listBudgetCycleDetails(
+  workspaceId: string,
   ciclo: string,
   options?: { incluirArquivados?: boolean },
 ): BudgetCycleDetail[] {
-  const all = listBudgetsWithCategories({
+  const all = listBudgetsWithCategories(workspaceId, {
     incluirArquivados: options?.incluirArquivados,
   });
   const eligible = all.filter(
@@ -410,6 +432,7 @@ export function listBudgetCycleDetails(
   );
 
   const spending = loadSpending(
+    workspaceId,
     eligible.map((budget) => ({ budget, ciclo })),
   );
 
@@ -427,22 +450,26 @@ export function listBudgetCycleDetails(
 }
 
 export function listBudgetCycleSummaries(
+  workspaceId: string,
   ciclo: string,
   options?: { incluirArquivados?: boolean },
 ): BudgetCycleSummary[] {
-  return listBudgetCycleDetails(ciclo, options).map((detail) => detail.resumo);
+  return listBudgetCycleDetails(workspaceId, ciclo, options).map(
+    (detail) => detail.resumo,
+  );
 }
 
 export function getBudgetCycleDetail(
+  workspaceId: string,
   budgetId: string,
   ciclo: string,
 ): BudgetCycleDetail | null {
-  const budget = listBudgetsWithCategories({ incluirArquivados: true }).find(
-    (item) => item.id === budgetId,
-  );
+  const budget = listBudgetsWithCategories(workspaceId, {
+    incluirArquivados: true,
+  }).find((item) => item.id === budgetId);
   if (!budget || !dentroDaVigencia(budget, ciclo)) return null;
 
-  const spending = loadSpending([{ budget, ciclo }]).get(
+  const spending = loadSpending(workspaceId, [{ budget, ciclo }]).get(
     pairKey(budget.id, ciclo),
   );
   if (!spending) return null;
@@ -475,10 +502,11 @@ function buildEventContext(
  * Uma única consulta de lançamentos por chamada.
  */
 export function getBudgetEventsForMonth(
+  workspaceId: string,
   monthKey: string,
   filters: TransactionFilters,
 ): BudgetEventView[] {
-  const all = listBudgetsWithCategories();
+  const all = listBudgetsWithCategories(workspaceId);
   const cycles = ciclosRelevantesParaMes(monthKey);
 
   const pairs: SpendingPair[] = [];
@@ -489,7 +517,7 @@ export function getBudgetEventsForMonth(
     }
   }
 
-  const spending = loadSpending(pairs);
+  const spending = loadSpending(workspaceId, pairs);
   const today = todayISO();
   const events: BudgetEventView[] = [];
 
@@ -554,20 +582,26 @@ function emptyBudgetFilters(monthKey: string): TransactionFilters {
  * anteriormente já se anulam e não alteram o saldo).
  */
 export function getBudgetEventsForDayBalances(
+  workspaceId: string,
   monthKey: string,
 ): BudgetEventView[] {
   const previous = addMonths(monthKey, -1);
   return [
-    ...getBudgetEventsForMonth(previous, emptyBudgetFilters(previous)),
-    ...getBudgetEventsForMonth(monthKey, emptyBudgetFilters(monthKey)),
+    ...getBudgetEventsForMonth(
+      workspaceId,
+      previous,
+      emptyBudgetFilters(previous),
+    ),
+    ...getBudgetEventsForMonth(workspaceId, monthKey, emptyBudgetFilters(monthKey)),
   ];
 }
 
 /** Deltas por conta para o saldo previsto (provisões −, sobras +). */
 export function getBudgetAccountDeltasForMonth(
+  workspaceId: string,
   monthKey: string,
 ): Map<string, number> {
-  const events = getBudgetEventsForDayBalances(monthKey);
+  const events = getBudgetEventsForDayBalances(workspaceId, monthKey);
   const deltas = new Map<string, number>();
 
   for (const event of events) {
@@ -580,8 +614,8 @@ export function getBudgetAccountDeltasForMonth(
   return deltas;
 }
 
-export function getDefaultBudgetAccountId(): string | null {
-  const db = getDb();
+export function getDefaultBudgetAccountId(workspaceId: string): string | null {
+  const { db, ws } = scopedDb(workspaceId);
   const mostUsed = db
     .select({
       contaId: transactions.contaId,
@@ -589,7 +623,11 @@ export function getDefaultBudgetAccountId(): string | null {
     })
     .from(transactions)
     .where(
-      and(isNull(transactions.deletedAt), sql`${transactions.contaId} is not null`),
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        sql`${transactions.contaId} is not null`,
+      ),
     )
     .groupBy(transactions.contaId)
     .orderBy(sql`count(*) desc`)
@@ -604,7 +642,9 @@ export function getDefaultBudgetAccountId(): string | null {
         deletedAt: accounts.deletedAt,
       })
       .from(accounts)
-      .where(eq(accounts.id, mostUsed.contaId))
+      .where(
+        and(eq(accounts.id, mostUsed.contaId), ws(accounts.workspaceId)),
+      )
       .get();
 
     if (account && !account.arquivada && !account.deletedAt) {
@@ -615,7 +655,13 @@ export function getDefaultBudgetAccountId(): string | null {
   const first = db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(and(isNull(accounts.deletedAt), eq(accounts.arquivada, false)))
+    .where(
+      and(
+        ws(accounts.workspaceId),
+        isNull(accounts.deletedAt),
+        eq(accounts.arquivada, false),
+      ),
+    )
     .orderBy(asc(accounts.nome))
     .limit(1)
     .get();
@@ -623,8 +669,9 @@ export function getDefaultBudgetAccountId(): string | null {
   return first?.id ?? null;
 }
 
-function listBudgetAccounts(): BudgetAccountOption[] {
-  return getDb()
+function listBudgetAccounts(workspaceId: string): BudgetAccountOption[] {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: accounts.id,
       nome: accounts.nome,
@@ -634,15 +681,16 @@ function listBudgetAccounts(): BudgetAccountOption[] {
       arquivada: accounts.arquivada,
     })
     .from(accounts)
-    .where(isNull(accounts.deletedAt))
+    .where(and(ws(accounts.workspaceId), isNull(accounts.deletedAt)))
     .orderBy(asc(accounts.arquivada), asc(accounts.nome))
     .all();
 }
 
-export function getBudgetFormData(): BudgetFormData {
+export function getBudgetFormData(workspaceId: string): BudgetFormData {
+  const { db, ws } = scopedDb(workspaceId);
   const cycle = currentMonth();
-  const allBudgets = listBudgetsWithCategories();
-  const allCategories = listAllCategories().filter(
+  const allBudgets = listBudgetsWithCategories(workspaceId);
+  const allCategories = listAllCategories(workspaceId).filter(
     (category) => category.tipo === "despesa" && !category.deletedAt,
   );
   const activeBudgets: BudgetCategoryUsage[] = allBudgets
@@ -688,8 +736,8 @@ export function getBudgetFormData(): BudgetFormData {
       blockedBy: blocked.get(category.id) ?? null,
       blockedByBudgetId: blockedBy.get(category.id) ?? null,
     })),
-    accounts: listBudgetAccounts(),
-    cards: getDb()
+    accounts: listBudgetAccounts(workspaceId),
+    cards: db
       .select({
         id: creditCards.id,
         nome: creditCards.nome,
@@ -700,10 +748,10 @@ export function getBudgetFormData(): BudgetFormData {
         arquivado: creditCards.arquivado,
       })
       .from(creditCards)
-      .where(isNull(creditCards.deletedAt))
+      .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
       .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
       .all(),
-    defaultAccountId: getDefaultBudgetAccountId(),
+    defaultAccountId: getDefaultBudgetAccountId(workspaceId),
     currentCycle: cycle,
     activeBudgets,
   };
@@ -719,6 +767,7 @@ export type BudgetNotice = {
  * Recebe os pares categoria+data já persistidos.
  */
 export function getBudgetNoticeForTransactions(
+  workspaceId: string,
   items: {
     categoriaId: string | null;
     data: string;
@@ -728,10 +777,10 @@ export function getBudgetNoticeForTransactions(
   const relevant = items.filter((item) => item.categoriaId);
   if (relevant.length === 0) return null;
 
-  const allBudgets = listBudgetsWithCategories();
+  const allBudgets = listBudgetsWithCategories(workspaceId);
   if (allBudgets.length === 0) return null;
 
-  const allCategories = listAllCategories().map((category) => ({
+  const allCategories = listAllCategories(workspaceId).map((category) => ({
     id: category.id,
     categoriaPaiId: category.categoriaPaiId,
   }));
@@ -757,7 +806,7 @@ export function getBudgetNoticeForTransactions(
       const key = pairKey(budget.id, ciclo);
       if (notices.has(key)) continue;
 
-      const spending = loadSpending([{ budget, ciclo }]).get(key);
+      const spending = loadSpending(workspaceId, [{ budget, ciclo }]).get(key);
       if (!spending) continue;
       const info = spending.info;
 

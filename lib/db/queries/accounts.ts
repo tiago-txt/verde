@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import { accounts, transactions, type Account } from "@/lib/db/schema";
 import { currentMonth } from "@/lib/dates";
 import {
@@ -14,13 +14,15 @@ export type AccountWithBalance = Account & {
   saldoPrevisto: number;
 };
 
-export function listAccountsWithBalances(): AccountWithBalance[] {
-  const db = getDb();
+export function listAccountsWithBalances(
+  workspaceId: string,
+): AccountWithBalance[] {
+  const { db, ws } = scopedDb(workspaceId);
 
   const accountRows = db
     .select()
     .from(accounts)
-    .where(isNull(accounts.deletedAt))
+    .where(and(ws(accounts.workspaceId), isNull(accounts.deletedAt)))
     .orderBy(asc(accounts.arquivada), asc(accounts.nome))
     .all();
 
@@ -37,7 +39,7 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
       deletedAt: transactions.deletedAt,
     })
     .from(transactions)
-    .where(isNull(transactions.deletedAt))
+    .where(and(ws(transactions.workspaceId), isNull(transactions.deletedAt)))
     .all();
 
   const atual = computeAccountBalances(
@@ -52,13 +54,16 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
   );
 
   // Provisões (−) e sobras (+) do mês corrente afetam apenas o previsto.
-  const budgetDeltas = getBudgetAccountDeltasForMonth(currentMonth());
+  const budgetDeltas = getBudgetAccountDeltasForMonth(
+    workspaceId,
+    currentMonth(),
+  );
   for (const [accountId, delta] of budgetDeltas) {
     previsto.set(accountId, (previsto.get(accountId) ?? 0) + delta);
   }
 
   // Faturas de cartão em aberto serão pagas pela conta de pagamento.
-  const cardDeltas = getCardInvoiceAccountDeltas();
+  const cardDeltas = getCardInvoiceAccountDeltas(workspaceId);
   for (const [accountId, delta] of cardDeltas) {
     if (!previsto.has(accountId)) continue;
     previsto.set(accountId, (previsto.get(accountId) ?? 0) + delta);
@@ -71,8 +76,9 @@ export function listAccountsWithBalances(): AccountWithBalance[] {
   }));
 }
 
-export function listAllAccounts() {
-  return getDb()
+export function listAllAccounts(workspaceId: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: accounts.id,
       nome: accounts.nome,
@@ -82,25 +88,37 @@ export function listAllAccounts() {
       arquivada: accounts.arquivada,
     })
     .from(accounts)
-    .where(isNull(accounts.deletedAt))
+    .where(and(ws(accounts.workspaceId), isNull(accounts.deletedAt)))
     .orderBy(asc(accounts.arquivada), asc(accounts.nome))
     .all();
 }
 
-export function getAccountById(id: string) {
-  return getDb()
+export function getAccountById(workspaceId: string, id: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select()
     .from(accounts)
-    .where(and(eq(accounts.id, id), isNull(accounts.deletedAt)))
+    .where(
+      and(
+        eq(accounts.id, id),
+        ws(accounts.workspaceId),
+        isNull(accounts.deletedAt),
+      ),
+    )
     .get();
 }
 
-export function countTransactionsForAccount(id: string): number {
-  const result = getDb()
+export function countTransactionsForAccount(
+  workspaceId: string,
+  id: string,
+): number {
+  const { db, ws } = scopedDb(workspaceId);
+  const result = db
     .select({ count: sql<number>`count(*)` })
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         or(eq(transactions.contaId, id), eq(transactions.contaDestinoId, id)),
       ),

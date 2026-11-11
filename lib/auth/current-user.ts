@@ -8,7 +8,8 @@ import { SESSION_COOKIE, verifySessionToken } from "./jwt";
 
 /**
  * Usuário autenticado (ou null). O cookie é validado criptograficamente e o
- * usuário é reconferido no banco — assim remover um usuário invalida o acesso.
+ * usuário é reconferido no banco — assim remover/desativar um usuário invalida
+ * o acesso mesmo que o token ainda esteja válido.
  */
 export const getCurrentUser = cache(async (): Promise<User | null> => {
   const store = await cookies();
@@ -24,17 +25,44 @@ export const getCurrentUser = cache(async (): Promise<User | null> => {
     .where(eq(users.id, session.userId))
     .get();
 
-  return user ?? null;
+  if (!user || !user.ativo) return null;
+  // Sessão de outro workspace/role (ex.: token antigo) é descartada.
+  if (user.workspaceId !== session.workspaceId) return null;
+
+  return user;
 });
 
+/**
+ * Usuário autenticado, forçando a troca de senha temporária no primeiro login.
+ * Use `requireSessionUser` apenas nas telas de troca de senha/perfil.
+ */
 export async function requireUser(): Promise<User> {
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  if (user.mustChangePassword) redirect("/trocar-senha");
+  return user;
+}
+
+/** Usuário autenticado sem o redirecionamento de troca de senha. */
+export async function requireSessionUser(): Promise<User> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   return user;
 }
 
+/**
+ * Usuário para route handlers/APIs: exige sessão válida e senha já trocada.
+ * Retorna null (o handler responde 401) para usuário inativo ou com senha
+ * temporária pendente.
+ */
+export async function getApiUser(): Promise<User | null> {
+  const user = await getCurrentUser();
+  if (!user || user.mustChangePassword) return null;
+  return user;
+}
+
 export async function requireAdmin(): Promise<User> {
   const user = await requireUser();
-  if (!user.isAdmin) redirect("/");
+  if (user.role !== "admin") redirect("/");
   return user;
 }

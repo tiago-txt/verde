@@ -49,13 +49,14 @@ function isActive(pathname: string, href: string): boolean {
 }
 
 type AppShellProps = {
-  user: { nome: string; email: string; isAdmin: boolean };
+  user: { userId: string; nome: string; email: string; isAdmin: boolean };
   children: React.ReactNode;
 };
 
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const sidebarKey = `verde:${user.userId}:sidebar-collapsed`;
   const isTransactionsPage = pathname.startsWith("/lancamentos");
   const hideFloatingNew =
     pathname === "/" ||
@@ -64,11 +65,11 @@ export function AppShell({ user, children }: AppShellProps) {
     pathname.startsWith("/cartoes");
 
   useEffect(() => {
-    const stored = localStorage.getItem("verde-sidebar-collapsed");
+    const stored = localStorage.getItem(sidebarKey);
     setCollapsed(
       stored !== null ? stored === "1" : window.innerWidth < 1024,
     );
-  }, []);
+  }, [sidebarKey]);
 
   useEffect(() => {
     document.documentElement.style.setProperty(
@@ -94,18 +95,18 @@ export function AppShell({ user, children }: AppShellProps) {
       event.preventDefault();
       setCollapsed((current) => {
         const next = !current;
-        localStorage.setItem("verde-sidebar-collapsed", next ? "1" : "0");
+        localStorage.setItem(sidebarKey, next ? "1" : "0");
         return next;
       });
     }
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, []);
+  }, [sidebarKey]);
 
   function toggleSidebar() {
     setCollapsed((current) => {
       const next = !current;
-      localStorage.setItem("verde-sidebar-collapsed", next ? "1" : "0");
+      localStorage.setItem(sidebarKey, next ? "1" : "0");
       return next;
     });
   }

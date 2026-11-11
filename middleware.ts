@@ -3,6 +3,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/auth/jwt";
 
 const PUBLIC_PREFIXES = [
   "/login",
+  "/cadastro",
   "/api/health",
   "/manifest.webmanifest",
   "/sw.js",

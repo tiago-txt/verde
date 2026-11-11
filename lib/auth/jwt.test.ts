@@ -7,6 +7,8 @@ import {
 
 const payload: SessionPayload = {
   userId: "user-1",
+  workspaceId: "workspace-1",
+  role: "admin",
   email: "teste@verde.local",
   nome: "Teste",
   isAdmin: true,

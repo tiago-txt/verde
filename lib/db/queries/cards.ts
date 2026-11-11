@@ -1,5 +1,5 @@
 import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   categories,
@@ -127,8 +127,11 @@ function cardConfig(card: CreditCard): CardCycleConfig {
   };
 }
 
-function loadLedger(): { movements: MovementRow[]; payments: PaymentRow[] } {
-  const db = getDb();
+function loadLedger(workspaceId: string): {
+  movements: MovementRow[];
+  payments: PaymentRow[];
+} {
+  const { db, ws } = scopedDb(workspaceId);
   const movements = db
     .select({
       cartaoId: transactions.cartaoId,
@@ -138,7 +141,11 @@ function loadLedger(): { movements: MovementRow[]; payments: PaymentRow[] } {
     })
     .from(transactions)
     .where(
-      and(isNull(transactions.deletedAt), isNotNull(transactions.cartaoId)),
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        isNotNull(transactions.cartaoId),
+      ),
     )
     .all();
 
@@ -153,6 +160,7 @@ function loadLedger(): { movements: MovementRow[]; payments: PaymentRow[] } {
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         isNotNull(transactions.cartaoDestinoId),
       ),
@@ -203,20 +211,20 @@ function emptyInvoice(card: CreditCard, chave: string, hoje: string) {
   return montarResumoFatura(chave, cardConfig(card), 0, 0, hoje);
 }
 
-export function listCards(): CardWithInvoice[] {
-  const db = getDb();
+export function listCards(workspaceId: string): CardWithInvoice[] {
+  const { db, ws } = scopedDb(workspaceId);
   const hoje = todayISO();
   const rows = db
     .select({ card: creditCards, contaNome: accounts.nome })
     .from(creditCards)
     .leftJoin(accounts, eq(creditCards.contaPagamentoId, accounts.id))
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
     .all();
 
   if (rows.length === 0) return [];
 
-  const { movements, payments } = loadLedger();
+  const { movements, payments } = loadLedger(workspaceId);
   const counts = db
     .select({
       cartaoId: transactions.cartaoId,
@@ -224,7 +232,11 @@ export function listCards(): CardWithInvoice[] {
     })
     .from(transactions)
     .where(
-      and(isNull(transactions.deletedAt), isNotNull(transactions.cartaoId)),
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        isNotNull(transactions.cartaoId),
+      ),
     )
     .groupBy(transactions.cartaoId)
     .all();
@@ -249,20 +261,32 @@ export function listCards(): CardWithInvoice[] {
   });
 }
 
-export function getCardById(id: string) {
-  return getDb()
+export function getCardById(workspaceId: string, id: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select()
     .from(creditCards)
-    .where(and(eq(creditCards.id, id), isNull(creditCards.deletedAt)))
+    .where(
+      and(
+        eq(creditCards.id, id),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
     .get();
 }
 
-export function countCardTransactions(id: string): number {
-  const result = getDb()
+export function countCardTransactions(
+  workspaceId: string,
+  id: string,
+): number {
+  const { db, ws } = scopedDb(workspaceId);
+  const result = db
     .select({ total: sql<number>`count(*)` })
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         sql`(${transactions.cartaoId} = ${id} or ${transactions.cartaoDestinoId} = ${id})`,
       ),
@@ -273,20 +297,27 @@ export function countCardTransactions(id: string): number {
 }
 
 export function getCardInvoiceDetail(
+  workspaceId: string,
   cardId: string,
   chave: string,
 ): CardInvoiceDetail | null {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const card = db
     .select({ card: creditCards, contaNome: accounts.nome })
     .from(creditCards)
     .leftJoin(accounts, eq(creditCards.contaPagamentoId, accounts.id))
-    .where(and(eq(creditCards.id, cardId), isNull(creditCards.deletedAt)))
+    .where(
+      and(
+        eq(creditCards.id, cardId),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
     .get();
   if (!card) return null;
 
   const hoje = todayISO();
-  const { movements, payments } = loadLedger();
+  const { movements, payments } = loadLedger(workspaceId);
   const invoices = invoicesForCard(card.card, movements, payments, hoje);
   const currentKey = faturaDaCompra(hoje, cardConfig(card.card));
   const fatura =
@@ -315,6 +346,7 @@ export function getCardInvoiceDetail(
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         eq(transactions.cartaoId, card.card.id),
         gte(transactions.data, interval.inicio),
@@ -339,6 +371,7 @@ export function getCardInvoiceDetail(
     .leftJoin(accounts, eq(transactions.contaId, accounts.id))
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         eq(transactions.cartaoDestinoId, card.card.id),
         eq(transactions.faturaChave, chave),
@@ -358,7 +391,12 @@ export function getCardInvoiceDetail(
           arquivada: accounts.arquivada,
         })
         .from(accounts)
-        .where(eq(accounts.id, card.card.contaPagamentoId))
+        .where(
+          and(
+            eq(accounts.id, card.card.contaPagamentoId),
+            ws(accounts.workspaceId),
+          ),
+        )
         .get() ?? null)
     : null;
 
@@ -378,19 +416,20 @@ export function getCardInvoiceDetail(
 }
 
 export function listCardInvoiceEventsForMonth(
+  workspaceId: string,
   monthKey: string,
   filters: CardInvoiceFilters,
 ): CardInvoiceEvent[] {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const hoje = todayISO();
   const cards = db
     .select()
     .from(creditCards)
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .all();
   if (cards.length === 0) return [];
 
-  const { movements, payments } = loadLedger();
+  const { movements, payments } = loadLedger(workspaceId);
   const events: CardInvoiceEvent[] = [];
 
   for (const card of cards) {
@@ -449,23 +488,30 @@ const EMPTY_CARD_FILTERS: CardInvoiceFilters = {
 
 /** Eventos de fatura para os saldos previstos (sem filtros da tela). */
 export function listCardInvoiceEventsForDayBalances(
+  workspaceId: string,
   monthKey: string,
 ): CardInvoiceEvent[] {
-  return listCardInvoiceEventsForMonth(monthKey, EMPTY_CARD_FILTERS);
+  return listCardInvoiceEventsForMonth(
+    workspaceId,
+    monthKey,
+    EMPTY_CARD_FILTERS,
+  );
 }
 
 /** Deltas de previsto por conta de pagamento (todas as faturas em aberto). */
-export function getCardInvoiceAccountDeltas(): Map<string, number> {
-  const db = getDb();
+export function getCardInvoiceAccountDeltas(
+  workspaceId: string,
+): Map<string, number> {
+  const { db, ws } = scopedDb(workspaceId);
   const hoje = todayISO();
   const cards = db
     .select()
     .from(creditCards)
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .all();
   if (cards.length === 0) return new Map();
 
-  const { movements, payments } = loadLedger();
+  const { movements, payments } = loadLedger(workspaceId);
   const deltas = new Map<string, number>();
 
   for (const card of cards) {
@@ -485,16 +531,18 @@ export function getCardInvoiceAccountDeltas(): Map<string, number> {
 }
 
 /** Mapa `cartaoId:YYYY-MM` -> status calculado da fatura. */
-export function getCardInvoiceStatuses(): Map<
+export function getCardInvoiceStatuses(
+  workspaceId: string,
+): Map<
   string,
   { status: CardInvoiceSummary["status"]; total: number; pago: number; restante: number }
 > {
-  const db = getDb();
+  const { db, ws } = scopedDb(workspaceId);
   const hoje = todayISO();
   const cards = db
     .select()
     .from(creditCards)
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .all();
   const map = new Map<
     string,
@@ -502,7 +550,7 @@ export function getCardInvoiceStatuses(): Map<
   >();
   if (cards.length === 0) return map;
 
-  const { movements, payments } = loadLedger();
+  const { movements, payments } = loadLedger(workspaceId);
   for (const card of cards) {
     for (const invoice of invoicesForCard(card, movements, payments, hoje)) {
       map.set(`${card.id}:${invoice.chave}`, {
@@ -516,8 +564,9 @@ export function getCardInvoiceStatuses(): Map<
   return map;
 }
 
-export function listCardsForFilter(): CardOption[] {
-  return getDb()
+export function listCardsForFilter(workspaceId: string): CardOption[] {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: creditCards.id,
       nome: creditCards.nome,
@@ -529,7 +578,7 @@ export function listCardsForFilter(): CardOption[] {
       diaVencimento: creditCards.diaVencimento,
     })
     .from(creditCards)
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
     .all();
 }

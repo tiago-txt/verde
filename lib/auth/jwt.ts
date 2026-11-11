@@ -1,10 +1,13 @@
 import { SignJWT, jwtVerify } from "jose";
+import type { UserRole } from "@/lib/db/schema";
 
 export const SESSION_COOKIE = "verde_session";
 export const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 dias
 
 export type SessionPayload = {
   userId: string;
+  workspaceId: string;
+  role: UserRole;
   email: string;
   nome: string;
   isAdmin: boolean;
@@ -37,6 +40,8 @@ export async function createSessionToken(
   return new SignJWT({
     email: payload.email,
     nome: payload.nome,
+    workspaceId: payload.workspaceId,
+    role: payload.role,
     isAdmin: payload.isAdmin,
   })
     .setProtectedHeader({ alg: "HS256" })
@@ -53,13 +58,22 @@ export async function verifySessionToken(
     const { payload } = await jwtVerify(token, getSecret(), {
       algorithms: ["HS256"],
     });
-    if (!payload.sub || typeof payload.email !== "string") return null;
+    if (
+      !payload.sub ||
+      typeof payload.email !== "string" ||
+      typeof payload.workspaceId !== "string" ||
+      (payload.role !== "admin" && payload.role !== "membro")
+    ) {
+      return null;
+    }
 
     return {
       userId: payload.sub,
+      workspaceId: payload.workspaceId,
+      role: payload.role,
       email: payload.email,
       nome: typeof payload.nome === "string" ? payload.nome : "",
-      isAdmin: payload.isAdmin === true,
+      isAdmin: payload.role === "admin",
     };
   } catch {
     return null;

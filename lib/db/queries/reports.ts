@@ -10,7 +10,7 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   categories,
@@ -42,9 +42,12 @@ const card = alias(creditCards, "report_card");
 
 export type ReportBundle = ReturnType<typeof getReportData>;
 
-function categoryFilterIds(categoriaIds: string[]): string[] {
+function categoryFilterIds(
+  workspaceId: string,
+  categoriaIds: string[],
+): string[] {
   if (categoriaIds.length === 0) return [];
-  const all = listAllCategories().map((category) => ({
+  const all = listAllCategories(workspaceId).map((category) => ({
     id: category.id,
     categoriaPaiId: category.categoriaPaiId,
   }));
@@ -52,9 +55,13 @@ function categoryFilterIds(categoriaIds: string[]): string[] {
 }
 
 /** Uma consulta de lançamentos para o intervalo; agregações são puras. */
-export function listReportRows(filters: ReportFilters): ReportRow[] {
-  const db = getDb();
+export function listReportRows(
+  workspaceId: string,
+  filters: ReportFilters,
+): ReportRow[] {
+  const { db, ws } = scopedDb(workspaceId);
   const conditions = [
+    ws(transactions.workspaceId),
     isNull(transactions.deletedAt),
     gte(transactions.data, filters.range.from),
     lte(transactions.data, filters.range.to),
@@ -75,7 +82,7 @@ export function listReportRows(filters: ReportFilters): ReportRow[] {
     conditions.push(sql`(${origin})`);
   }
 
-  const expandedCategories = categoryFilterIds(filters.categorias);
+  const expandedCategories = categoryFilterIds(workspaceId, filters.categorias);
   if (expandedCategories.length > 0) {
     conditions.push(
       inArray(transactions.categoriaId, expandedCategories),
@@ -90,6 +97,7 @@ export function listReportRows(filters: ReportFilters): ReportRow[] {
           .from(transactionTags)
           .where(
             and(
+              ws(transactionTags.workspaceId),
               eq(transactionTags.transactionId, transactions.id),
               inArray(transactionTags.tagId, filters.tags),
             ),
@@ -130,7 +138,7 @@ export function listReportRows(filters: ReportFilters): ReportRow[] {
     .orderBy(asc(transactions.data), asc(transactions.createdAt))
     .all();
 
-  const statuses = getCardInvoiceStatuses();
+  const statuses = getCardInvoiceStatuses(workspaceId);
 
   return rows.map((row) => {
     const faturaChave =
@@ -169,7 +177,10 @@ export function listReportRows(filters: ReportFilters): ReportRow[] {
   });
 }
 
-export function getReportData(filters: ReportFilters) {
+export function getReportData(
+  workspaceId: string,
+  filters: ReportFilters,
+) {
   const previousRange = previousEquivalentRange(filters.range);
   const queryFilters: ReportFilters = {
     ...filters,
@@ -181,7 +192,7 @@ export function getReportData(filters: ReportFilters) {
       to: filters.range.to,
     },
   };
-  const allRows = listReportRows(queryFilters);
+  const allRows = listReportRows(workspaceId, queryFilters);
   const currentRows = filterReportRows(
     rowsInRange(allRows, filters.range),
     { onlyPaid: filters.onlyPaid },
@@ -245,10 +256,14 @@ export type UpcomingExpense = {
   daysUntil: number;
 };
 
-export function listUpcomingExpenses(days = 15): UpcomingExpense[] {
+export function listUpcomingExpenses(
+  workspaceId: string,
+  days = 15,
+): UpcomingExpense[] {
   const today = todayISO();
   const end = addDaysISO(today, days);
-  const rows = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const rows = db
     .select({
       id: transactions.id,
       descricao: transactions.descricao,
@@ -263,6 +278,7 @@ export function listUpcomingExpenses(days = 15): UpcomingExpense[] {
     .leftJoin(accounts, eq(transactions.contaId, accounts.id))
     .where(
       and(
+        ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         isNull(transactions.cartaoId),
         eq(transactions.tipo, "despesa"),
@@ -285,8 +301,9 @@ export function listUpcomingExpenses(days = 15): UpcomingExpense[] {
   }));
 }
 
-export function listCardsForDashboard() {
-  return getDb()
+export function listCardsForDashboard(workspaceId: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: creditCards.id,
       nome: creditCards.nome,
@@ -298,7 +315,7 @@ export function listCardsForDashboard() {
       arquivado: creditCards.arquivado,
     })
     .from(creditCards)
-    .where(isNull(creditCards.deletedAt))
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
     .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
     .all();
 }

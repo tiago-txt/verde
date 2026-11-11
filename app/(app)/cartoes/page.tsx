@@ -7,10 +7,10 @@ import { listCards } from "@/lib/db/queries/cards";
 export const metadata: Metadata = { title: "Cartões" };
 
 export default async function CartoesPage() {
-  await requireUser();
+  const user = await requireUser();
 
-  const cards = listCards();
-  const accounts = listAllAccounts();
+  const cards = listCards(user.workspaceId);
+  const accounts = listAllAccounts(user.workspaceId);
 
   return <CardsView cards={cards} accounts={accounts} />;
 }

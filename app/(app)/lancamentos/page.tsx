@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { TransactionsPageClient } from "@/components/transactions/transactions-page-client";
 import { requireUser } from "@/lib/auth/current-user";
 import {
@@ -21,30 +22,31 @@ export default async function LancamentosPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   const params = await searchParams;
   const filters = parseTransactionFilters(params);
+  const workspaceId = user.workspaceId;
 
-  ensureRecurrencesForMonth(filters.mes);
+  ensureRecurrencesForMonth(workspaceId, filters.mes);
 
-  const transactions = listMonthTransactions(filters);
-  const formData = getTransactionFormData();
+  const transactions = listMonthTransactions(workspaceId, filters);
+  const formData = getTransactionFormData(workspaceId);
   const customRange = Boolean(filters.de && filters.ate);
   const budgetEvents = customRange
     ? []
-    : getBudgetEventsForMonth(filters.mes, filters);
+    : getBudgetEventsForMonth(workspaceId, filters.mes, filters);
   const cardInvoiceEvents = customRange
     ? []
-    : listCardInvoiceEventsForMonth(filters.mes, filters);
-  const monthBalances = getMonthBalances(filters.mes);
+    : listCardInvoiceEventsForMonth(workspaceId, filters.mes, filters);
+  const monthBalances = getMonthBalances(workspaceId, filters.mes);
   const dayBalances = customRange
     ? {}
     : aplicarEventosAoSalsoDia(
         monthBalances.byDay,
         [
-          ...getBudgetEventsForDayBalances(filters.mes),
-          ...listCardInvoiceEventsForDayBalances(filters.mes).map((event) => ({
+          ...getBudgetEventsForDayBalances(workspaceId, filters.mes),
+          ...listCardInvoiceEventsForDayBalances(workspaceId, filters.mes).map((event) => ({
             tipo: "provisao" as const,
             data: event.vencimento,
             valor: event.restante,
@@ -53,8 +55,9 @@ export default async function LancamentosPage({
         ],
       );
   const detail = filters.detalhe
-    ? getTransactionDetail(filters.detalhe)
+    ? getTransactionDetail(workspaceId, filters.detalhe)
     : null;
+  if (filters.detalhe && !detail) notFound();
   const today = todayISO();
   const overdueIds = transactions
     .filter(

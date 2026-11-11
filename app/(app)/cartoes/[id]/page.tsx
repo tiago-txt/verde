@@ -21,12 +21,12 @@ export default async function CartaoPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   const { id } = await params;
   if (!idSchema.safeParse(id).success) notFound();
 
-  const card = getCardById(id);
+  const card = getCardById(user.workspaceId, id);
   if (!card) notFound();
 
   const query = await searchParams;
@@ -39,16 +39,16 @@ export default async function CartaoPage({
           diaVencimento: card.diaVencimento,
         });
 
-  const detail = getCardInvoiceDetail(id, chave);
+  const detail = getCardInvoiceDetail(user.workspaceId, id, chave);
   if (!detail) notFound();
 
-  const formData = getTransactionFormData();
+  const formData = getTransactionFormData(user.workspaceId);
 
   return (
     <CardDetailView
       detail={detail}
       formData={formData}
-      accounts={listAllAccounts()}
+      accounts={listAllAccounts(user.workspaceId)}
     />
   );
 }

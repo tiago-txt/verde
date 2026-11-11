@@ -1,5 +1,5 @@
 import { and, asc, eq, isNull, sql } from "drizzle-orm";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
   categories,
   tags,
@@ -14,8 +14,10 @@ export type CategoryWithCount = Category & {
   childrenCount: number;
 };
 
-export function listCategoriesWithCounts(): CategoryWithCount[] {
-  const db = getDb();
+export function listCategoriesWithCounts(
+  workspaceId: string,
+): CategoryWithCount[] {
+  const { db, ws } = scopedDb(workspaceId);
 
   const rows = db
     .select({
@@ -29,6 +31,7 @@ export function listCategoriesWithCounts(): CategoryWithCount[] {
       createdAt: categories.createdAt,
       updatedAt: categories.updatedAt,
       deletedAt: categories.deletedAt,
+      workspaceId: categories.workspaceId,
       transactionCount: sql<number>`count(${transactions.id})`,
     })
     .from(categories)
@@ -36,9 +39,11 @@ export function listCategoriesWithCounts(): CategoryWithCount[] {
       transactions,
       and(
         eq(transactions.categoriaId, categories.id),
+        eq(transactions.workspaceId, workspaceId),
         isNull(transactions.deletedAt),
       ),
     )
+    .where(ws(categories.workspaceId))
     .groupBy(categories.id)
     .orderBy(asc(categories.tipo), asc(categories.nome))
     .all();
@@ -59,8 +64,9 @@ export function listCategoriesWithCounts(): CategoryWithCount[] {
   }));
 }
 
-export function listAllCategories() {
-  return getDb()
+export function listAllCategories(workspaceId: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: categories.id,
       nome: categories.nome,
@@ -72,19 +78,21 @@ export function listAllCategories() {
       deletedAt: categories.deletedAt,
     })
     .from(categories)
+    .where(ws(categories.workspaceId))
     .orderBy(asc(categories.tipo), asc(categories.nome))
     .all();
 }
 
-/** IDs das categorias de sistema "Outros" por tipo. */
-export function getSystemCategoryIds(): {
+/** IDs das categorias de sistema "Outros" por tipo no workspace. */
+export function getSystemCategoryIds(workspaceId: string): {
   despesa: string | null;
   receita: string | null;
 } {
-  const rows = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const rows = db
     .select({ id: categories.id, tipo: categories.tipo })
     .from(categories)
-    .where(eq(categories.isSystem, true))
+    .where(and(ws(categories.workspaceId), eq(categories.isSystem, true)))
     .all();
 
   return {
@@ -93,20 +101,32 @@ export function getSystemCategoryIds(): {
   };
 }
 
-export function getCategoryById(id: string) {
-  return getDb()
+export function getCategoryById(workspaceId: string, id: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select()
     .from(categories)
-    .where(and(eq(categories.id, id), isNull(categories.deletedAt)))
+    .where(
+      and(
+        eq(categories.id, id),
+        ws(categories.workspaceId),
+        isNull(categories.deletedAt),
+      ),
+    )
     .get();
 }
 
-export function countTransactionsForCategory(id: string): number {
-  const result = getDb()
+export function countTransactionsForCategory(
+  workspaceId: string,
+  id: string,
+): number {
+  const { db, ws } = scopedDb(workspaceId);
+  const result = db
     .select({ count: sql<number>`count(*)` })
     .from(transactions)
     .where(
       and(
+        ws(transactions.workspaceId),
         eq(transactions.categoriaId, id),
         isNull(transactions.deletedAt),
       ),
@@ -116,11 +136,17 @@ export function countTransactionsForCategory(id: string): number {
   return result?.count ?? 0;
 }
 
-export function countChildrenForCategory(id: string): number {
-  const result = getDb()
+export function countChildrenForCategory(
+  workspaceId: string,
+  id: string,
+): number {
+  const { db, ws } = scopedDb(workspaceId);
+  const result = db
     .select({ count: sql<number>`count(*)` })
     .from(categories)
-    .where(eq(categories.categoriaPaiId, id))
+    .where(
+      and(ws(categories.workspaceId), eq(categories.categoriaPaiId, id)),
+    )
     .get();
 
   return result?.count ?? 0;
@@ -128,25 +154,36 @@ export function countChildrenForCategory(id: string): number {
 
 export type TagWithCount = Tag & { transactionCount: number };
 
-export function listTagsWithCounts(): TagWithCount[] {
-  return getDb()
+export function listTagsWithCounts(workspaceId: string): TagWithCount[] {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({
       id: tags.id,
       nome: tags.nome,
       createdAt: tags.createdAt,
+      workspaceId: tags.workspaceId,
       transactionCount: sql<number>`count(${transactionTags.transactionId})`,
     })
     .from(tags)
-    .leftJoin(transactionTags, eq(transactionTags.tagId, tags.id))
+    .leftJoin(
+      transactionTags,
+      and(
+        eq(transactionTags.tagId, tags.id),
+        eq(transactionTags.workspaceId, workspaceId),
+      ),
+    )
+    .where(ws(tags.workspaceId))
     .groupBy(tags.id)
     .orderBy(asc(tags.nome))
     .all();
 }
 
-export function listTags() {
-  return getDb()
+export function listTags(workspaceId: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  return db
     .select({ id: tags.id, nome: tags.nome })
     .from(tags)
+    .where(ws(tags.workspaceId))
     .orderBy(asc(tags.nome))
     .all();
 }

@@ -22,8 +22,9 @@ type Tx = Parameters<Parameters<DatabaseInstance["transaction"]>[0]>[0];
 
 const DEMO_MARKER = "Conta Corrente (Demo)";
 
-function categoryId(
+function rawCategoryId(
   tx: Tx,
+  workspaceId: string,
   nome: string,
   tipo: CategoryType,
 ): string | null {
@@ -32,6 +33,7 @@ function categoryId(
     .from(categories)
     .where(
       and(
+        eq(categories.workspaceId, workspaceId),
         eq(categories.nome, nome),
         eq(categories.tipo, tipo),
         isNull(categories.deletedAt),
@@ -42,30 +44,31 @@ function categoryId(
   return row?.id ?? null;
 }
 
-function tagId(tx: Tx, nome: string): string {
+function rawTagId(tx: Tx, workspaceId: string, nome: string): string {
   const existing = tx
     .select({ id: tags.id })
     .from(tags)
-    .where(eq(tags.nome, nome))
+    .where(and(eq(tags.workspaceId, workspaceId), eq(tags.nome, nome)))
     .get();
   if (existing) return existing.id;
 
   const id = crypto.randomUUID();
-  tx.insert(tags).values({ id, nome }).run();
+  tx.insert(tags).values({ id, workspaceId, nome }).run();
   return id;
 }
 
-function insertDemoTransaction(
+function rawInsertDemoTransaction(
   tx: Tx,
-  values: NewTransaction,
+  workspaceId: string,
+  values: Omit<NewTransaction, "workspaceId">,
   tagIds: string[] = [],
 ) {
   const id = values.id ?? crypto.randomUUID();
-  tx.insert(transactions).values({ ...values, id }).run();
+  tx.insert(transactions).values({ ...values, id, workspaceId }).run();
 
   if (tagIds.length > 0) {
     tx.insert(transactionTags)
-      .values(tagIds.map((tag) => ({ transactionId: id, tagId: tag })))
+      .values(tagIds.map((tag) => ({ workspaceId, transactionId: id, tagId: tag })))
       .onConflictDoNothing()
       .run();
   }
@@ -75,14 +78,32 @@ function insertDemoTransaction(
  * Popula o app com 3 meses de dados para visualização.
  * Idempotente: se a conta marcadora já existir, não faz nada.
  */
-export function seedDemoData(db: DatabaseInstance): void {
+export function seedDemoData(
+  db: DatabaseInstance,
+  workspaceId: string,
+): void {
   const marker = db
     .select({ id: accounts.id })
     .from(accounts)
-    .where(eq(accounts.nome, DEMO_MARKER))
+    .where(
+      and(
+        eq(accounts.workspaceId, workspaceId),
+        eq(accounts.nome, DEMO_MARKER),
+      ),
+    )
     .get();
 
   if (marker) return;
+
+  // Helpers locais já escopados no workspace do admin.
+  const scopedCategoryId = (tx: Tx, nome: string, tipo: CategoryType) =>
+    rawCategoryId(tx, workspaceId, nome, tipo);
+  const scopedTagId = (tx: Tx, nome: string) => rawTagId(tx, workspaceId, nome);
+  const scopedInsertTransaction = (
+    tx: Tx,
+    values: Omit<NewTransaction, "workspaceId">,
+    tagIds: string[] = [],
+  ) => rawInsertDemoTransaction(tx, workspaceId, values, tagIds);
 
   const today = todayISO();
   const current = today.slice(0, 7);
@@ -97,6 +118,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       .values([
         {
           id: checkingId,
+          workspaceId,
           nome: DEMO_MARKER,
           tipo: "corrente",
           saldoInicial: 250_000,
@@ -105,6 +127,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         },
         {
           id: savingsId,
+          workspaceId,
           nome: "Poupança (Demo)",
           tipo: "poupanca",
           saldoInicial: 1_200_000,
@@ -113,6 +136,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         },
         {
           id: walletId,
+          workspaceId,
           nome: "Carteira (Demo)",
           tipo: "dinheiro",
           saldoInicial: 15_000,
@@ -129,6 +153,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       .values([
         {
           id: nuCardId,
+          workspaceId,
           nome: "Nu (Demo)",
           bandeira: "visa",
           limite: 500_000,
@@ -140,6 +165,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         },
         {
           id: visaCardId,
+          workspaceId,
           nome: "Visa (Demo)",
           bandeira: "visa",
           limite: 300_000,
@@ -152,17 +178,17 @@ export function seedDemoData(db: DatabaseInstance): void {
       ])
       .run();
 
-    const fixedTag = tagId(tx, "Fixo");
-    const variableTag = tagId(tx, "Variável");
-    const familyTag = tagId(tx, "Família");
+    const fixedTag = scopedTagId(tx, "Fixo");
+    const variableTag = scopedTagId(tx, "Variável");
+    const familyTag = scopedTagId(tx, "Família");
 
-    const salaryCategory = categoryId(tx, "Salário", "receita");
-    const freelanceCategory = categoryId(tx, "Freelance", "receita");
-    const rentCategory = categoryId(tx, "Aluguel", "despesa");
-    const marketCategory = categoryId(tx, "Mercado", "despesa");
-    const pharmacyCategory = categoryId(tx, "Farmácia", "despesa");
-    const leisureCategory = categoryId(tx, "Lazer", "despesa");
-    const otherExpenseCategory = categoryId(tx, "Outros", "despesa");
+    const salaryCategory = scopedCategoryId(tx, "Salário", "receita");
+    const freelanceCategory = scopedCategoryId(tx, "Freelance", "receita");
+    const rentCategory = scopedCategoryId(tx, "Aluguel", "despesa");
+    const marketCategory = scopedCategoryId(tx, "Mercado", "despesa");
+    const pharmacyCategory = scopedCategoryId(tx, "Farmácia", "despesa");
+    const leisureCategory = scopedCategoryId(tx, "Lazer", "despesa");
+    const otherExpenseCategory = scopedCategoryId(tx, "Outros", "despesa");
 
     const salaryRecurrenceId = crypto.randomUUID();
     if (salaryCategory) {
@@ -182,6 +208,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       tx.insert(recurrences)
         .values({
           id: salaryRecurrenceId,
+          workspaceId,
           frequencia: "mensal",
           dataInicio: dateInMonth(months[0] as string, 5),
           dataFim: null,
@@ -191,7 +218,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         .run();
 
       for (const month of months) {
-        insertDemoTransaction(
+        scopedInsertTransaction(
           tx,
           {
             tipo: "receita",
@@ -227,6 +254,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       tx.insert(recurrences)
         .values({
           id: rentRecurrenceId,
+          workspaceId,
           frequencia: "mensal",
           dataInicio: dateInMonth(months[0] as string, 10),
           dataFim: null,
@@ -236,7 +264,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         .run();
 
       for (const month of months) {
-        insertDemoTransaction(
+        scopedInsertTransaction(
           tx,
           {
             tipo: "despesa",
@@ -256,7 +284,7 @@ export function seedDemoData(db: DatabaseInstance): void {
 
     if (marketCategory) {
       months.forEach((month, index) => {
-        insertDemoTransaction(
+        scopedInsertTransaction(
           tx,
           {
             tipo: "despesa",
@@ -274,7 +302,7 @@ export function seedDemoData(db: DatabaseInstance): void {
     }
 
     if (freelanceCategory) {
-      insertDemoTransaction(
+      scopedInsertTransaction(
         tx,
         {
           tipo: "receita",
@@ -291,7 +319,7 @@ export function seedDemoData(db: DatabaseInstance): void {
     }
 
     if (pharmacyCategory) {
-      insertDemoTransaction(
+      scopedInsertTransaction(
         tx,
         {
           tipo: "despesa",
@@ -307,7 +335,7 @@ export function seedDemoData(db: DatabaseInstance): void {
     }
 
     if (leisureCategory) {
-      insertDemoTransaction(
+      scopedInsertTransaction(
         tx,
         {
           tipo: "despesa",
@@ -322,7 +350,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         [familyTag],
       );
 
-      insertDemoTransaction(
+      scopedInsertTransaction(
         tx,
         {
           tipo: "despesa",
@@ -348,7 +376,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       const groupId = crypto.randomUUID();
 
       for (const item of plan) {
-        insertDemoTransaction(
+        scopedInsertTransaction(
           tx,
           {
             tipo: "despesa",
@@ -370,7 +398,7 @@ export function seedDemoData(db: DatabaseInstance): void {
 
     if (marketCategory && leisureCategory && pharmacyCategory) {
       // Compras no cartão Nu (demonstração).
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "despesa",
         descricao: "Mercado no Nu (Demo)",
         valor: 30_000,
@@ -380,7 +408,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         categoriaId: marketCategory,
       });
 
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "despesa",
         descricao: "Lazer no Nu (Demo)",
         valor: 20_000,
@@ -392,7 +420,7 @@ export function seedDemoData(db: DatabaseInstance): void {
 
       const phoneGroupId = crypto.randomUUID();
       for (let index = 0; index < 3; index += 1) {
-        insertDemoTransaction(tx, {
+        scopedInsertTransaction(tx, {
           tipo: "despesa",
           descricao: "Fone parcelado (Demo)",
           valor: 10_000,
@@ -411,7 +439,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         dateInMonth(months[1] as string, 9),
         { diaFechamento: 10, diaVencimento: 17 },
       );
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "transferencia",
         descricao: "Pagamento de fatura Nu (Demo)",
         valor: 30_000,
@@ -424,7 +452,7 @@ export function seedDemoData(db: DatabaseInstance): void {
       });
 
       // Compras no cartão Visa (demonstração), com vencimento antes do fechamento.
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "despesa",
         descricao: "Farmácia no Visa (Demo)",
         valor: 12_000,
@@ -434,7 +462,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         categoriaId: pharmacyCategory,
       });
 
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "despesa",
         descricao: "Farmácia no Visa 2 (Demo)",
         valor: 15_000,
@@ -444,7 +472,7 @@ export function seedDemoData(db: DatabaseInstance): void {
         categoriaId: pharmacyCategory,
       });
 
-      insertDemoTransaction(tx, {
+      scopedInsertTransaction(tx, {
         tipo: "despesa",
         descricao: "Cinema no Visa (Demo)",
         valor: 5_000,
@@ -461,7 +489,7 @@ export function seedDemoData(db: DatabaseInstance): void {
     );
     if (salaryCategory && rentCategory && marketCategory) {
       olderMonths.forEach((month, index) => {
-        insertDemoTransaction(tx, {
+        scopedInsertTransaction(tx, {
           tipo: "receita",
           descricao: "Salário (Demo)",
           valor: 650_000,
@@ -471,7 +499,7 @@ export function seedDemoData(db: DatabaseInstance): void {
           categoriaId: salaryCategory,
           observacao: "Receita fixa de demonstração",
         });
-        insertDemoTransaction(tx, {
+        scopedInsertTransaction(tx, {
           tipo: "despesa",
           descricao: "Aluguel (Demo)",
           valor: 180_000,
@@ -481,7 +509,7 @@ export function seedDemoData(db: DatabaseInstance): void {
           categoriaId: rentCategory,
           observacao: "Despesa fixa de demonstração",
         });
-        insertDemoTransaction(tx, {
+        scopedInsertTransaction(tx, {
           tipo: "despesa",
           descricao: "Mercado do mês (Demo)",
           valor: 82_000 + index * 1_500,
@@ -494,7 +522,7 @@ export function seedDemoData(db: DatabaseInstance): void {
     }
 
     for (const month of months) {
-      insertDemoTransaction(
+      scopedInsertTransaction(
         tx,
         {
           tipo: "transferencia",

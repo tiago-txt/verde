@@ -10,7 +10,12 @@ export default async function AppLayout({
   return (
     <ToastProvider>
       <AppShell
-        user={{ nome: user.nome, email: user.email, isAdmin: user.isAdmin }}
+        user={{
+          userId: user.id,
+          nome: user.nome,
+          email: user.email,
+          isAdmin: user.role === "admin",
+        }}
       >
         {children}
       </AppShell>

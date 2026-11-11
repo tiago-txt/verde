@@ -6,8 +6,8 @@ import { listAccountsWithBalances } from "@/lib/db/queries/accounts";
 export const metadata: Metadata = { title: "Contas" };
 
 export default async function ContasPage() {
-  await requireUser();
-  const accounts = listAccountsWithBalances();
+  const user = await requireUser();
+  const accounts = listAccountsWithBalances(user.workspaceId);
 
   return <AccountsView accounts={accounts} />;
 }

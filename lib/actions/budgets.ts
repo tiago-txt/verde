@@ -1,16 +1,18 @@
 "use server";
 
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gte, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
 import { addMonths, todayISO } from "@/lib/dates";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import {
+  accounts,
   budgetCategories,
   budgetOverrides,
   budgets,
   categories,
+  creditCards,
 } from "@/lib/db/schema";
 import {
   getBudgetCycleDetail,
@@ -37,7 +39,7 @@ import {
 } from "@/lib/validation/budgets";
 import type { ActionResult } from "./result";
 
-type Db = ReturnType<typeof getDb>;
+type Db = ReturnType<typeof scopedDb>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 function fail(error: string): ActionResult {
@@ -51,11 +53,14 @@ function revalidateBudgets() {
   revalidatePath("/contas");
 }
 
-function validateCategories(categoriaIds: string[]): {
+function validateCategories(
+  workspaceId: string,
+  categoriaIds: string[],
+): {
   error?: string;
   names?: Map<string, string>;
-} {
-  const rows = getDb()
+} {  const { db, ws } = scopedDb(workspaceId);
+  const rows = db
     .select({
       id: categories.id,
       nome: categories.nome,
@@ -63,6 +68,7 @@ function validateCategories(categoriaIds: string[]): {
       deletedAt: categories.deletedAt,
     })
     .from(categories)
+    .where(ws(categories.workspaceId))
     .all();
 
   const byId = new Map(rows.map((row) => [row.id, row]));
@@ -81,12 +87,56 @@ function validateCategories(categoriaIds: string[]): {
   return { names: new Map(rows.map((row) => [row.id, row.nome])) };
 }
 
-function usagesForPeriod(options: {
-  start: string;
-  end: string | null;
-  ignoreBudgetId?: string;
-}): BudgetCategoryUsage[] {
-  return listBudgetsWithCategories()
+/** Garante que conta/cartão vinculados pertencem ao workspace da sessão. */
+function validateBudgetLinks(
+  workspaceId: string,
+  contaId: string | null,
+  cartaoId: string | null,
+): string | null {
+  const { db, ws } = scopedDb(workspaceId);
+
+  if (contaId) {
+    const account = db
+      .select({ id: accounts.id })
+      .from(accounts)
+      .where(
+        and(
+          eq(accounts.id, contaId),
+          ws(accounts.workspaceId),
+          isNull(accounts.deletedAt),
+        ),
+      )
+      .get();
+    if (!account) return "Conta não encontrada.";
+  }
+
+  if (cartaoId) {
+    const card = db
+      .select({ id: creditCards.id })
+      .from(creditCards)
+      .where(
+        and(
+          eq(creditCards.id, cartaoId),
+          ws(creditCards.workspaceId),
+          isNull(creditCards.deletedAt),
+        ),
+      )
+      .get();
+    if (!card) return "Cartão não encontrado.";
+  }
+
+  return null;
+}
+
+function usagesForPeriod(
+  workspaceId: string,
+  options: {
+    start: string;
+    end: string | null;
+    ignoreBudgetId?: string;
+  },
+): BudgetCategoryUsage[] {
+  return listBudgetsWithCategories(workspaceId)
     .filter((budget) => {
       if (budget.arquivado) return false;
       if (options.ignoreBudgetId && budget.id === options.ignoreBudgetId) {
@@ -104,6 +154,7 @@ function usagesForPeriod(options: {
 }
 
 function conflictError(
+  workspaceId: string,
   categoriaIds: string[],
   options: {
     start: string;
@@ -112,15 +163,17 @@ function conflictError(
     names?: Map<string, string>;
   },
 ): string | null {
-  const categoryRows = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const categoryRows = db
     .select({ id: categories.id, categoriaPaiId: categories.categoriaPaiId })
     .from(categories)
+    .where(ws(categories.workspaceId))
     .all();
 
   const conflict = encontrarConflitoDeCategorias(
     categoryRows,
     categoriaIds,
-    usagesForPeriod(options),
+    usagesForPeriod(workspaceId, options),
     options.ignoreBudgetId,
   );
 
@@ -129,12 +182,24 @@ function conflictError(
   return `A categoria "${name}" já está no orçamento "${conflict.budgetNome}".`;
 }
 
-function replaceCategories(tx: Tx, budgetId: string, ids: string[]) {
+function replaceCategories(
+  tx: Tx,
+  workspaceId: string,
+  budgetId: string,
+  ids: string[],
+) {
   tx.delete(budgetCategories)
-    .where(eq(budgetCategories.budgetId, budgetId))
+    .where(
+      and(
+        eq(budgetCategories.budgetId, budgetId),
+        eq(budgetCategories.workspaceId, workspaceId),
+      ),
+    )
     .run();
   tx.insert(budgetCategories)
-    .values(ids.map((categoryId) => ({ budgetId, categoryId })))
+    .values(
+      ids.map((categoryId) => ({ workspaceId, budgetId, categoryId })),
+    )
     .onConflictDoNothing()
     .run();
 }
@@ -162,6 +227,7 @@ function detectRelevantChange(
 
 function insertNewVersion(
   tx: Tx,
+  workspaceId: string,
   source: BudgetWithCategories,
   data: BudgetFormValues,
   start: string,
@@ -172,6 +238,7 @@ function insertNewVersion(
   tx.insert(budgets)
     .values({
       id: newId,
+      workspaceId,
       nome: data.nome,
       valorPadrao: data.valorPadrao,
       diaFechamento: data.diaFechamento,
@@ -194,7 +261,7 @@ function insertNewVersion(
     })
     .run();
 
-  replaceCategories(tx, newId, data.categoriaIds);
+  replaceCategories(tx, workspaceId, newId, data.categoriaIds);
 
   // Preserva overrides futuros ao dividir a vigência.
   tx.update(budgetOverrides)
@@ -202,6 +269,7 @@ function insertNewVersion(
     .where(
       and(
         eq(budgetOverrides.budgetId, source.id),
+        eq(budgetOverrides.workspaceId, workspaceId),
         gte(budgetOverrides.ciclo, start),
       ),
     )
@@ -213,7 +281,9 @@ function insertNewVersion(
 export async function createBudgetAction(
   input: BudgetFormValues,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = createBudgetSchema.safeParse(input);
   if (!parsed.success) {
@@ -221,10 +291,16 @@ export async function createBudgetAction(
   }
 
   const data = parsed.data;
-  const categoryCheck = validateCategories(data.categoriaIds);
+  const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
   if (categoryCheck.error) return fail(categoryCheck.error);
+  const linkError = validateBudgetLinks(
+    workspaceId,
+    data.contaId ?? null,
+    data.cartaoId ?? null,
+  );
+  if (linkError) return fail(linkError);
 
-  const conflict = conflictError(data.categoriaIds, {
+  const conflict = conflictError(workspaceId, data.categoriaIds, {
     start: data.dataInicio,
     end: data.dataFim,
     names: categoryCheck.names,
@@ -235,10 +311,11 @@ export async function createBudgetAction(
   const now = new Date();
 
   try {
-    getDb().transaction((tx) => {
+    db.transaction((tx) => {
       tx.insert(budgets)
         .values({
           id,
+          workspaceId,
           nome: data.nome,
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
@@ -248,7 +325,7 @@ export async function createBudgetAction(
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
           // Conta de reserva padrão: a mais usada/principal.
-          contaId: data.contaId ?? getDefaultBudgetAccountId(),
+          contaId: data.contaId ?? getDefaultBudgetAccountId(workspaceId),
           dataInicio: data.dataInicio,
           dataFim: data.dataFim,
           cor: data.cor,
@@ -263,7 +340,7 @@ export async function createBudgetAction(
         })
         .run();
 
-      replaceCategories(tx, id, data.categoriaIds);
+      replaceCategories(tx, workspaceId, id, data.categoriaIds);
     });
   } catch (error) {
     console.error("[verde] erro ao criar orçamento:", error);
@@ -281,7 +358,9 @@ export async function createBudgetAction(
 export async function updateBudgetAction(
   input: UpdateBudgetInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = updateBudgetSchema.safeParse(input);
   if (!parsed.success) {
@@ -289,12 +368,18 @@ export async function updateBudgetAction(
   }
 
   const data = parsed.data;
-  const categoryCheck = validateCategories(data.categoriaIds);
+  const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
   if (categoryCheck.error) return fail(categoryCheck.error);
-
-  const existing = listBudgetsWithCategories({ incluirArquivados: true }).find(
-    (budget) => budget.id === data.id,
+  const linkError = validateBudgetLinks(
+    workspaceId,
+    data.contaId ?? null,
+    data.cartaoId ?? null,
   );
+  if (linkError) return fail(linkError);
+
+  const existing = listBudgetsWithCategories(workspaceId, {
+    incluirArquivados: true,
+  }).find((budget) => budget.id === data.id);
   if (!existing) return fail("Orçamento não encontrado.");
 
   const ciclo = data.ciclo;
@@ -327,9 +412,9 @@ export async function updateBudgetAction(
     }
 
     try {
-      getDb()
-        .insert(budgetOverrides)
+      db.insert(budgetOverrides)
         .values({
+          workspaceId,
           budgetId: existing.id,
           ciclo,
           valorCentavos: data.valorPadrao,
@@ -361,7 +446,7 @@ export async function updateBudgetAction(
 
   if (start < existing.dataInicio) start = existing.dataInicio;
 
-  const conflict = conflictError(data.categoriaIds, {
+  const conflict = conflictError(workspaceId, data.categoriaIds, {
     start,
     end: data.dataFim,
     ignoreBudgetId: existing.id,
@@ -379,7 +464,7 @@ export async function updateBudgetAction(
       const previous = addMonths(start, -1);
       let newId = "";
 
-      getDb().transaction((tx) => {
+      db.transaction((tx) => {
         tx.update(budgets)
           .set({
             dataFim:
@@ -388,10 +473,15 @@ export async function updateBudgetAction(
                 : previous,
             updatedAt: new Date(),
           })
-          .where(eq(budgets.id, existing.id))
+          .where(
+            and(
+              eq(budgets.id, existing.id),
+              eq(budgets.workspaceId, workspaceId),
+            ),
+          )
           .run();
 
-        newId = insertNewVersion(tx, existing, data, start);
+        newId = insertNewVersion(tx, workspaceId, existing, data, start);
       });
 
       revalidateBudgets();
@@ -399,7 +489,7 @@ export async function updateBudgetAction(
     }
 
     // Atualização direta (inclui "todos" e início igual ao primeiro ciclo).
-    getDb().transaction((tx) => {
+    db.transaction((tx) => {
       tx.update(budgets)
         .set({
           nome: data.nome,
@@ -420,10 +510,15 @@ export async function updateBudgetAction(
           mes: start,
           valorLimite: data.valorPadrao,
         })
-        .where(eq(budgets.id, existing.id))
+        .where(
+          and(
+            eq(budgets.id, existing.id),
+            eq(budgets.workspaceId, workspaceId),
+          ),
+        )
         .run();
 
-      replaceCategories(tx, existing.id, data.categoriaIds);
+      replaceCategories(tx, workspaceId, existing.id, data.categoriaIds);
     });
   } catch (error) {
     console.error("[verde] erro ao atualizar orçamento:", error);
@@ -443,16 +538,18 @@ export async function setBudgetOverrideAction(input: {
   ciclo: string;
   valorCentavos: number;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = budgetOverrideSchema.safeParse(input);
   if (!parsed.success) {
     return fail(parsed.error.issues[0]?.message ?? "Dados inválidos.");
   }
 
-  const existing = listBudgetsWithCategories({ incluirArquivados: true }).find(
-    (budget) => budget.id === parsed.data.budgetId,
-  );
+  const existing = listBudgetsWithCategories(workspaceId, {
+    incluirArquivados: true,
+  }).find((budget) => budget.id === parsed.data.budgetId);
   if (!existing) return fail("Orçamento não encontrado.");
 
   if (
@@ -463,9 +560,9 @@ export async function setBudgetOverrideAction(input: {
   }
 
   try {
-    getDb()
-      .insert(budgetOverrides)
+    db.insert(budgetOverrides)
       .values({
+        workspaceId,
         budgetId: parsed.data.budgetId,
         ciclo: parsed.data.ciclo,
         valorCentavos: parsed.data.valorCentavos,
@@ -493,7 +590,9 @@ export async function setBudgetArchivedAction(input: {
   id: string;
   arquivado: boolean;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({ id: idSchema, arquivado: z.boolean() })
@@ -501,16 +600,16 @@ export async function setBudgetArchivedAction(input: {
   if (!parsed.success) return fail("Orçamento inválido.");
 
   if (!parsed.data.arquivado) {
-    const existing = listBudgetsWithCategories({
+    const existing = listBudgetsWithCategories(workspaceId, {
       incluirArquivados: true,
     }).find((budget) => budget.id === parsed.data.id);
     if (!existing) return fail("Orçamento não encontrado.");
 
     const categoriaIds = existing.categories.map((category) => category.id);
-    const categoryCheck = validateCategories(categoriaIds);
+    const categoryCheck = validateCategories(workspaceId, categoriaIds);
     if (categoryCheck.error) return fail(categoryCheck.error);
 
-    const conflict = conflictError(categoriaIds, {
+    const conflict = conflictError(workspaceId, categoriaIds, {
       start: existing.dataInicio,
       end: existing.dataFim,
       ignoreBudgetId: existing.id,
@@ -523,10 +622,12 @@ export async function setBudgetArchivedAction(input: {
     }
   }
 
-  const result = getDb()
+  const result = db
     .update(budgets)
     .set({ arquivado: parsed.data.arquivado, updatedAt: new Date() })
-    .where(eq(budgets.id, parsed.data.id))
+    .where(
+      and(eq(budgets.id, parsed.data.id), ws(budgets.workspaceId)),
+    )
     .run();
 
   if (result.changes === 0) return fail("Orçamento não encontrado.");
@@ -538,16 +639,19 @@ export async function setBudgetArchivedAction(input: {
 export async function deleteBudgetAction(input: {
   id: string;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z.object({ id: idSchema }).safeParse(input);
   if (!parsed.success) return fail("Orçamento inválido.");
 
   // O cascade remove categorias sincronizadas e overrides. Lançamentos nunca
   // são tocados: o gasto real continua existindo fora do orçamento.
-  const result = getDb()
+  const result = db
     .delete(budgets)
-    .where(eq(budgets.id, parsed.data.id))
+    .where(
+      and(eq(budgets.id, parsed.data.id), ws(budgets.workspaceId)),
+    )
     .run();
 
   if (result.changes === 0) return fail("Orçamento não encontrado.");
@@ -577,7 +681,8 @@ export async function getBudgetHintAction(input: {
   cartaoId?: string | null;
   excludeTransactionId?: string | null;
 }): Promise<BudgetHint | null> {
-  await requireUser();
+  const user = await requireUser();
+  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({
@@ -590,12 +695,14 @@ export async function getBudgetHintAction(input: {
   if (!parsed.success) return null;
 
   const { categoriaId, data, cartaoId, excludeTransactionId } = parsed.data;
-  const categoryRows = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const categoryRows = db
     .select({ id: categories.id, categoriaPaiId: categories.categoriaPaiId })
     .from(categories)
+    .where(ws(categories.workspaceId))
     .all();
 
-  for (const budget of listBudgetsWithCategories()) {
+  for (const budget of listBudgetsWithCategories(workspaceId)) {
     if (budget.arquivado) continue;
     const ciclo = cicloDaData(data, budget.diaFechamento);
     if (!orcamentoVigenteNoCiclo(budget, ciclo)) continue;
@@ -607,12 +714,12 @@ export async function getBudgetHintAction(input: {
     if (!expanded.has(categoriaId)) continue;
     if (!transacaoConsomeOrcamento(budget.origens, cartaoId)) continue;
 
-    const detail = getBudgetCycleDetail(budget.id, ciclo);
+    const detail = getBudgetCycleDetail(workspaceId, budget.id, ciclo);
     if (!detail) return null;
 
     let gasto = detail.resumo.gasto;
     if (excludeTransactionId) {
-      const transaction = getTransactionRaw(excludeTransactionId);
+      const transaction = getTransactionRaw(workspaceId, excludeTransactionId);
       if (
         transaction &&
         transaction.tipo === "despesa" &&

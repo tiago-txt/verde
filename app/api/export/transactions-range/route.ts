@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getApiUser } from "@/lib/auth/current-user";
 import { listTransactionsForExport } from "@/lib/db/queries/data-export";
 import {
   formatCsvDate,
@@ -17,7 +17,7 @@ const TYPE_LABELS = {
 } as const;
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getApiUser();
   if (!user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   }
 
   const transactions = listTransactionsForExport(
+    user.workspaceId,
     parsed.data.de,
     parsed.data.ate,
   );

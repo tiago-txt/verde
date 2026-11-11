@@ -92,7 +92,8 @@ export function LoginForm({ next }: { next?: string }) {
       </Button>
 
       <p className="text-center text-xs text-muted-foreground">
-        Acesso restrito à família. Novos usuários são criados pelo administrador.
+        Cada usuário acessa apenas o próprio espaço financeiro. Novos acessos
+        podem ser criados pelo administrador.
       </p>
     </form>
   );

@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Database, LogOut, Tags, Users, Wallet, CreditCard } from "lucide-react";
+import { Database, Tags, Users, Wallet, CreditCard, UserRound } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { logoutAction } from "@/lib/actions/auth";
+import { LogoutButton } from "@/components/auth/logout-button";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatDateTime, getInitials } from "@/lib/format";
 
@@ -54,7 +54,6 @@ export default async function ConfiguracoesPage() {
           </Link>
         </Button>
       </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <CardHeader>
@@ -69,8 +68,8 @@ export default async function ConfiguracoesPage() {
               <div className="min-w-0 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="truncate font-medium">{user.nome}</p>
-                  <Badge variant={user.isAdmin ? "default" : "secondary"}>
-                    {user.isAdmin ? "Administrador" : "Membro"}
+                  <Badge variant={user.role === "admin" ? "default" : "secondary"}>
+                    {user.role === "admin" ? "Administrador" : "Membro"}
                   </Badge>
                 </div>
                 <p className="truncate text-sm text-muted-foreground">
@@ -82,9 +81,12 @@ export default async function ConfiguracoesPage() {
               <dt className="text-muted-foreground">No Verde desde</dt>
               <dd>{formatDateTime(user.createdAt)}</dd>
             </dl>
-            <p className="text-xs text-muted-foreground">
-              Edição de nome, e-mail e senha chega na etapa 6.
-            </p>
+            <Button asChild variant="outline">
+              <Link href="/configuracoes/perfil">
+                <UserRound className="h-4 w-4" />
+                Editar perfil, senha e conta
+              </Link>
+            </Button>
           </CardContent>
         </Card>
 
@@ -133,18 +135,26 @@ export default async function ConfiguracoesPage() {
               <Users className="h-4 w-4" aria-hidden="true" />
             </span>
             <div>
-              <CardTitle>Família</CardTitle>
+              <CardTitle>Usuários</CardTitle>
               <CardDescription>
-                Até 5 pessoas podem usar este Verde.
+                Acessos isolados por workspace.
               </CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {user.isAdmin
-                ? "Como administrador, você poderá criar e gerenciar os usuários da família na etapa 6."
+              {user.role === "admin"
+                ? "Crie usuários, redefina senhas e ative/desative contas. Você não vê os dados financeiros de outros usuários."
                 : "Novos usuários são criados pelo administrador do Verde."}
             </p>
+            {user.role === "admin" && (
+              <Button asChild variant="outline" className="mt-3">
+                <Link href="/configuracoes/usuarios">
+                  <Users className="h-4 w-4" />
+                  Gerenciar usuários
+                </Link>
+              </Button>
+            )}
           </CardContent>
         </Card>
 
@@ -185,12 +195,7 @@ export default async function ConfiguracoesPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={logoutAction}>
-            <Button type="submit" variant="outline">
-              <LogOut className="h-4 w-4" />
-              Sair da conta
-            </Button>
-          </form>
+          <LogoutButton className="w-auto justify-center px-4" />
         </CardContent>
       </Card>
     </div>

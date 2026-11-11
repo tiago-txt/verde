@@ -3,7 +3,7 @@
 import { and, eq, ne, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import { tags } from "@/lib/db/schema";
 import { idSchema } from "@/lib/validation/common";
 import { tagInputSchema, type TagInput } from "@/lib/validation/tags";
@@ -14,11 +14,15 @@ function revalidateTags() {
   revalidatePath("/configuracoes/categorias");
 }
 
-function findTagByName(nome: string, excludeId?: string) {
-  const conditions = [sql`lower(${tags.nome}) = lower(${nome})`];
+function findTagByName(workspaceId: string, nome: string, excludeId?: string) {
+  const { db, ws } = scopedDb(workspaceId);
+  const conditions = [
+    ws(tags.workspaceId),
+    sql`lower(${tags.nome}) = lower(${nome})`,
+  ];
   if (excludeId) conditions.push(ne(tags.id, excludeId));
 
-  return getDb()
+  return db
     .select({ id: tags.id })
     .from(tags)
     .where(and(...conditions))
@@ -26,7 +30,8 @@ function findTagByName(nome: string, excludeId?: string) {
 }
 
 export async function createTagAction(input: TagInput): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
 
   const parsed = tagInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -36,12 +41,14 @@ export async function createTagAction(input: TagInput): Promise<ActionResult> {
     };
   }
 
-  if (findTagByName(parsed.data.nome)) {
+  if (findTagByName(user.workspaceId, parsed.data.nome)) {
     return { ok: false, error: "Já existe uma tag com esse nome." };
   }
 
   const id = crypto.randomUUID();
-  getDb().insert(tags).values({ id, nome: parsed.data.nome }).run();
+  db.insert(tags)
+    .values({ id, workspaceId: user.workspaceId, nome: parsed.data.nome })
+    .run();
   revalidateTags();
   return { ok: true, id };
 }
@@ -50,7 +57,8 @@ export async function renameTagAction(
   id: string,
   input: TagInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsedId = idSchema.safeParse(id);
   const parsed = tagInputSchema.safeParse(input);
@@ -64,21 +72,22 @@ export async function renameTagAction(
     };
   }
 
-  const existing = getDb()
+  const existing = db
     .select({ id: tags.id })
     .from(tags)
-    .where(eq(tags.id, parsedId.data))
+    .where(
+      and(eq(tags.id, parsedId.data), ws(tags.workspaceId)),
+    )
     .get();
   if (!existing) return { ok: false, error: "Tag não encontrada." };
 
-  if (findTagByName(parsed.data.nome, parsedId.data)) {
+  if (findTagByName(user.workspaceId, parsed.data.nome, parsedId.data)) {
     return { ok: false, error: "Já existe uma tag com esse nome." };
   }
 
-  getDb()
-    .update(tags)
+  db.update(tags)
     .set({ nome: parsed.data.nome })
-    .where(eq(tags.id, parsedId.data))
+    .where(and(eq(tags.id, parsedId.data), ws(tags.workspaceId)))
     .run();
 
   revalidateTags();
@@ -86,20 +95,23 @@ export async function renameTagAction(
 }
 
 export async function deleteTagAction(id: string): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsedId = idSchema.safeParse(id);
   if (!parsedId.success) return { ok: false, error: "Tag inválida." };
 
-  const existing = getDb()
+  const existing = db
     .select({ id: tags.id })
     .from(tags)
-    .where(eq(tags.id, parsedId.data))
+    .where(and(eq(tags.id, parsedId.data), ws(tags.workspaceId)))
     .get();
   if (!existing) return { ok: false, error: "Tag não encontrada." };
 
   // O vínculo transaction_tags é removido por ON DELETE CASCADE.
-  getDb().delete(tags).where(eq(tags.id, parsedId.data)).run();
+  db.delete(tags)
+    .where(and(eq(tags.id, parsedId.data), ws(tags.workspaceId)))
+    .run();
   revalidateTags();
   return { ok: true };
 }

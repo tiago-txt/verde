@@ -61,6 +61,17 @@ export type BudgetReserveDate = (typeof BUDGET_RESERVE_DATES)[number];
 export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
 export type BudgetOrigin = (typeof BUDGET_ORIGINS)[number];
 
+export const USER_ROLES = ["admin", "membro"] as const;
+export type UserRole = (typeof USER_ROLES)[number];
+
+export const workspaces = sqliteTable("workspaces", {
+  id: id(),
+  nome: text("nome").notNull(),
+  createdAt: integer("created_at", { mode: "timestamp_ms" })
+    .notNull()
+    .$defaultFn(() => new Date()),
+});
+
 /** Campos copiados para cada lançamento gerado por uma recorrência. */
 export type RecurrenceTemplate = {
   tipo: TransactionType;
@@ -79,19 +90,35 @@ export const users = sqliteTable(
   "users",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     email: text("email").notNull(),
     senhaHash: text("senha_hash").notNull(),
+    role: text("role", { enum: USER_ROLES }).notNull().default("membro"),
+    /** @deprecated use `role`; mantido em sincronia para compatibilidade. */
     isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
+    ativo: integer("ativo", { mode: "boolean" }).notNull().default(true),
+    mustChangePassword: integer("must_change_password", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    lastLoginAt: integer("last_login_at", { mode: "timestamp_ms" }),
     ...timestamps,
   },
-  (table) => [uniqueIndex("users_email_unique").on(table.email)],
+  (table) => [
+    uniqueIndex("users_email_unique").on(table.email),
+    index("users_workspace_idx").on(table.workspaceId),
+  ],
 );
 
 export const accounts = sqliteTable(
   "accounts",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     tipo: text("tipo", { enum: ACCOUNT_TYPES }).notNull(),
     saldoInicial: integer("saldo_inicial").notNull().default(0),
@@ -101,13 +128,23 @@ export const accounts = sqliteTable(
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
-  (table) => [index("accounts_arquivada_idx").on(table.arquivada)],
+  (table) => [
+    index("accounts_arquivada_idx").on(table.arquivada),
+    index("accounts_workspace_idx").on(table.workspaceId),
+    uniqueIndex("accounts_workspace_nome_unique").on(
+      table.workspaceId,
+      table.nome,
+    ),
+  ],
 );
 
 export const creditCards = sqliteTable(
   "credit_cards",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     bandeira: text("bandeira").notNull().default("outra"),
     limite: integer("limite").notNull().default(0),
@@ -124,6 +161,11 @@ export const creditCards = sqliteTable(
   },
   (table) => [
     index("credit_cards_arquivado_idx").on(table.arquivado),
+    index("credit_cards_workspace_idx").on(table.workspaceId),
+    uniqueIndex("credit_cards_workspace_nome_unique").on(
+      table.workspaceId,
+      table.nome,
+    ),
     check("credit_cards_fechamento_check", sql`${table.diaFechamento} between 1 and 31`),
     check("credit_cards_vencimento_check", sql`${table.diaVencimento} between 1 and 31`),
     check("credit_cards_limite_check", sql`${table.limite} >= 0`),
@@ -134,6 +176,9 @@ export const categories = sqliteTable(
   "categories",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     tipo: text("tipo", { enum: CATEGORY_TYPES }).notNull(),
     icone: text("icone").notNull().default("CircleEllipsis"),
@@ -147,6 +192,15 @@ export const categories = sqliteTable(
   (table) => [
     index("categories_tipo_idx").on(table.tipo),
     index("categories_pai_idx").on(table.categoriaPaiId),
+    index("categories_workspace_idx").on(table.workspaceId),
+    uniqueIndex("categories_workspace_tipo_nome_unique").on(
+      table.workspaceId,
+      table.tipo,
+      table.nome,
+    ),
+    uniqueIndex("categories_system_workspace_unique")
+      .on(table.workspaceId, table.tipo)
+      .where(sql`${table.isSystem} = 1`),
   ],
 );
 
@@ -154,6 +208,9 @@ export const recurrences = sqliteTable(
   "recurrences",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     frequencia: text("frequencia", { enum: RECURRENCE_FREQUENCIES }).notNull(),
     dataInicio: text("data_inicio").notNull(),
     dataFim: text("data_fim"),
@@ -163,13 +220,19 @@ export const recurrences = sqliteTable(
       .notNull(),
     ...timestamps,
   },
-  (table) => [index("recurrences_ativo_idx").on(table.ativo)],
+  (table) => [
+    index("recurrences_ativo_idx").on(table.ativo),
+    index("recurrences_workspace_idx").on(table.workspaceId),
+  ],
 );
 
 export const transactions = sqliteTable(
   "transactions",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     tipo: text("tipo", { enum: TRANSACTION_TYPES }).notNull(),
     descricao: text("descricao").notNull(),
     /** Valor sempre positivo, em centavos. O tipo define entrada/saída. */
@@ -206,6 +269,23 @@ export const transactions = sqliteTable(
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
   (table) => [
+    index("transactions_workspace_idx").on(table.workspaceId),
+    index("transactions_workspace_data_idx").on(
+      table.workspaceId,
+      table.data,
+    ),
+    index("transactions_workspace_conta_idx").on(
+      table.workspaceId,
+      table.contaId,
+    ),
+    index("transactions_workspace_cartao_idx").on(
+      table.workspaceId,
+      table.cartaoId,
+    ),
+    index("transactions_workspace_categoria_idx").on(
+      table.workspaceId,
+      table.categoriaId,
+    ),
     index("transactions_data_idx").on(table.data),
     index("transactions_conta_idx").on(table.contaId),
     index("transactions_cartao_idx").on(table.cartaoId),
@@ -227,6 +307,7 @@ export const transactions = sqliteTable(
     index("transactions_import_batch_idx").on(table.importBatchId),
     // Garante idempotência da geração de recorrências (inclusive após soft delete).
     uniqueIndex("transactions_recorrencia_data_unique").on(
+      table.workspaceId,
       table.recorrenciaId,
       table.data,
     ),
@@ -238,17 +319,29 @@ export const tags = sqliteTable(
   "tags",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull(),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .notNull()
       .$defaultFn(() => new Date()),
   },
-  (table) => [uniqueIndex("tags_nome_unique").on(table.nome)],
+  (table) => [
+    index("tags_workspace_idx").on(table.workspaceId),
+    uniqueIndex("tags_workspace_nome_unique").on(
+      table.workspaceId,
+      table.nome,
+    ),
+  ],
 );
 
 export const transactionTags = sqliteTable(
   "transaction_tags",
   {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     transactionId: text("transaction_id")
       .notNull()
       .references(() => transactions.id, { onDelete: "cascade" }),
@@ -259,6 +352,7 @@ export const transactionTags = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.transactionId, table.tagId] }),
     index("transaction_tags_tag_idx").on(table.tagId),
+    index("transaction_tags_workspace_idx").on(table.workspaceId),
   ],
 );
 
@@ -267,6 +361,9 @@ export const budgets = sqliteTable(
   "budgets",
   {
     id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     nome: text("nome").notNull().default(""),
     valorPadrao: integer("valor_padrao_centavos").notNull().default(0),
     diaFechamento: integer("dia_fechamento").notNull().default(1),
@@ -307,6 +404,7 @@ export const budgets = sqliteTable(
   },
   (table) => [
     index("budgets_arquivado_idx").on(table.arquivado),
+    index("budgets_workspace_idx").on(table.workspaceId),
     check("budgets_valor_check", sql`${table.valorLimite} >= 0`),
     check(
       "budgets_fechamento_check",
@@ -334,6 +432,9 @@ export const budgets = sqliteTable(
 export const budgetCategories = sqliteTable(
   "budget_categories",
   {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     budgetId: text("budget_id")
       .notNull()
       .references(() => budgets.id, { onDelete: "cascade" }),
@@ -344,6 +445,7 @@ export const budgetCategories = sqliteTable(
   (table) => [
     primaryKey({ columns: [table.budgetId, table.categoryId] }),
     index("budget_categories_category_idx").on(table.categoryId),
+    index("budget_categories_workspace_idx").on(table.workspaceId),
   ],
 );
 
@@ -351,6 +453,9 @@ export const budgetCategories = sqliteTable(
 export const budgetOverrides = sqliteTable(
   "budget_overrides",
   {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
     budgetId: text("budget_id")
       .notNull()
       .references(() => budgets.id, { onDelete: "cascade" }),
@@ -360,12 +465,15 @@ export const budgetOverrides = sqliteTable(
   },
   (table) => [
     primaryKey({ columns: [table.budgetId, table.ciclo] }),
+    index("budget_overrides_workspace_idx").on(table.workspaceId),
     check("budget_overrides_valor_check", sql`${table.valorCentavos} >= 0`),
   ],
 );
 
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
+export type Workspace = typeof workspaces.$inferSelect;
+export type NewWorkspace = typeof workspaces.$inferInsert;
 export type Account = typeof accounts.$inferSelect;
 export type NewAccount = typeof accounts.$inferInsert;
 export type CreditCard = typeof creditCards.$inferSelect;

@@ -48,6 +48,7 @@ export default async function DashboardPage({
   const params = await searchParams;
   const month = monthFromParams(params);
   const firstName = user.nome.split(/\s+/)[0] ?? user.nome;
+  const workspaceId = user.workspaceId;
 
   return (
     <div className="space-y-4">
@@ -63,7 +64,7 @@ export default async function DashboardPage({
         <div className="order-1 lg:col-span-4">
           <Suspense fallback={<DashboardSkeleton lines={4} />}>
             <BlockBoundary label="o saldo">
-              <BalanceBlock />
+              <BalanceBlock workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -71,7 +72,7 @@ export default async function DashboardPage({
         <div className="order-2 lg:col-span-8">
           <Suspense fallback={<DashboardSkeleton lines={4} />}>
             <BlockBoundary label="o resumo do mês">
-              <MonthBlock month={month} />
+              <MonthBlock month={month} workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -79,7 +80,7 @@ export default async function DashboardPage({
         <div className="order-3 lg:col-span-5">
           <Suspense fallback={<DashboardSkeleton lines={5} />}>
             <BlockBoundary label="os próximos vencimentos">
-              <UpcomingServerBlock />
+              <UpcomingServerBlock workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -87,7 +88,7 @@ export default async function DashboardPage({
         <div className="order-4 lg:col-span-7">
           <Suspense fallback={<DashboardSkeleton lines={7} />}>
             <BlockBoundary label="o gráfico de categorias">
-              <CategoryBlock month={month} />
+              <CategoryBlock month={month} workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -95,7 +96,7 @@ export default async function DashboardPage({
         <div className="order-5 lg:col-span-4">
           <Suspense fallback={<DashboardSkeleton lines={4} />}>
             <BlockBoundary label="os orçamentos">
-              <BudgetsBlock month={month} />
+              <BudgetsBlock month={month} workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -103,7 +104,7 @@ export default async function DashboardPage({
         <div className="order-6 lg:col-span-3">
           <Suspense fallback={<DashboardSkeleton lines={5} />}>
             <BlockBoundary label="os cartões">
-              <CardsBlock />
+              <CardsBlock workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -111,7 +112,7 @@ export default async function DashboardPage({
         <div className="order-7 lg:col-span-5">
           <Suspense fallback={<DashboardSkeleton lines={6} />}>
             <BlockBoundary label="a evolução mensal">
-              <EvolutionBlock month={month} />
+              <EvolutionBlock month={month} workspaceId={workspaceId} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -123,8 +124,8 @@ export default async function DashboardPage({
   );
 }
 
-async function BalanceBlock() {
-  const data = await getDashboardBalance();
+async function BalanceBlock({ workspaceId }: { workspaceId: string }) {
+  const data = await getDashboardBalance(workspaceId);
 
   return (
     <Card className="h-full">
@@ -191,8 +192,14 @@ function Variation({
   );
 }
 
-async function MonthBlock({ month }: { month: string }) {
-  const data = await getDashboardMonth(month);
+async function MonthBlock({
+  month,
+  workspaceId,
+}: {
+  month: string;
+  workspaceId: string;
+}) {
+  const data = await getDashboardMonth(workspaceId, month);
   const { current, previous, expenseVariation, incomeVariation } = data;
 
   return (
@@ -261,8 +268,14 @@ function dashboardReportFilters(month: string): ReportFilters {
   };
 }
 
-async function CategoryBlock({ month }: { month: string }) {
-  const data = await getDashboardMonth(month);
+async function CategoryBlock({
+  month,
+  workspaceId,
+}: {
+  month: string;
+  workspaceId: string;
+}) {
+  const data = await getDashboardMonth(workspaceId, month);
   const base = dashboardReportFilters(month);
   const categories = data.categories.map((category) => ({
     ...category,
@@ -289,8 +302,14 @@ async function CategoryBlock({ month }: { month: string }) {
   );
 }
 
-async function EvolutionBlock({ month }: { month: string }) {
-  const data = await getDashboardMonth(month);
+async function EvolutionBlock({
+  month,
+  workspaceId,
+}: {
+  month: string;
+  workspaceId: string;
+}) {
+  const data = await getDashboardMonth(workspaceId, month);
 
   return (
     <Card className="h-full">
@@ -304,8 +323,8 @@ async function EvolutionBlock({ month }: { month: string }) {
   );
 }
 
-async function UpcomingServerBlock() {
-  const data = await getDashboardUpcoming();
+async function UpcomingServerBlock({ workspaceId }: { workspaceId: string }) {
+  const data = await getDashboardUpcoming(workspaceId);
   const today = todayISO();
   const invoices = data.invoices.map((invoice) => ({
     id: invoice.id,
@@ -334,8 +353,8 @@ async function UpcomingServerBlock() {
   );
 }
 
-async function CardsBlock() {
-  const cards = await getDashboardCards();
+async function CardsBlock({ workspaceId }: { workspaceId: string }) {
+  const cards = await getDashboardCards(workspaceId);
 
   return (
     <Card className="h-full">
@@ -401,8 +420,16 @@ async function CardsBlock() {
   );
 }
 
-async function BudgetsBlock({ month }: { month: string }) {
-  const budgets = listBudgetCycleDetails(month).map((detail) => detail.resumo);
+async function BudgetsBlock({
+  month,
+  workspaceId,
+}: {
+  month: string;
+  workspaceId: string;
+}) {
+  const budgets = listBudgetCycleDetails(workspaceId, month).map(
+    (detail) => detail.resumo,
+  );
 
   return (
     <BudgetCycleOverview

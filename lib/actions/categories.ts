@@ -1,10 +1,10 @@
 "use server";
 
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import { categories, transactions } from "@/lib/db/schema";
 import {
   countChildrenForCategory,
@@ -26,16 +26,20 @@ function revalidateCategories() {
 }
 
 function validateParent(
+  workspaceId: string,
   parentId: string | null,
   tipo: CategoryInput["tipo"],
   categoryId?: string,
 ): string | null {
   if (!parentId) return null;
 
-  const parent = getDb()
+  const { db, ws } = scopedDb(workspaceId);
+  const parent = db
     .select()
     .from(categories)
-    .where(eq(categories.id, parentId))
+    .where(
+      and(eq(categories.id, parentId), ws(categories.workspaceId)),
+    )
     .get();
 
   if (!parent) return "Categoria pai não encontrada.";
@@ -52,7 +56,8 @@ function validateParent(
 export async function createCategoryAction(
   input: CategoryInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
 
   const parsed = categoryInputSchema.safeParse(input);
   if (!parsed.success) {
@@ -63,16 +68,24 @@ export async function createCategoryAction(
   }
 
   const parentError = validateParent(
+    user.workspaceId,
     parsed.data.categoriaPaiId,
     parsed.data.tipo,
   );
   if (parentError) return { ok: false, error: parentError };
 
   const id = crypto.randomUUID();
-  getDb()
-    .insert(categories)
-    .values({ id, ...parsed.data })
-    .run();
+  try {
+    db.insert(categories)
+      .values({ id, workspaceId: user.workspaceId, ...parsed.data })
+      .run();
+  } catch (error) {
+    console.error("[verde] erro ao criar categoria:", error);
+    return {
+      ok: false,
+      error: "Já existe uma categoria com esse nome neste tipo.",
+    };
+  }
 
   revalidateCategories();
   return { ok: true, id };
@@ -82,7 +95,8 @@ export async function updateCategoryAction(
   id: string,
   input: CategoryInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsedId = idSchema.safeParse(id);
   const parsed = categoryInputSchema.safeParse(input);
@@ -96,7 +110,7 @@ export async function updateCategoryAction(
     };
   }
 
-  const existing = getCategoryById(parsedId.data);
+  const existing = getCategoryById(user.workspaceId, parsedId.data);
   if (!existing) return { ok: false, error: "Categoria não encontrada." };
 
   if (existing.tipo !== parsed.data.tipo) {
@@ -113,7 +127,7 @@ export async function updateCategoryAction(
     };
   }
 
-  const childCount = countChildrenForCategory(parsedId.data);
+  const childCount = countChildrenForCategory(user.workspaceId, parsedId.data);
   if (childCount > 0 && parsed.data.categoriaPaiId) {
     return {
       ok: false,
@@ -123,17 +137,25 @@ export async function updateCategoryAction(
   }
 
   const parentError = validateParent(
+    user.workspaceId,
     parsed.data.categoriaPaiId,
     parsed.data.tipo,
     parsedId.data,
   );
   if (parentError) return { ok: false, error: parentError };
 
-  getDb()
-    .update(categories)
-    .set({ ...parsed.data, updatedAt: new Date() })
-    .where(eq(categories.id, parsedId.data))
-    .run();
+  try {
+    db.update(categories)
+      .set({ ...parsed.data, updatedAt: new Date() })
+      .where(and(eq(categories.id, parsedId.data), ws(categories.workspaceId)))
+      .run();
+  } catch (error) {
+    console.error("[verde] erro ao atualizar categoria:", error);
+    return {
+      ok: false,
+      error: "Já existe uma categoria com esse nome neste tipo.",
+    };
+  }
 
   revalidateCategories();
   return { ok: true, id: parsedId.data };
@@ -143,14 +165,15 @@ export async function setCategoryArchivedAction(
   id: string,
   archived: boolean,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({ id: idSchema, archived: z.boolean() })
     .safeParse({ id, archived });
   if (!parsed.success) return { ok: false, error: "Dados inválidos." };
 
-  const existing = getCategoryById(parsed.data.id);
+  const existing = getCategoryById(user.workspaceId, parsed.data.id);
   if (!existing) return { ok: false, error: "Categoria não encontrada." };
 
   if (existing.isSystem && parsed.data.archived) {
@@ -161,16 +184,18 @@ export async function setCategoryArchivedAction(
     };
   }
 
-  getDb()
-    .update(categories)
+  db.update(categories)
     .set({
       deletedAt: parsed.data.archived ? new Date() : null,
       updatedAt: new Date(),
     })
     .where(
-      or(
-        eq(categories.id, parsed.data.id),
-        eq(categories.categoriaPaiId, parsed.data.id),
+      and(
+        ws(categories.workspaceId),
+        or(
+          eq(categories.id, parsed.data.id),
+          eq(categories.categoriaPaiId, parsed.data.id),
+        ),
       ),
     )
     .run();
@@ -183,7 +208,8 @@ export async function deleteCategoryAction(input: {
   id: string;
   moveToId?: string | null;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({
@@ -195,10 +221,10 @@ export async function deleteCategoryAction(input: {
 
   const { id, moveToId } = parsed.data;
 
-  const existing = getDb()
+  const existing = db
     .select()
     .from(categories)
-    .where(eq(categories.id, id))
+    .where(and(eq(categories.id, id), ws(categories.workspaceId)))
     .get();
   if (!existing) return { ok: false, error: "Categoria não encontrada." };
 
@@ -210,7 +236,7 @@ export async function deleteCategoryAction(input: {
     };
   }
 
-  const childCount = countChildrenForCategory(id);
+  const childCount = countChildrenForCategory(user.workspaceId, id);
   if (childCount > 0) {
     return {
       ok: false,
@@ -220,7 +246,7 @@ export async function deleteCategoryAction(input: {
     };
   }
 
-  const transactionCount = countTransactionsForCategory(id);
+  const transactionCount = countTransactionsForCategory(user.workspaceId, id);
   if (transactionCount > 0 && !moveToId) {
     return {
       ok: false,
@@ -230,10 +256,16 @@ export async function deleteCategoryAction(input: {
   }
 
   if (moveToId) {
-    const target = getDb()
+    const target = db
       .select()
       .from(categories)
-      .where(and(eq(categories.id, moveToId), isNull(categories.deletedAt)))
+      .where(
+        and(
+          eq(categories.id, moveToId),
+          ws(categories.workspaceId),
+          isNull(categories.deletedAt),
+        ),
+      )
       .get();
 
     if (!target) {
@@ -256,14 +288,23 @@ export async function deleteCategoryAction(input: {
     }
   }
 
-  getDb().transaction((tx) => {
+  db.transaction((tx) => {
     if (moveToId) {
       tx.update(transactions)
         .set({ categoriaId: moveToId, updatedAt: new Date() })
-        .where(eq(transactions.categoriaId, id))
+        .where(
+          and(
+            eq(transactions.categoriaId, id),
+            eq(transactions.workspaceId, user.workspaceId),
+          ),
+        )
         .run();
     }
-    tx.delete(categories).where(eq(categories.id, id)).run();
+    tx.delete(categories)
+      .where(
+        and(eq(categories.id, id), eq(categories.workspaceId, user.workspaceId)),
+      )
+      .run();
   });
 
   revalidateCategories();

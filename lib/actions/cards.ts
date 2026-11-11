@@ -4,7 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { getDb } from "@/lib/db";
+import { scopedDb } from "@/lib/db/scoped";
 import { accounts, creditCards, transactions } from "@/lib/db/schema";
 import { getCardInvoiceDetail } from "@/lib/db/queries/cards";
 import { countCardTransactions } from "@/lib/db/queries/cards";
@@ -31,11 +31,21 @@ function revalidateCards(cardId?: string) {
   revalidatePath("/");
 }
 
-function validatePaymentAccount(accountId: string): string | null {
-  const account = getDb()
+function validatePaymentAccount(
+  workspaceId: string,
+  accountId: string,
+): string | null {
+  const { db, ws } = scopedDb(workspaceId);
+  const account = db
     .select({ id: accounts.id, arquivada: accounts.arquivada })
     .from(accounts)
-    .where(and(eq(accounts.id, accountId), isNull(accounts.deletedAt)))
+    .where(
+      and(
+        eq(accounts.id, accountId),
+        ws(accounts.workspaceId),
+        isNull(accounts.deletedAt),
+      ),
+    )
     .get();
 
   if (!account) return "Conta de pagamento não encontrada.";
@@ -46,7 +56,8 @@ function validatePaymentAccount(accountId: string): string | null {
 export async function createCardAction(
   input: CardFormValues,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
 
   const parsed = createCardSchema.safeParse(input);
   if (!parsed.success) {
@@ -55,7 +66,7 @@ export async function createCardAction(
 
   const data = parsed.data;
   if (data.contaPagamentoId) {
-    const error = validatePaymentAccount(data.contaPagamentoId);
+    const error = validatePaymentAccount(user.workspaceId, data.contaPagamentoId);
     if (error) return fail(error);
   }
 
@@ -63,10 +74,10 @@ export async function createCardAction(
   const now = new Date();
 
   try {
-    getDb()
-      .insert(creditCards)
+    db.insert(creditCards)
       .values({
         id,
+        workspaceId: user.workspaceId,
         nome: data.nome,
         bandeira: data.bandeira,
         limite: data.limite,
@@ -83,7 +94,11 @@ export async function createCardAction(
   } catch (error) {
     console.error("[verde] erro ao criar cartão:", error);
     return fail(
-      error instanceof Error ? error.message : "Não foi possível criar o cartão.",
+      error instanceof Error && error.message.includes("UNIQUE")
+        ? "Já existe um cartão com esse nome."
+        : error instanceof Error
+          ? error.message
+          : "Não foi possível criar o cartão.",
     );
   }
 
@@ -94,7 +109,8 @@ export async function createCardAction(
 export async function updateCardAction(
   input: CardFormValues & { id: string },
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = updateCardSchema.safeParse(input);
   if (!parsed.success) {
@@ -103,20 +119,25 @@ export async function updateCardAction(
 
   const data = parsed.data;
   if (data.contaPagamentoId) {
-    const error = validatePaymentAccount(data.contaPagamentoId);
+    const error = validatePaymentAccount(user.workspaceId, data.contaPagamentoId);
     if (error) return fail(error);
   }
 
-  const existing = getDb()
+  const existing = db
     .select({ id: creditCards.id })
     .from(creditCards)
-    .where(and(eq(creditCards.id, data.id), isNull(creditCards.deletedAt)))
+    .where(
+      and(
+        eq(creditCards.id, data.id),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
     .get();
   if (!existing) return fail("Cartão não encontrado.");
 
   try {
-    getDb()
-      .update(creditCards)
+    db.update(creditCards)
       .set({
         nome: data.nome,
         bandeira: data.bandeira,
@@ -128,14 +149,18 @@ export async function updateCardAction(
         icone: data.icone,
         updatedAt: new Date(),
       })
-      .where(eq(creditCards.id, data.id))
+      .where(
+        and(eq(creditCards.id, data.id), ws(creditCards.workspaceId)),
+      )
       .run();
   } catch (error) {
     console.error("[verde] erro ao atualizar cartão:", error);
     return fail(
-      error instanceof Error
-        ? error.message
-        : "Não foi possível salvar o cartão.",
+      error instanceof Error && error.message.includes("UNIQUE")
+        ? "Já existe um cartão com esse nome."
+        : error instanceof Error
+          ? error.message
+          : "Não foi possível salvar o cartão.",
     );
   }
 
@@ -147,17 +172,23 @@ export async function setCardArchivedAction(input: {
   id: string;
   arquivado: boolean;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z
     .object({ id: idSchema, arquivado: z.boolean() })
     .safeParse(input);
   if (!parsed.success) return fail("Cartão inválido.");
 
-  const result = getDb()
+  const result = db
     .update(creditCards)
     .set({ arquivado: parsed.data.arquivado, updatedAt: new Date() })
-    .where(eq(creditCards.id, parsed.data.id))
+    .where(
+      and(
+        eq(creditCards.id, parsed.data.id),
+        ws(creditCards.workspaceId),
+      ),
+    )
     .run();
 
   if (result.changes === 0) return fail("Cartão não encontrado.");
@@ -169,22 +200,28 @@ export async function setCardArchivedAction(input: {
 export async function deleteCardAction(input: {
   id: string;
 }): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = z.object({ id: idSchema }).safeParse(input);
   if (!parsed.success) return fail("Cartão inválido.");
 
-  if (countCardTransactions(parsed.data.id) > 0) {
+  if (countCardTransactions(user.workspaceId, parsed.data.id) > 0) {
     return fail(
       "Este cartão tem lançamentos. Arquive-o em vez de excluir para preservar o histórico.",
     );
   }
 
   // Soft delete: mantém rastros e evita reaproveitar o id.
-  const result = getDb()
+  const result = db
     .update(creditCards)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
-    .where(eq(creditCards.id, parsed.data.id))
+    .where(
+      and(
+        eq(creditCards.id, parsed.data.id),
+        ws(creditCards.workspaceId),
+      ),
+    )
     .run();
 
   if (result.changes === 0) return fail("Cartão não encontrado.");
@@ -196,7 +233,8 @@ export async function deleteCardAction(input: {
 export async function payInvoiceAction(
   input: PayInvoiceInput,
 ): Promise<ActionResult> {
-  await requireUser();
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
 
   const parsed = payInvoiceSchema.safeParse(input);
   if (!parsed.success) {
@@ -204,18 +242,28 @@ export async function payInvoiceAction(
   }
 
   const data = parsed.data;
-  const card = getDb()
+  const card = db
     .select()
     .from(creditCards)
-    .where(and(eq(creditCards.id, data.cartaoId), isNull(creditCards.deletedAt)))
+    .where(
+      and(
+        eq(creditCards.id, data.cartaoId),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
     .get();
   if (!card) return fail("Cartão não encontrado.");
   if (card.arquivado) return fail("Este cartão está arquivado.");
 
-  const accountError = validatePaymentAccount(data.contaId);
+  const accountError = validatePaymentAccount(user.workspaceId, data.contaId);
   if (accountError) return fail(accountError);
 
-  const detail = getCardInvoiceDetail(data.cartaoId, data.faturaChave);
+  const detail = getCardInvoiceDetail(
+    user.workspaceId,
+    data.cartaoId,
+    data.faturaChave,
+  );
   if (!detail) return fail("Fatura não encontrada.");
 
   const id = crypto.randomUUID();
@@ -223,10 +271,10 @@ export async function payInvoiceAction(
   const descricao = `Pagamento de fatura · ${card.nome}`;
 
   try {
-    getDb()
-      .insert(transactions)
+    db.insert(transactions)
       .values({
         id,
+        workspaceId: user.workspaceId,
         tipo: "transferencia",
         descricao,
         valor: data.valor,

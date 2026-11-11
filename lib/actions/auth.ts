@@ -2,6 +2,7 @@
 
 import { compare } from "bcryptjs";
 import { eq } from "drizzle-orm";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { endSession, startSession } from "@/lib/auth/session";
@@ -42,6 +43,16 @@ function registerFailure(key: string): void {
   entry.count += 1;
 }
 
+async function clientIp(): Promise<string> {
+  const headerStore = await headers();
+  const forwarded = headerStore.get("x-forwarded-for");
+  if (forwarded) {
+    const first = forwarded.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return headerStore.get("x-real-ip")?.trim() || "local";
+}
+
 function safeNextPath(next: string | undefined): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
   return next;
@@ -62,8 +73,11 @@ export async function loginAction(
   }
 
   const { email, senha, next } = parsed.data;
+  const ip = await clientIp();
+  const emailKey = `email:${email}`;
+  const ipKey = `ip:${ip}`;
 
-  if (isThrottled(email)) {
+  if (isThrottled(emailKey) || isThrottled(ipKey)) {
     return {
       error: "Muitas tentativas. Aguarde alguns minutos e tente novamente.",
     };
@@ -77,21 +91,33 @@ export async function loginAction(
 
   const senhaValida = user ? await compare(senha, user.senhaHash) : false;
 
-  if (!user || !senhaValida) {
-    registerFailure(email);
+  // Mensagem genérica: não revela se o e-mail existe, está inativo ou a senha
+  // está errada.
+  if (!user || !senhaValida || !user.ativo) {
+    registerFailure(emailKey);
+    registerFailure(ipKey);
     return { error: "E-mail ou senha incorretos." };
   }
 
-  attempts.delete(email);
+  attempts.delete(emailKey);
+  attempts.delete(ipKey);
+
+  getDb()
+    .update(users)
+    .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+    .where(eq(users.id, user.id))
+    .run();
 
   await startSession({
     userId: user.id,
+    workspaceId: user.workspaceId,
+    role: user.role,
     email: user.email,
     nome: user.nome,
-    isAdmin: user.isAdmin,
+    isAdmin: user.role === "admin",
   });
 
-  redirect(safeNextPath(next));
+  redirect(user.mustChangePassword ? "/trocar-senha" : safeNextPath(next));
 }
 
 export async function logoutAction(): Promise<void> {

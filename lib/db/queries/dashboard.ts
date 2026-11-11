@@ -50,9 +50,9 @@ export type DashboardMonthData = {
 };
 
 export const getDashboardMonth = cache(
-  async (month: string): Promise<DashboardMonthData> => {
+  async (workspaceId: string, month: string): Promise<DashboardMonthData> => {
     const range12 = evolutionRange(month, 12);
-    const rows = listReportRows(reportFilters(month, range12));
+    const rows = listReportRows(workspaceId, reportFilters(month, range12));
     const series12 = buildMonthlySeries(rows, range12);
     const series6 = series12.slice(-6);
     const monthRangeValue = monthRange(month);
@@ -98,9 +98,9 @@ function addMonthsSafe(month: string, delta: number): string {
   return date.toISOString().slice(0, 7);
 }
 
-export const getDashboardBalance = cache(async () => {
-  const accounts = listAccountsWithBalances();
-  const cards = listCards();
+export const getDashboardBalance = cache(async (workspaceId: string) => {
+  const accounts = listAccountsWithBalances(workspaceId);
+  const cards = listCards(workspaceId);
   const operational = accounts
     .filter(
       (account) =>
@@ -134,7 +134,7 @@ export type UpcomingInvoice = ReturnType<
   typeof listCardInvoiceEventsForMonth
 >[number];
 
-export const getDashboardUpcoming = cache(async () => {
+export const getDashboardUpcoming = cache(async (workspaceId: string) => {
   const today = todayISO();
   const end = addDaysISO(today, 15);
   const month = today.slice(0, 7);
@@ -149,8 +149,8 @@ export const getDashboardUpcoming = cache(async () => {
     q: null,
   };
   const invoices = [
-    ...listCardInvoiceEventsForMonth(month, empty),
-    ...listCardInvoiceEventsForMonth(nextMonth, empty),
+    ...listCardInvoiceEventsForMonth(workspaceId, month, empty),
+    ...listCardInvoiceEventsForMonth(workspaceId, nextMonth, empty),
   ]
     .filter(
       (invoice) =>
@@ -159,9 +159,11 @@ export const getDashboardUpcoming = cache(async () => {
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
 
   return {
-    expenses: listUpcomingExpenses(15),
+    expenses: listUpcomingExpenses(workspaceId, 15),
     invoices,
   };
 });
 
-export const getDashboardCards = cache(async () => listCards());
+export const getDashboardCards = cache(async (workspaceId: string) =>
+  listCards(workspaceId),
+);

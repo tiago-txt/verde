@@ -27,6 +27,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useToast } from "@/components/ui/toast";
 import {
+  importJsonAction,
   importTransactionsAction,
   previewImportAction,
   undoLastImportAction,
@@ -103,6 +104,10 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<string | null>(null);
   const [confirmUndo, setConfirmUndo] = useState(false);
+  const [jsonFile, setJsonFile] = useState<File | null>(null);
+  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [jsonResult, setJsonResult] = useState<string | null>(null);
+  const [jsonPending, startJsonTransition] = useTransition();
 
   const csvHref = useMemo(() => {
     if (!de || !ate || de > ate) return null;
@@ -274,6 +279,68 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-4 w-4 text-primary" aria-hidden="true" />
+            Restaurar backup (JSON)
+          </CardTitle>
+          <CardDescription>
+            Recria contas, cartões, categorias, tags, lançamentos, recorrências e
+            orçamentos dentro do seu workspace, remapeando os IDs. Útil para
+            restaurar a conta de um único usuário.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Input
+            type="file"
+            accept=".json,application/json"
+            disabled={jsonPending}
+            onChange={(event) => {
+              setJsonFile(event.target.files?.[0] ?? null);
+              setJsonError(null);
+              setJsonResult(null);
+            }}
+            className="h-11 file:mr-3 file:rounded file:border-0 file:bg-muted file:px-3 file:py-1 file:text-xs"
+          />
+          {jsonError && <FormError message={jsonError} />}
+          {jsonResult && (
+            <p className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2 text-sm text-primary">
+              {jsonResult}
+            </p>
+          )}
+          <Button
+            type="button"
+            className="h-11"
+            disabled={!jsonFile || jsonPending}
+            onClick={() => {
+              if (!jsonFile) return;
+              startJsonTransition(async () => {
+                const content = await jsonFile.text();
+                const response = await importJsonAction({ json: content });
+                if (!response.ok) {
+                  setJsonError(response.error);
+                  return;
+                }
+                const c = response.counts;
+                setJsonResult(
+                  `Backup restaurado: ${c.accounts} conta(s), ${c.creditCards} cartão(ões), ${c.categories} categoria(s), ${c.tags} tag(s), ${c.transactions} lançamento(s), ${c.recurrences} recorrência(s) e ${c.budgets} orçamento(s).`,
+                );
+                setJsonFile(null);
+                router.refresh();
+              });
+            }}
+          >
+            {jsonPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="h-4 w-4" />
+            )}
+            Restaurar JSON
+          </Button>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

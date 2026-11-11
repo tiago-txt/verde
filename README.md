@@ -6,8 +6,9 @@ e dashboard no computador), self-hosted em um único container Docker, com SQLit
 
 > **Status:** etapas 1–5 concluídas — autenticação, contas, categorias/tags,
 > lançamentos completos, recorrência/parcelamento, orçamentos com ciclo,
-> cartões/faturas, dashboard, relatórios, exportação/importação e PWA. A previsão
-> de saldo entra na Etapa 6.
+> cartões/faturas, dashboard, relatórios, exportação/importação e PWA. Esta
+> entrega adiciona **multiusuário com isolamento total por workspace** (sem
+> compartilhamento). A previsão de saldo continua reservada para a Etapa 6.
 
 ---
 
@@ -29,6 +30,11 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 
 ## Funcionalidades atuais
 
+- **Multiusuário isolado por workspace**: cada usuário tem um workspace pessoal
+  com contas, cartões, categorias, tags, lançamentos, recorrências e orçamentos
+  próprios. O `workspace_id` vem sempre da sessão no servidor; IDs de outro
+  workspace respondem como “não encontrado”. O admin gerencia usuários, mas
+  **não** vê os dados financeiros de ninguém.
 - **Contas** (`/contas`): CRUD, saldo atual (pagos) e previsto (inclui não pagos),
   transferências, arquivamento e exclusão bloqueada quando há lançamentos.
 - **Categorias e tags** (`/configuracoes/categorias`): despesa/receita, um nível
@@ -66,12 +72,23 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Relatórios** (`/relatorios`): por categoria (com subcategorias e variação),
   por mês (barras empilhadas e tabela) e por conta/cartão (com faturas), filtros
   de período/tipo/origem/categoria/tag/pago e exportação CSV por aba.
-- **Dados** (`/configuracoes/dados`): backup JSON completo, CSV de lançamentos
-  por intervalo e importação de CSV com mapeamento, pré-visualização,
-  duplicados, criação opcional de contas/categorias e desfazer do último lote.
+- **Dados** (`/configuracoes/dados`): backup JSON completo, restauração do JSON
+  dentro do workspace (remapeando IDs), CSV de lançamentos por intervalo e
+  importação de CSV com mapeamento, pré-visualização, duplicados, criação
+  opcional de contas/categorias e desfazer do último lote.
+- **Usuários** (`/configuracoes/usuarios`, somente admin): criar usuário com
+  senha temporária, redefinir senha, ativar/desativar e excluir (apaga o
+  workspace inteiro). O último admin ativo e a própria conta são protegidos.
+  O novo usuário nasce com categorias padrão (incluindo “Outros”) e tags.
+- **Perfil e segurança** (`/configuracoes/perfil`): editar nome/e-mail, trocar a
+  própria senha e excluir a própria conta com confirmação. Primeiro login com
+  senha temporária força a troca em `/trocar-senha`.
+- **Cadastro público opcional**: desligado por padrão (`ALLOW_SIGNUP=false`);
+  quando ligado, habilita `/cadastro` com validação de e-mail e senha forte.
 - **PWA**: manifest, ícones 192/512/maskable, atalhos iOS, service worker com
   cache apenas de assets e página offline; nova versão avisa e atualiza sob
-  demanda, sem cachear respostas autenticadas ou APIs.
+  demanda, sem cachear respostas autenticadas ou APIs. O logout limpa caches e
+  storages locais para não vazar estado entre usuários no mesmo aparelho.
 - **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
   parcelas, transferências, 2 cartões com faturas e um pagamento de fatura.
 
@@ -105,6 +122,11 @@ app/
     relatorios/          # etapa 5
     configuracoes/       # perfil, tema, logout
       categorias/        # categorias, subcategorias e tags
+      dados/             # exportação/importação JSON e CSV
+      perfil/            # nome, e-mail, senha e exclusão da conta
+      usuarios/          # gestão de usuários (somente admin)
+  cadastro/              # cadastro público (somente com ALLOW_SIGNUP=true)
+  trocar-senha/          # troca obrigatória da senha temporária
   login/                 # login (fora do shell)
   api/health/            # healthcheck do Docker
   layout.tsx             # tema escuro padrão + metadados
@@ -123,11 +145,13 @@ components/
 lib/
   db/
     schema.ts            # tabelas Drizzle
+    scoped.ts            # camada única de acesso com workspaceId
     init.ts              # migrations + seed idempotente
     index.ts             # conexão única por processo
     seed-data.ts         # categorias/tags padrão
+    seed-workspace.ts    # seed por workspace (novos usuários)
     seed-demo.ts         # dados de exemplo (SEED_DEMO=true)
-    queries/             # leituras (saldos, filtros, saldo do dia, detalhe)
+    queries/             # leituras escopadas por workspace
   finance/               # lógica pura testável: saldos, recorrência, parcelas,
                          # escopos, filtros, calendário, datas, saldo do dia,
                          # lote, orçamentos com ciclo e faturas de cartão
@@ -283,6 +307,7 @@ risco no seu servidor.
 | `ADMIN_EMAIL`    | 1º boot     | E-mail do primeiro usuário (admin). Ignorado se já existir usuário.        |
 | `ADMIN_PASSWORD` | 1º boot     | Senha do admin inicial (≥ 8 caracteres).                                   |
 | `ADMIN_NAME`     | não         | Nome exibido do admin (padrão: Administrador).                            |
+| `ALLOW_SIGNUP`   | não         | `true` habilita o cadastro público em `/cadastro` (padrão: `false`).      |
 | `PORT`           | não         | Porta HTTP do app/container (padrão: 3000).                                |
 | `TZ`             | não         | Fuso para “hoje”, faturas e recorrências (padrão: `America/Sao_Paulo`).    |
 | `COOKIE_SECURE`  | não         | Força o cookie `Secure`. Em geral o app detecta HTTPS via `x-forwarded-proto`. |
@@ -293,7 +318,8 @@ risco no seu servidor.
 | `BACKUP_KEEP`    | não         | Quantos backups manter (padrão: 14).                                       |
 
 > `ADMIN_EMAIL`/`ADMIN_PASSWORD` só são usados quando **não existe nenhum
-> usuário**. Depois disso, o admin gerencia a família pela interface (etapa 6).
+> usuário**. Depois disso, o admin gerencia os usuários em
+> **Configurações → Usuários**.
 
 ---
 
@@ -332,8 +358,8 @@ fornece TLS válido, então o PWA pode ser instalado.
 - **Android/Chrome:** menu → “Instalar app” / “Adicionar à tela inicial”.
 - **iOS/Safari:** compartilhar → “Adicionar à Tela de Início”.
 
-O manifest e o service worker entram na etapa 6; até lá o app funciona
-normalmente no navegador.
+O manifest e o service worker já estão ativos; o logout limpa caches e
+storages locais.
 
 ---
 
@@ -376,6 +402,22 @@ docker compose logs -f verde
 
 Para backup “frio” de tudo, pare o container e copie a pasta `./data` inteira.
 
+### Restaurar um único usuário
+
+O backup SQLite cobre **todos** os usuários/workspaces de uma vez — é o caminho
+recomendado para desastre total. Para restaurar apenas uma pessoa:
+
+1. Peça a ela (ou use um backup anterior) o JSON exportado em
+   **Configurações → Dados → Exportar JSON**.
+2. Crie/abra a conta dela e vá em **Configurações → Dados → Restaurar backup
+   (JSON)**.
+3. O arquivo é recriado **dentro do workspace dela**, com contas, cartões,
+   categorias, tags, lançamentos, recorrências e orçamentos; os IDs são
+   remapeados e nomes duplicados recebem sufixo.
+
+O JSON não contém senhas nem segredos. Se o usuário foi excluído, o admin pode
+criá-lo novamente em **Configurações → Usuários** antes de restaurar.
+
 ---
 
 ## Qualidade
@@ -386,7 +428,7 @@ npm test
 npm run build
 ```
 
-Testes atuais (102): formatação/parse de BRL, datas/meses, máscara e parsing
+Testes atuais (271): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
 geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e
@@ -397,16 +439,37 @@ lote. A migration 0002 (categorias de sistema + backfill) foi validada também
 contra um banco simulando a etapa 2. Na etapa 4 entram os testes de fechamento
 de fatura.
 
+Testes de multiusuário (SQLite real em memória): dois workspaces cobrindo contas,
+cartões, categorias, tags, lançamentos, recorrências, parcelas, orçamentos,
+faturas, importação/desfazer lote, exportação, relatórios, dashboard, busca e
+filtros; rejeição de IDs de outro workspace em vínculos; saldos/relatórios/
+faturas/orçamentos imutáveis entre workspaces; “Outros” por workspace; usuário
+inativo sem sessão; último admin protegido; `ALLOW_SIGNUP=false`; migration 0007
+validada contra um banco da etapa anterior e idempotente; e uma varredura que
+falha se houver query de domínio fora de `scopedDb`.
+
 Decisões de segurança já aplicadas:
 
-- senha com **bcrypt** (custo 12), sem cadastro público;
+- senha com **bcrypt** (custo 12), sem cadastro público por padrão;
 - cookie de sessão `httpOnly`, `SameSite=Lax`, `Secure` quando HTTPS (detectado
   via `x-forwarded-proto` ou `COOKIE_SECURE=true`), assinado com HS256;
-- middleware protege todas as rotas (exceto login/health) e a sessão é
-  reconferida no banco a cada request;
+- sessão inclui `userId`, `workspaceId` e `role`; o usuário é reconferido no
+  banco a cada request e **usuário inativo perde a sessão**;
+- middleware protege todas as rotas (exceto login/cadastro/health) e toda query
+  de domínio passa pela camada `scopedDb(workspaceId)`; um teste de varredura
+  falha se alguém consultar tabela de domínio fora dela;
+- operações por ID validam o workspace e respondem “não encontrado” para
+  recursos de outro usuário;
 - validação com **Zod** em toda entrada;
 - queries parametrizadas via Drizzle (sem SQL concatenado);
-- rate limit simples em memória no login (8 tentativas / 5 min por e-mail).
+- rate limit simples em memória no login (8 tentativas / 5 min por e-mail **e**
+  por IP), com mensagem genérica;
+- admin vê apenas metadados de usuários; nunca dados financeiros de outro
+  workspace;
+- preferências de interface (tema e sidebar) ficam no `localStorage`; a sidebar
+  é namespaced por `userId` e o logout limpa tema, sidebar, `sessionStorage` e
+  caches do service worker. Não há tabela de preferências no servidor nesta
+  etapa.
 
 ---
 
@@ -417,7 +480,8 @@ Decisões de segurança já aplicadas:
 - [x] **Etapa 3** — tela de Lançamentos completa, calendário, filtros, painel, saldo do dia, lote e CSV
 - [ ] **Etapa 4** — cartões e faturas
 - [ ] **Etapa 5** — dashboard, relatórios e limite de gastos
-- [ ] **Etapa 6** — PWA, exportação/importação, backup e gestão de usuários
+- [ ] **Etapa 6** - previsão de saldo (PWA, exportação/importação, backup,
+  multiusuário e gestão de usuários já implementados)
 
 Fora do escopo por enquanto: Open Finance, IA de categorização, multi-moeda,
 investimentos com cotação e notificações push.

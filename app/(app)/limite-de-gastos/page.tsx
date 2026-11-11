@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import { BudgetsView } from "@/components/budgets/budgets-view";
 import { requireUser } from "@/lib/auth/current-user";
 import {
@@ -15,7 +16,7 @@ export default async function LimiteDeGastosPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requireUser();
+  const user = await requireUser();
 
   const params = await searchParams;
   const rawCiclo = Array.isArray(params.ciclo) ? params.ciclo[0] : params.ciclo;
@@ -29,8 +30,16 @@ export default async function LimiteDeGastosPage({
   const initialBudgetId =
     rawBudget && idSchema.safeParse(rawBudget).success ? rawBudget : null;
 
-  const details = listBudgetCycleDetails(ciclo, { incluirArquivados });
-  const formData = getBudgetFormData();
+  const details = listBudgetCycleDetails(user.workspaceId, ciclo, {
+    incluirArquivados,
+  });
+  if (
+    initialBudgetId &&
+    !details.some((detail) => detail.resumo.id === initialBudgetId)
+  ) {
+    notFound();
+  }
+  const formData = getBudgetFormData(user.workspaceId);
 
   return (
     <BudgetsView

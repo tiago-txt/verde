@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { getApiUser } from "@/lib/auth/current-user";
 import { listMonthTransactions } from "@/lib/db/queries/transactions";
 import { formatCsvDate, formatCsvNumber, toCsv } from "@/lib/finance/csv";
 import { parseTransactionFilters } from "@/lib/finance/filters";
@@ -13,7 +13,7 @@ const TYPE_LABELS = {
 } as const;
 
 export async function GET(request: Request) {
-  const user = await getCurrentUser();
+  const user = await getApiUser();
   if (!user) {
     return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
   }
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
   const filters = parseTransactionFilters(
     Object.fromEntries(url.searchParams.entries()),
   );
-  const transactions = listMonthTransactions(filters);
+  const transactions = listMonthTransactions(user.workspaceId, filters);
 
   const header = [
     "Data",
