@@ -21,6 +21,7 @@ import { BudgetScopeDialog } from "./budget-scope-dialog";
 import { BudgetProgress, budgetTone } from "./budget-progress";
 import {
   createBudgetAction,
+  restoreBudgetCycleAction,
   updateBudgetAction,
 } from "@/lib/actions/budgets";
 import type {
@@ -41,6 +42,7 @@ type BudgetsViewProps = {
   formData: BudgetFormData;
   incluirArquivados: boolean;
   initialBudgetId: string | null;
+  excludedCycles: { budgetId: string; nome: string }[];
 };
 
 function relevantChange(
@@ -88,6 +90,7 @@ export function BudgetsView({
   formData,
   incluirArquivados,
   initialBudgetId,
+  excludedCycles,
 }: BudgetsViewProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -167,17 +170,8 @@ export function BudgetsView({
       return { ok: true };
     }
 
-    const result = await updateBudgetAction({
-      ...values,
-      id: editing.id,
-      scope: "all",
-      ciclo,
-    });
-    if (result.ok) {
-      toast({ description: "Orçamento atualizado.", tone: "success" });
-      router.refresh();
-    }
-    return { ok: result.ok, error: result.ok ? undefined : result.error };
+    // Sem mudanças: não regrava a série (isso apagaria exceções existentes).
+    return { ok: true };
   }
 
   function applyScope(scope: Scope) {
@@ -211,6 +205,21 @@ export function BudgetsView({
   function openEdit(budget: BudgetWithCategories) {
     setEditing(budget);
     setFormOpen(true);
+  }
+
+  function restoreCycle(item: { budgetId: string; nome: string }) {
+    startTransition(async () => {
+      const result = await restoreBudgetCycleAction({
+        id: item.budgetId,
+        ciclo,
+      });
+      if (!result.ok) {
+        toast({ description: result.error, tone: "warning" });
+        return;
+      }
+      toast({ description: "Ciclo restaurado.", tone: "success" });
+      router.refresh();
+    });
   }
 
   return (
@@ -283,9 +292,34 @@ export function BudgetsView({
         </Button>
       </div>
 
+      {excludedCycles.length > 0 && (
+        <div className="rounded-xl border border-border bg-card p-3">
+          <p className="text-sm font-medium">
+            Ciclos excluídos em {formatMonthTitle(ciclo)}
+          </p>
+          <p className="mb-2 text-[11px] text-muted-foreground">
+            Eles não consomem gastos nem geram reserva. Você pode restaurar.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {excludedCycles.map((item) => (
+              <Button
+                key={item.budgetId}
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11"
+                onClick={() => restoreCycle(item)}
+                disabled={isPending}
+              >
+                Restaurar {item.nome}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Total label="Limites" value={totals.limites} />
-        <Total label="Gastos" value={totals.gastos} tone="text-destructive" />
+        <Total label="Limites" value={totals.limites} />        <Total label="Gastos" value={totals.gastos} tone="text-destructive" />
         <Total
           label="Restantes"
           value={totals.restantes}
@@ -306,8 +340,16 @@ export function BudgetsView({
         <div className="rounded-xl border border-border bg-card p-6">
           <EmptyState
             icon={Target}
-            title="Crie seu primeiro orçamento"
-            description="Defina um valor por ciclo e sincronize as categorias que ele deve cobrir."
+            title={
+              excludedCycles.length > 0
+                ? "Nenhum orçamento ativo neste ciclo"
+                : "Crie seu primeiro orçamento"
+            }
+            description={
+              excludedCycles.length > 0
+                ? "Os ciclos excluídos aparecem acima e podem ser restaurados."
+                : "Defina um valor por ciclo e sincronize as categorias que ele deve cobrir."
+            }
             action={
               <Button
                 onClick={() => {
@@ -356,6 +398,12 @@ export function BudgetsView({
                         <Badge variant="destructive">Estourou</Badge>
                       )}
                       {summary.estouro === 0 &&
+                        summary.restante === 0 &&
+                        summary.gasto > 0 && (
+                          <Badge variant="warning">Consumido</Badge>
+                        )}
+                      {summary.estouro === 0 &&
+                        summary.restante > 0 &&
                         summary.gasto / Math.max(1, summary.limite) >= 0.8 && (
                           <Badge variant={tone.badge}>{summary.percentual}%</Badge>
                         )}
@@ -392,7 +440,9 @@ export function BudgetsView({
                       "tabular shrink-0 text-xs font-medium",
                       summary.estouro > 0
                         ? "text-destructive"
-                        : "text-success",
+                        : summary.restante === 0
+                          ? "text-warning"
+                          : "text-success",
                     )}
                   >
                     {summary.estouro > 0

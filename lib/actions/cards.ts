@@ -8,8 +8,9 @@ import { scopedDb } from "@/lib/db/scoped";
 import { accounts, creditCards, transactions } from "@/lib/db/schema";
 import { getCardInvoiceDetail } from "@/lib/db/queries/cards";
 import { countCardTransactions } from "@/lib/db/queries/cards";
+import { listAllAccounts } from "@/lib/db/queries/accounts";
 import { formatCurrency } from "@/lib/format";
-import { idSchema } from "@/lib/validation/common";
+import { idSchema, monthKeySchema } from "@/lib/validation/common";
 import {
   createCardSchema,
   payInvoiceSchema,
@@ -21,6 +22,38 @@ import type { ActionResult } from "./result";
 
 function fail(error: string): ActionResult {
   return { ok: false, error };
+}
+
+export type CardInvoiceDetailResult =
+  | {
+      ok: true;
+      detail: NonNullable<ReturnType<typeof getCardInvoiceDetail>>;
+      accounts: ReturnType<typeof listAllAccounts>;
+    }
+  | { ok: false; error: string };
+
+export async function getCardInvoiceDetailAction(
+  cartaoId: string,
+  faturaChave: string,
+): Promise<CardInvoiceDetailResult> {
+  const user = await requireUser();
+  const parsed = z
+    .object({ cartaoId: idSchema, faturaChave: monthKeySchema })
+    .safeParse({ cartaoId, faturaChave });
+  if (!parsed.success) return { ok: false, error: "Fatura inválida." };
+
+  const detail = getCardInvoiceDetail(
+    user.workspaceId,
+    parsed.data.cartaoId,
+    parsed.data.faturaChave,
+  );
+  if (!detail) return { ok: false, error: "Fatura não encontrada." };
+
+  return {
+    ok: true,
+    detail,
+    accounts: listAllAccounts(user.workspaceId),
+  };
 }
 
 function revalidateCards(cardId?: string) {

@@ -32,6 +32,7 @@ import { DatePicker } from "@/components/calendar/date-picker";
 import { FormError } from "@/components/form-feedback";
 import { useToast } from "@/components/ui/toast";
 import { BudgetProgress, budgetTone } from "@/components/budgets/budget-progress";
+import { PaymentProgress } from "@/components/cards/payment-progress";
 import { TransactionFormDialog } from "@/components/transactions/transaction-form-dialog";
 import {
   deleteTransactionAction,
@@ -48,8 +49,11 @@ import { cn } from "@/lib/utils";
 
 type CardDetailViewProps = {
   detail: CardInvoiceDetail;
-  formData: TransactionFormData;
+  formData: TransactionFormData | null;
   accounts: { id: string; nome: string; arquivada: boolean }[];
+  embedded?: boolean;
+  initialPay?: boolean;
+  onChanged?: () => void;
 };
 
 const STATUS_LABELS = {
@@ -63,11 +67,14 @@ export function CardDetailView({
   detail,
   formData,
   accounts,
+  embedded = false,
+  initialPay = false,
+  onChanged,
 }: CardDetailViewProps) {
   const router = useRouter();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
-  const [payOpen, setPayOpen] = useState(false);
+  const [payOpen, setPayOpen] = useState(initialPay);
   const [purchaseOpen, setPurchaseOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [payAccountId, setPayAccountId] = useState(
@@ -78,6 +85,10 @@ export function CardDetailView({
   );
   const [payValue, setPayValue] = useState(detail.fatura.restante);
   const [payDate, setPayDate] = useState(todayISO());
+
+  useEffect(() => {
+    if (initialPay) setPayOpen(true);
+  }, [initialPay]);
 
   useEffect(() => {
     if (!payOpen) return;
@@ -137,6 +148,7 @@ export function CardDetailView({
         });
       }
       router.refresh();
+      onChanged?.();
     });
   }
 
@@ -150,6 +162,7 @@ export function CardDetailView({
       }
       toast({ description: "Pagamento desfeito; fatura reaberta.", tone: "success" });
       router.refresh();
+      onChanged?.();
     });
   }
 
@@ -166,12 +179,35 @@ export function CardDetailView({
         tone: "success",
       });
       router.refresh();
+      onChanged?.();
     });
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start gap-3">
+      {embedded ? (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-sm font-semibold">
+              Fatura {detail.card.nome}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {formatMonthTitle(fatura.chave)} · vence em{" "}
+              {formatDate(fatura.vencimento)}
+            </p>
+          </div>
+          <Button
+            type="button"
+            className="h-11"
+            onClick={() => setPayOpen(true)}
+            disabled={!canPay}
+          >
+            <Check className="h-4 w-4" />
+            Pagar fatura
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-start gap-3">
         <Link
           href="/cartoes"
           className="mt-1 inline-flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -250,11 +286,17 @@ export function CardDetailView({
             Pagar fatura
           </Button>
         </div>
-      </div>
+        </div>
+      )}
 
       <FormError message={error} />
 
-      <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+      <div
+        className={cn(
+          "grid gap-3",
+          !embedded && "lg:grid-cols-[1.2fr_1fr]",
+        )}
+      >
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
@@ -303,6 +345,12 @@ export function CardDetailView({
             />
           </div>
 
+          <PaymentProgress
+            pago={fatura.pago}
+            total={fatura.total}
+            className="mt-1"
+          />
+
           {canPay ? (
             <p className="flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
               <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
@@ -317,7 +365,8 @@ export function CardDetailView({
           )}
         </div>
 
-        <div className="space-y-2 rounded-xl border border-border bg-card p-4">
+        {!embedded && (
+          <div className="space-y-2 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">Limite usado</span>
             <span className={cn("tabular font-medium", tone.text)}>
@@ -368,6 +417,7 @@ export function CardDetailView({
             </div>
           )}
         </div>
+        )}
       </div>
 
       <div className="rounded-xl border border-border bg-card">
@@ -573,14 +623,16 @@ export function CardDetailView({
         </DialogContent>
       </Dialog>
 
-      <TransactionFormDialog
-        open={purchaseOpen}
-        onOpenChange={setPurchaseOpen}
-        mode="create"
-        formData={formData}
-        initialCartaoId={detail.card.id}
-        onSaved={() => router.refresh()}
-      />
+      {!embedded && formData && (
+        <TransactionFormDialog
+          open={purchaseOpen}
+          onOpenChange={setPurchaseOpen}
+          mode="create"
+          formData={formData}
+          initialCartaoId={detail.card.id}
+          onSaved={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }

@@ -34,7 +34,8 @@ const OPTIONS: {
   {
     scope: "single",
     title: "Só este ciclo",
-    description: "Ajusta o valor apenas neste ciclo, sem alterar o padrão.",
+    description:
+      "Ajusta só este ciclo como exceção (valor, categorias e fechamento), sem alterar os demais.",
     icon: CalendarClock,
   },
   {
@@ -75,7 +76,7 @@ export function BudgetScopeDialog({
 
         <div className="space-y-2">
           {OPTIONS.map((option) => {
-            const disabled = option.scope === "single" && !onlyValueChanged;
+            const disabled = false;
             const Icon = option.icon;
             return (
               <button

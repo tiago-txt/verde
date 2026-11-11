@@ -15,6 +15,8 @@ const DOMAIN_TABLES = [
   "budgets",
   "budgetCategories",
   "budgetOverrides",
+  "budgetVersions",
+  "budgetCycleExceptions",
 ];
 
 const SCOPED_LAYER_PREFIXES = ["lib/db/queries/", "lib/actions/"];

@@ -252,14 +252,16 @@ export function aplicarFaturasAoResumo<T extends MonthSummary>(
 }
 
 export function faturaPassaFiltros(
-  fatura: Pick<CardInvoiceSummary, "restante"> & {
+  fatura: Pick<CardInvoiceSummary, "restante" | "total" | "pago"> & {
     cartaoId: string;
     cartaoNome: string;
     contaPagamentoId: string | null;
   },
   filters: CardInvoiceFilters,
 ): boolean {
-  if (fatura.restante <= 0) return false;
+  // Fatura sem valor e sem pagamento não existe para a tela. Fatura quitada
+  // continua visível (restante 0), mas não entra em cálculos de previsto.
+  if (fatura.total <= 0 && fatura.pago <= 0) return false;
   if (filters.status !== "todos") return false;
   if (filters.tags.length > 0) return false;
   if (filters.categorias.length > 0) return false;

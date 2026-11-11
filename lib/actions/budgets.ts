@@ -4,31 +4,35 @@ import { and, eq, gte, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { addMonths, todayISO } from "@/lib/dates";
+import { addMonths, currentMonth, todayISO } from "@/lib/dates";
 import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   budgetCategories,
+  budgetCycleExceptions,
   budgetOverrides,
+  budgetVersions,
   budgets,
   categories,
   creditCards,
+  type BudgetVersionData,
 } from "@/lib/db/schema";
 import {
   getBudgetCycleDetail,
   getDefaultBudgetAccountId,
-  listBudgetsWithCategories,
-  type BudgetWithCategories,
+  loadBudgetSeries,
 } from "@/lib/db/queries/budgets";
-import {
-  cicloDaData,
-  encontrarConflitoDeCategorias,
-  expandirCategorias,
-  orcamentoVigenteNoCiclo,
-  transacaoConsomeOrcamento,
-  type BudgetCategoryUsage,
-} from "@/lib/finance/budgets";
+import { listAllCategories } from "@/lib/db/queries/categories";
 import { getTransactionRaw } from "@/lib/db/queries/transactions";
+import {
+  calcularCiclo,
+  ciclosEntre,
+  ciclosRelevantesParaMes,
+  cicloDaData,
+  expandirCategorias,
+  resolverCiclo,
+  transacaoConsomeOrcamento,
+} from "@/lib/finance/budgets";
 import { idSchema, isoDateSchema } from "@/lib/validation/common";
 import {
   budgetOverrideSchema,
@@ -56,21 +60,8 @@ function revalidateBudgets() {
 function validateCategories(
   workspaceId: string,
   categoriaIds: string[],
-): {
-  error?: string;
-  names?: Map<string, string>;
-} {  const { db, ws } = scopedDb(workspaceId);
-  const rows = db
-    .select({
-      id: categories.id,
-      nome: categories.nome,
-      tipo: categories.tipo,
-      deletedAt: categories.deletedAt,
-    })
-    .from(categories)
-    .where(ws(categories.workspaceId))
-    .all();
-
+): { error?: string; names?: Map<string, string> } {
+  const rows = listAllCategories(workspaceId);
   const byId = new Map(rows.map((row) => [row.id, row]));
 
   for (const id of categoriaIds) {
@@ -128,61 +119,47 @@ function validateBudgetLinks(
   return null;
 }
 
-function usagesForPeriod(
-  workspaceId: string,
-  options: {
-    start: string;
-    end: string | null;
-    ignoreBudgetId?: string;
-  },
-): BudgetCategoryUsage[] {
-  return listBudgetsWithCategories(workspaceId)
-    .filter((budget) => {
-      if (budget.arquivado) return false;
-      if (options.ignoreBudgetId && budget.id === options.ignoreBudgetId) {
-        return false;
-      }
-      if (budget.dataInicio > (options.end ?? "9999-12")) return false;
-      if (budget.dataFim && budget.dataFim < options.start) return false;
-      return true;
-    })
-    .map((budget) => ({
-      budgetId: budget.id,
-      budgetNome: budget.nome,
-      categoriaIds: budget.categories.map((category) => category.id),
-    }));
-}
-
 function conflictError(
   workspaceId: string,
-  categoriaIds: string[],
-  options: {
-    start: string;
-    end: string | null;
-    ignoreBudgetId?: string;
-    names?: Map<string, string>;
-  },
+  selectedRootIds: string[],
+  start: string,
+  end: string | null,
+  ignoreBudgetId?: string,
 ): string | null {
-  const { db, ws } = scopedDb(workspaceId);
-  const categoryRows = db
-    .select({ id: categories.id, categoriaPaiId: categories.categoriaPaiId })
-    .from(categories)
-    .where(ws(categories.workspaceId))
-    .all();
+  const categories = listAllCategories(workspaceId).map((category) => ({
+    id: category.id,
+    categoriaPaiId: category.categoriaPaiId,
+    nome: category.nome,
+  }));
+  const selected = expandirCategorias(categories, selectedRootIds);
+  const series = loadBudgetSeries(workspaceId);
 
-  const conflict = encontrarConflitoDeCategorias(
-    categoryRows,
-    categoriaIds,
-    usagesForPeriod(workspaceId, options),
-    options.ignoreBudgetId,
-  );
+  // Para séries sem fim, valida uma janela segura de ciclos. O usuário pode
+  // criar um orçamento futuro depois; nesse momento a validação roda de novo.
+  const rangeEnd = end ?? addMonths(currentMonth(), 24);
+  const cycles = ciclosEntre(start, rangeEnd, 120);
 
-  if (!conflict) return null;
-  const name = options.names?.get(conflict.categoryId) ?? "uma categoria";
-  return `A categoria "${name}" já está no orçamento "${conflict.budgetNome}".`;
+  for (const row of series) {
+    if (ignoreBudgetId && row.id === ignoreBudgetId) continue;
+    for (const ciclo of cycles) {
+      const resolved = resolverCiclo(row, ciclo);
+      if (!resolved) continue;
+      const covered = expandirCategorias(categories, resolved.categoriaIds);
+      for (const id of selected) {
+        if (covered.has(id)) {
+          const name =
+            categories.find((category) => category.id === id)?.nome ??
+            "uma categoria";
+          return `A categoria "${name}" já está no orçamento "${resolved.nome}" no ciclo ${ciclo}.`;
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
-function replaceCategories(
+function replaceLegacyCategories(
   tx: Tx,
   workspaceId: string,
   budgetId: string,
@@ -196,86 +173,116 @@ function replaceCategories(
       ),
     )
     .run();
-  tx.insert(budgetCategories)
-    .values(
-      ids.map((categoryId) => ({ workspaceId, budgetId, categoryId })),
-    )
-    .onConflictDoNothing()
-    .run();
+  if (ids.length > 0) {
+    tx.insert(budgetCategories)
+      .values(ids.map((categoryId) => ({ workspaceId, budgetId, categoryId })))
+      .onConflictDoNothing()
+      .run();
+  }
 }
 
-function detectRelevantChange(
-  existing: BudgetWithCategories,
-  data: UpdateBudgetInput,
-): boolean {
-  if (existing.valorPadrao !== data.valorPadrao) return true;
-  if (existing.diaFechamento !== data.diaFechamento) return true;
-  if (existing.dataInicio !== data.dataInicio) return true;
-  if ((existing.dataFim ?? null) !== (data.dataFim ?? null)) return true;
-  if (existing.dataDaReserva !== data.dataDaReserva) return true;
-  if (existing.diaVencimento !== data.diaVencimento) return true;
-  if ((existing.cartaoId ?? null) !== (data.cartaoId ?? null)) return true;
-  if (existing.origens !== data.origens) return true;
-
-  const before = existing.categories.map((category) => category.id).sort();
-  const after = [...data.categoriaIds].sort();
-  return (
-    before.length !== after.length ||
-    before.some((id, index) => id !== after[index])
-  );
+function versionDataFromForm(
+  data: BudgetFormValues,
+  categoriaIds: string[],
+  contaId: string | null,
+): BudgetVersionData {
+  return {
+    nome: data.nome,
+    valorPadrao: data.valorPadrao,
+    diaFechamento: data.diaFechamento,
+    antecedenciaCiclos: data.antecedenciaCiclos,
+    dataDaReserva: data.dataDaReserva,
+    diaVencimento: data.diaVencimento,
+    origens: data.origens,
+    contaId,
+    cartaoId: data.cartaoId ?? null,
+    cor: data.cor,
+    icone: data.icone,
+    categoriaIds,
+  };
 }
 
-function insertNewVersion(
+function insertVersion(
   tx: Tx,
   workspaceId: string,
-  source: BudgetWithCategories,
-  data: BudgetFormValues,
-  start: string,
-): string {
-  const newId = crypto.randomUUID();
-  const now = new Date();
-
-  tx.insert(budgets)
+  budgetId: string,
+  vigenteApartir: string,
+  data: BudgetVersionData,
+) {
+  tx.insert(budgetVersions)
     .values({
-      id: newId,
+      id: crypto.randomUUID(),
       workspaceId,
-      nome: data.nome,
-      valorPadrao: data.valorPadrao,
-      diaFechamento: data.diaFechamento,
-      antecedenciaCiclos: data.antecedenciaCiclos,
-      dataDaReserva: data.dataDaReserva,
-      diaVencimento: data.diaVencimento,
-      origens: data.origens,
-      cartaoId: data.cartaoId ?? null,
-      contaId: data.contaId ?? source.contaId,
-      dataInicio: start,
-      dataFim: data.dataFim,
-      cor: data.cor,
-      icone: data.icone,
-      arquivado: false,
-      createdAt: now,
-      updatedAt: now,
-      categoriaId: data.categoriaIds[0] as string,
-      mes: start,
-      valorLimite: data.valorPadrao,
+      budgetId,
+      vigenteApartir,
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
     })
     .run();
+}
 
-  replaceCategories(tx, workspaceId, newId, data.categoriaIds);
-
-  // Preserva overrides futuros ao dividir a vigência.
-  tx.update(budgetOverrides)
-    .set({ budgetId: newId, updatedAt: now })
+function deleteVersionsFrom(
+  tx: Tx,
+  workspaceId: string,
+  budgetId: string,
+  ciclo: string,
+) {
+  tx.delete(budgetVersions)
     .where(
       and(
-        eq(budgetOverrides.budgetId, source.id),
-        eq(budgetOverrides.workspaceId, workspaceId),
-        gte(budgetOverrides.ciclo, start),
+        eq(budgetVersions.workspaceId, workspaceId),
+        eq(budgetVersions.budgetId, budgetId),
+        gte(budgetVersions.vigenteApartir, ciclo),
       ),
     )
     .run();
+}
 
-  return newId;
+function deleteExceptionsFrom(
+  tx: Tx,
+  workspaceId: string,
+  budgetId: string,
+  ciclo: string,
+) {
+  tx.delete(budgetCycleExceptions)
+    .where(
+      and(
+        eq(budgetCycleExceptions.workspaceId, workspaceId),
+        eq(budgetCycleExceptions.budgetId, budgetId),
+        gte(budgetCycleExceptions.ciclo, ciclo),
+      ),
+    )
+    .run();
+}
+
+function upsertException(
+  tx: Tx,
+  workspaceId: string,
+  budgetId: string,
+  ciclo: string,
+  tipo: "excluido" | "ajustado",
+  dados: Partial<BudgetVersionData> | null,
+) {
+  tx.insert(budgetCycleExceptions)
+    .values({
+      id: crypto.randomUUID(),
+      workspaceId,
+      budgetId,
+      ciclo,
+      tipo,
+      dados,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [
+        budgetCycleExceptions.budgetId,
+        budgetCycleExceptions.ciclo,
+      ],
+      set: { tipo, dados, updatedAt: new Date() },
+    })
+    .run();
 }
 
 export async function createBudgetAction(
@@ -300,15 +307,18 @@ export async function createBudgetAction(
   );
   if (linkError) return fail(linkError);
 
-  const conflict = conflictError(workspaceId, data.categoriaIds, {
-    start: data.dataInicio,
-    end: data.dataFim,
-    names: categoryCheck.names,
-  });
+  const conflict = conflictError(
+    workspaceId,
+    data.categoriaIds,
+    data.dataInicio,
+    data.dataFim,
+  );
   if (conflict) return fail(conflict);
 
   const id = crypto.randomUUID();
   const now = new Date();
+  const contaId = data.contaId ?? getDefaultBudgetAccountId(workspaceId);
+  const versionData = versionDataFromForm(data, data.categoriaIds, contaId);
 
   try {
     db.transaction((tx) => {
@@ -324,8 +334,7 @@ export async function createBudgetAction(
           diaVencimento: data.diaVencimento,
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
-          // Conta de reserva padrão: a mais usada/principal.
-          contaId: data.contaId ?? getDefaultBudgetAccountId(workspaceId),
+          contaId,
           dataInicio: data.dataInicio,
           dataFim: data.dataFim,
           cor: data.cor,
@@ -333,14 +342,14 @@ export async function createBudgetAction(
           arquivado: false,
           createdAt: now,
           updatedAt: now,
-          // Colunas legadas da Etapa 1 (mantidas para compatibilidade).
           categoriaId: data.categoriaIds[0] as string,
           mes: data.dataInicio,
           valorLimite: data.valorPadrao,
         })
         .run();
 
-      replaceCategories(tx, workspaceId, id, data.categoriaIds);
+      insertVersion(tx, workspaceId, id, data.dataInicio, versionData);
+      replaceLegacyCategories(tx, workspaceId, id, data.categoriaIds);
     });
   } catch (error) {
     console.error("[verde] erro ao criar orçamento:", error);
@@ -368,6 +377,11 @@ export async function updateBudgetAction(
   }
 
   const data = parsed.data;
+  const series = loadBudgetSeries(workspaceId, { incluirArquivados: true }).find(
+    (row) => row.id === data.id,
+  );
+  if (!series) return fail("Orçamento não encontrado.");
+
   const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
   if (categoryCheck.error) return fail(categoryCheck.error);
   const linkError = validateBudgetLinks(
@@ -377,119 +391,144 @@ export async function updateBudgetAction(
   );
   if (linkError) return fail(linkError);
 
-  const existing = listBudgetsWithCategories(workspaceId, {
-    incluirArquivados: true,
-  }).find((budget) => budget.id === data.id);
-  if (!existing) return fail("Orçamento não encontrado.");
-
+  const scope = data.scope;
   const ciclo = data.ciclo;
-  if (
-    ciclo < existing.dataInicio ||
-    (existing.dataFim && ciclo > existing.dataFim)
-  ) {
-    return fail("O ciclo escolhido está fora da vigência deste orçamento.");
-  }
+  const start =
+    scope === "single"
+      ? ciclo
+      : scope === "future"
+        ? ciclo
+        : data.dataInicio;
+  const end = scope === "single" ? ciclo : data.dataFim;
 
-  // "Só este ciclo" só altera o valor; o restante continua como está.
-  if (data.scope === "single") {
-    const onlyValueChanged =
-      existing.diaFechamento === data.diaFechamento &&
-      existing.dataInicio === data.dataInicio &&
-      (existing.dataFim ?? null) === (data.dataFim ?? null) &&
-      existing.dataDaReserva === data.dataDaReserva &&
-      existing.diaVencimento === data.diaVencimento &&
-      (existing.cartaoId ?? null) === (data.cartaoId ?? null) &&
-      existing.origens === data.origens &&
-      existing.categories.length === data.categoriaIds.length &&
-      existing.categories.every((category) =>
-        data.categoriaIds.includes(category.id),
-      );
-
-    if (!onlyValueChanged) {
-      return fail(
-        "Em “Só este ciclo” apenas o valor pode mudar. Escolha outro escopo para alterar categorias ou fechamento.",
-      );
+  if (scope === "single") {
+    const exception = series.exceptions.find(
+      (item) => item.ciclo === ciclo && item.tipo === "excluido",
+    );
+    if (exception) {
+      return fail("Este ciclo está excluído. Restaure-o antes de editar.");
     }
-
-    try {
-      db.insert(budgetOverrides)
-        .values({
-          workspaceId,
-          budgetId: existing.id,
-          ciclo,
-          valorCentavos: data.valorPadrao,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .onConflictDoUpdate({
-          target: [budgetOverrides.budgetId, budgetOverrides.ciclo],
-          set: { valorCentavos: data.valorPadrao, updatedAt: new Date() },
-        })
-        .run();
-    } catch (error) {
-      console.error("[verde] erro ao ajustar ciclo do orçamento:", error);
-      return fail("Não foi possível ajustar o valor deste ciclo.");
-    }
-
-    revalidateBudgets();
-    return { ok: true, id: existing.id };
   }
 
-  let start = data.scope === "future" ? ciclo : data.dataInicio;
-
-  // Alterar o fechamento não pode reescrever ciclos já encerrados.
-  if (data.scope === "all" && existing.diaFechamento !== data.diaFechamento) {
-    const openCycle = cicloDaData(todayISO(), existing.diaFechamento);
-    start = ciclo > openCycle ? ciclo : openCycle;
-    if (existing.dataInicio >= start) start = existing.dataInicio;
+  if (scope !== "all" && ciclo < series.dataInicio) {
+    return fail("O ciclo escolhido está antes do início desta série.");
+  }
+  if (scope !== "all" && series.dataFim && ciclo > series.dataFim) {
+    return fail("O ciclo escolhido está depois do fim desta série.");
+  }
+  if (end && end < start) {
+    return fail("O fim deve ser depois do início.");
   }
 
-  if (start < existing.dataInicio) start = existing.dataInicio;
-
-  const conflict = conflictError(workspaceId, data.categoriaIds, {
+  const conflict = conflictError(
+    workspaceId,
+    data.categoriaIds,
     start,
-    end: data.dataFim,
-    ignoreBudgetId: existing.id,
-    names: categoryCheck.names,
-  });
+    end,
+    series.id,
+  );
   if (conflict) return fail(conflict);
 
-  const requiresNewVersion =
-    detectRelevantChange(existing, data) &&
-    (data.scope === "future" ||
-      (data.scope === "all" && existing.diaFechamento !== data.diaFechamento));
+  const contaId =
+    data.contaId ?? getDefaultBudgetAccountId(workspaceId);
+  const versionData = versionDataFromForm(
+    data,
+    data.categoriaIds,
+    contaId,
+  );
+  const now = new Date();
 
   try {
-    if (requiresNewVersion && start > existing.dataInicio) {
-      const previous = addMonths(start, -1);
-      let newId = "";
+    db.transaction((tx) => {
+      if (scope === "single") {
+        // Exceção do ciclo: sobrepõe valor, categorias, fechamento etc.
+        upsertException(
+          tx,
+          workspaceId,
+          series.id,
+          ciclo,
+          "ajustado",
+          versionData,
+        );
+        // Compatibilidade com o mecanismo antigo de override de valor.
+        tx.insert(budgetOverrides)
+          .values({
+            workspaceId,
+            budgetId: series.id,
+            ciclo,
+            valorCentavos: data.valorPadrao,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: [budgetOverrides.budgetId, budgetOverrides.ciclo],
+            set: {
+              valorCentavos: data.valorPadrao,
+              updatedAt: now,
+            },
+          })
+          .run();
+        return;
+      }
 
-      db.transaction((tx) => {
+      if (scope === "future") {
+        // Ciclos anteriores ficam como estavam; do ciclo em diante, uma nova
+        // vigência substitui versões/exceções futuras.
+        if (ciclo <= series.dataInicio) {
+          tx.delete(budgetVersions)
+            .where(
+              and(
+                eq(budgetVersions.workspaceId, workspaceId),
+                eq(budgetVersions.budgetId, series.id),
+              ),
+            )
+            .run();
+          tx.delete(budgetCycleExceptions)
+            .where(
+              and(
+                eq(budgetCycleExceptions.workspaceId, workspaceId),
+                eq(budgetCycleExceptions.budgetId, series.id),
+              ),
+            )
+            .run();
+          insertVersion(tx, workspaceId, series.id, series.dataInicio, versionData);
+        } else {
+          deleteVersionsFrom(tx, workspaceId, series.id, ciclo);
+          deleteExceptionsFrom(tx, workspaceId, series.id, ciclo);
+          insertVersion(tx, workspaceId, series.id, ciclo, versionData);
+        }
+
         tx.update(budgets)
           .set({
-            dataFim:
-              existing.dataFim && existing.dataFim < previous
-                ? existing.dataFim
-                : previous,
-            updatedAt: new Date(),
+            dataFim: data.dataFim,
+            updatedAt: now,
           })
           .where(
-            and(
-              eq(budgets.id, existing.id),
-              eq(budgets.workspaceId, workspaceId),
-            ),
+            and(eq(budgets.id, series.id), ws(budgets.workspaceId)),
           )
           .run();
+        return;
+      }
 
-        newId = insertNewVersion(tx, workspaceId, existing, data, start);
-      });
+      // Todos: uma única vigência com os novos valores, sem exceções.
+      tx.delete(budgetVersions)
+        .where(
+          and(
+            eq(budgetVersions.workspaceId, workspaceId),
+            eq(budgetVersions.budgetId, series.id),
+          ),
+        )
+        .run();
+      tx.delete(budgetCycleExceptions)
+        .where(
+          and(
+            eq(budgetCycleExceptions.workspaceId, workspaceId),
+            eq(budgetCycleExceptions.budgetId, series.id),
+          ),
+        )
+        .run();
+      insertVersion(tx, workspaceId, series.id, data.dataInicio, versionData);
 
-      revalidateBudgets();
-      return { ok: true, id: newId };
-    }
-
-    // Atualização direta (inclui "todos" e início igual ao primeiro ciclo).
-    db.transaction((tx) => {
       tx.update(budgets)
         .set({
           nome: data.nome,
@@ -500,25 +539,22 @@ export async function updateBudgetAction(
           diaVencimento: data.diaVencimento,
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
-          contaId: data.contaId ?? existing.contaId,
-          dataInicio: start,
+          contaId,
+          dataInicio: data.dataInicio,
           dataFim: data.dataFim,
           cor: data.cor,
           icone: data.icone,
-          updatedAt: new Date(),
+          updatedAt: now,
           categoriaId: data.categoriaIds[0] as string,
-          mes: start,
+          mes: data.dataInicio,
           valorLimite: data.valorPadrao,
         })
         .where(
-          and(
-            eq(budgets.id, existing.id),
-            eq(budgets.workspaceId, workspaceId),
-          ),
+          and(eq(budgets.id, series.id), ws(budgets.workspaceId)),
         )
         .run();
 
-      replaceCategories(tx, workspaceId, existing.id, data.categoriaIds);
+      replaceLegacyCategories(tx, workspaceId, series.id, data.categoriaIds);
     });
   } catch (error) {
     console.error("[verde] erro ao atualizar orçamento:", error);
@@ -530,7 +566,7 @@ export async function updateBudgetAction(
   }
 
   revalidateBudgets();
-  return { ok: true, id: existing.id };
+  return { ok: true, id: series.id };
 }
 
 export async function setBudgetOverrideAction(input: {
@@ -547,43 +583,55 @@ export async function setBudgetOverrideAction(input: {
     return fail(parsed.error.issues[0]?.message ?? "Dados inválidos.");
   }
 
-  const existing = listBudgetsWithCategories(workspaceId, {
-    incluirArquivados: true,
-  }).find((budget) => budget.id === parsed.data.budgetId);
-  if (!existing) return fail("Orçamento não encontrado.");
-
-  if (
-    parsed.data.ciclo < existing.dataInicio ||
-    (existing.dataFim && parsed.data.ciclo > existing.dataFim)
-  ) {
-    return fail("O ciclo escolhido está fora da vigência deste orçamento.");
-  }
+  const series = loadBudgetSeries(workspaceId, { incluirArquivados: true }).find(
+    (row) => row.id === parsed.data.budgetId,
+  );
+  if (!series) return fail("Orçamento não encontrado.");
+  const resolved = resolverCiclo(series, parsed.data.ciclo);
+  if (!resolved) return fail("O ciclo escolhido não existe neste orçamento.");
 
   try {
-    db.insert(budgetOverrides)
-      .values({
+    db.transaction((tx) => {
+      const existing = series.exceptions.find(
+        (item) => item.ciclo === parsed.data.ciclo,
+      );
+      const dados = {
+        ...(existing?.tipo === "ajustado" ? (existing.dados ?? {}) : {}),
+        valorPadrao: parsed.data.valorCentavos,
+      };
+      upsertException(
+        tx,
         workspaceId,
-        budgetId: parsed.data.budgetId,
-        ciclo: parsed.data.ciclo,
-        valorCentavos: parsed.data.valorCentavos,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .onConflictDoUpdate({
-        target: [budgetOverrides.budgetId, budgetOverrides.ciclo],
-        set: {
+        series.id,
+        parsed.data.ciclo,
+        "ajustado",
+        dados,
+      );
+      tx.insert(budgetOverrides)
+        .values({
+          workspaceId,
+          budgetId: series.id,
+          ciclo: parsed.data.ciclo,
           valorCentavos: parsed.data.valorCentavos,
+          createdAt: new Date(),
           updatedAt: new Date(),
-        },
-      })
-      .run();
+        })
+        .onConflictDoUpdate({
+          target: [budgetOverrides.budgetId, budgetOverrides.ciclo],
+          set: {
+            valorCentavos: parsed.data.valorCentavos,
+            updatedAt: new Date(),
+          },
+        })
+        .run();
+    });
   } catch (error) {
     console.error("[verde] erro ao ajustar orçamento:", error);
     return fail("Não foi possível ajustar o valor deste ciclo.");
   }
 
   revalidateBudgets();
-  return { ok: true, id: parsed.data.budgetId };
+  return { ok: true, id: series.id };
 }
 
 export async function setBudgetArchivedAction(input: {
@@ -592,35 +640,11 @@ export async function setBudgetArchivedAction(input: {
 }): Promise<ActionResult> {
   const user = await requireUser();
   const { db, ws } = scopedDb(user.workspaceId);
-  const workspaceId = user.workspaceId;
 
   const parsed = z
     .object({ id: idSchema, arquivado: z.boolean() })
     .safeParse(input);
   if (!parsed.success) return fail("Orçamento inválido.");
-
-  if (!parsed.data.arquivado) {
-    const existing = listBudgetsWithCategories(workspaceId, {
-      incluirArquivados: true,
-    }).find((budget) => budget.id === parsed.data.id);
-    if (!existing) return fail("Orçamento não encontrado.");
-
-    const categoriaIds = existing.categories.map((category) => category.id);
-    const categoryCheck = validateCategories(workspaceId, categoriaIds);
-    if (categoryCheck.error) return fail(categoryCheck.error);
-
-    const conflict = conflictError(workspaceId, categoriaIds, {
-      start: existing.dataInicio,
-      end: existing.dataFim,
-      ignoreBudgetId: existing.id,
-      names: categoryCheck.names,
-    });
-    if (conflict) {
-      return fail(
-        `Não foi possível desarquivar: ${conflict.charAt(0).toLowerCase()}${conflict.slice(1)}`,
-      );
-    }
-  }
 
   const result = db
     .update(budgets)
@@ -638,26 +662,141 @@ export async function setBudgetArchivedAction(input: {
 
 export async function deleteBudgetAction(input: {
   id: string;
+  ciclo?: string;
+  scope?: "single" | "future" | "all";
 }): Promise<ActionResult> {
   const user = await requireUser();
   const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
 
-  const parsed = z.object({ id: idSchema }).safeParse(input);
+  const parsed = z
+    .object({
+      id: idSchema,
+      ciclo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional(),
+      scope: z.enum(["single", "future", "all"]).optional(),
+    })
+    .safeParse(input);
   if (!parsed.success) return fail("Orçamento inválido.");
 
-  // O cascade remove categorias sincronizadas e overrides. Lançamentos nunca
-  // são tocados: o gasto real continua existindo fora do orçamento.
-  const result = db
-    .delete(budgets)
-    .where(
-      and(eq(budgets.id, parsed.data.id), ws(budgets.workspaceId)),
-    )
-    .run();
+  const scope = parsed.data.scope ?? "all";
+  const ciclo = parsed.data.ciclo;
+  const series = loadBudgetSeries(workspaceId, { incluirArquivados: true }).find(
+    (row) => row.id === parsed.data.id,
+  );
+  if (!series) return fail("Orçamento não encontrado.");
+  if (scope !== "all") {
+    if (!ciclo) return fail("Ciclo obrigatório.");
+    if (ciclo < series.dataInicio) {
+      return fail("O ciclo escolhido está antes do início desta série.");
+    }
+    if (series.dataFim && ciclo > series.dataFim) {
+      return fail("O ciclo escolhido está depois do fim desta série.");
+    }
+  }
 
-  if (result.changes === 0) return fail("Orçamento não encontrado.");
+  try {
+    db.transaction((tx) => {
+      if (scope === "single") {
+        if (!ciclo) throw new Error("Ciclo obrigatório.");
+        const existing = series.exceptions.find(
+          (item) => item.ciclo === ciclo,
+        );
+        upsertException(
+          tx,
+          workspaceId,
+          series.id,
+          ciclo,
+          "excluido",
+          existing?.tipo === "ajustado" ? (existing.dados ?? null) : null,
+        );
+        return;
+      }
+
+      if (scope === "future") {
+        if (!ciclo) throw new Error("Ciclo obrigatório.");
+        if (ciclo <= series.dataInicio) {
+          tx.delete(budgets)
+            .where(
+              and(eq(budgets.id, series.id), ws(budgets.workspaceId)),
+            )
+            .run();
+          return;
+        }
+        tx.update(budgets)
+          .set({
+            dataFim: addMonths(ciclo, -1),
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(budgets.id, series.id), ws(budgets.workspaceId)),
+          )
+          .run();
+        return;
+      }
+
+      // Todos: remove a série, versões, exceções e vínculos; lançamentos ficam.
+      tx.delete(budgets)
+        .where(and(eq(budgets.id, series.id), ws(budgets.workspaceId)))
+        .run();
+    });
+  } catch (error) {
+    console.error("[verde] erro ao excluir orçamento:", error);
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Não foi possível excluir o orçamento.",
+    );
+  }
 
   revalidateBudgets();
   return { ok: true };
+}
+
+export async function restoreBudgetCycleAction(input: {
+  id: string;
+  ciclo: string;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+
+  const parsed = z
+    .object({
+      id: idSchema,
+      ciclo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+    })
+    .safeParse(input);
+  if (!parsed.success) return fail("Ciclo inválido.");
+
+  const exception = db
+    .select()
+    .from(budgetCycleExceptions)
+    .where(
+      and(
+        eq(budgetCycleExceptions.workspaceId, workspaceId),
+        eq(budgetCycleExceptions.budgetId, parsed.data.id),
+        eq(budgetCycleExceptions.ciclo, parsed.data.ciclo),
+        eq(budgetCycleExceptions.tipo, "excluido"),
+      ),
+    )
+    .get();
+  if (!exception) return fail("Ciclo excluído não encontrado.");
+
+  const result = exception.dados
+    ? db
+        .update(budgetCycleExceptions)
+        .set({ tipo: "ajustado", updatedAt: new Date() })
+        .where(eq(budgetCycleExceptions.id, exception.id))
+        .run()
+    : db
+        .delete(budgetCycleExceptions)
+        .where(eq(budgetCycleExceptions.id, exception.id))
+        .run();
+
+  if (result.changes === 0) return fail("Ciclo excluído não encontrado.");
+
+  revalidateBudgets();
+  return { ok: true, id: parsed.data.id };
 }
 
 export type BudgetHint = {
@@ -695,54 +834,70 @@ export async function getBudgetHintAction(input: {
   if (!parsed.success) return null;
 
   const { categoriaId, data, cartaoId, excludeTransactionId } = parsed.data;
-  const { db, ws } = scopedDb(workspaceId);
-  const categoryRows = db
-    .select({ id: categories.id, categoriaPaiId: categories.categoriaPaiId })
-    .from(categories)
-    .where(ws(categories.workspaceId))
-    .all();
+  const series = loadBudgetSeries(workspaceId);
+  const categories = listAllCategories(workspaceId);
+  const candidateCycles = new Set(ciclosRelevantesParaMes(data.slice(0, 7)));
+  candidateCycles.add(cicloDaData(data, 1));
 
-  for (const budget of listBudgetsWithCategories(workspaceId)) {
-    if (budget.arquivado) continue;
-    const ciclo = cicloDaData(data, budget.diaFechamento);
-    if (!orcamentoVigenteNoCiclo(budget, ciclo)) continue;
+  for (const row of series) {
+    if (row.arquivado) continue;
+    for (const ciclo of candidateCycles) {
+      const resolved = resolverCiclo(row, ciclo);
+      if (!resolved) continue;
+      const config = {
+        valorPadrao: resolved.valorPadrao,
+        diaFechamento: resolved.diaFechamento,
+        antecedenciaCiclos: resolved.antecedenciaCiclos,
+        dataInicio: resolved.dataInicio,
+        dataFim: resolved.dataFim,
+        arquivado: resolved.arquivado,
+        dataDaReserva: resolved.dataDaReserva,
+        diaVencimento: resolved.diaVencimento,
+        origens: resolved.origens,
+        cartaoFechamento: resolved.cartaoId
+          ? (row.cardsById.get(resolved.cartaoId)?.diaFechamento ?? null)
+          : null,
+        cartaoVencimento: resolved.cartaoId
+          ? (row.cardsById.get(resolved.cartaoId)?.diaVencimento ?? null)
+          : null,
+      };
+      const info0 = calcularCiclo(config, ciclo, 0, {});
+      if (data < info0.inicio || data > info0.fim) continue;
 
-    const expanded = expandirCategorias(
-      categoryRows,
-      budget.categories.map((category) => category.id),
-    );
-    if (!expanded.has(categoriaId)) continue;
-    if (!transacaoConsomeOrcamento(budget.origens, cartaoId)) continue;
+      const expanded = expandirCategorias(categories, resolved.categoriaIds);
+      if (!expanded.has(categoriaId)) continue;
+      if (!transacaoConsomeOrcamento(resolved.origens, cartaoId)) continue;
 
-    const detail = getBudgetCycleDetail(workspaceId, budget.id, ciclo);
-    if (!detail) return null;
+      const detail = getBudgetCycleDetail(workspaceId, row.id, ciclo);
+      if (!detail) return null;
 
-    let gasto = detail.resumo.gasto;
-    if (excludeTransactionId) {
-      const transaction = getTransactionRaw(workspaceId, excludeTransactionId);
-      if (
-        transaction &&
-        transaction.tipo === "despesa" &&
-        transaction.categoriaId &&
-        expanded.has(transaction.categoriaId) &&
-        transacaoConsomeOrcamento(budget.origens, transaction.cartaoId) &&
-        transaction.data >= detail.resumo.inicio &&
-        transaction.data <= detail.resumo.fim
-      ) {
-        gasto = Math.max(0, gasto - transaction.valor);
+      let gasto = detail.resumo.gasto;
+      if (excludeTransactionId) {
+        const transaction = getTransactionRaw(workspaceId, excludeTransactionId);
+        if (
+          transaction &&
+          transaction.tipo === "despesa" &&
+          transaction.categoriaId &&
+          expanded.has(transaction.categoriaId) &&
+          transacaoConsomeOrcamento(resolved.origens, transaction.cartaoId) &&
+          transaction.data >= detail.resumo.inicio &&
+          transaction.data <= detail.resumo.fim
+        ) {
+          gasto = Math.max(0, gasto - transaction.valor);
+        }
       }
-    }
 
-    return {
-      budgetId: budget.id,
-      nome: budget.nome,
-      ciclo,
-      limite: detail.resumo.limite,
-      gasto,
-      restante: Math.max(0, detail.resumo.limite - gasto),
-      estouro: Math.max(0, gasto - detail.resumo.limite),
-      fechamento: detail.resumo.fechamento,
-    };
+      return {
+        budgetId: row.id,
+        nome: resolved.nome,
+        ciclo,
+        limite: detail.resumo.limite,
+        gasto,
+        restante: Math.max(0, detail.resumo.limite - gasto),
+        estouro: Math.max(0, gasto - detail.resumo.limite),
+        fechamento: detail.resumo.fechamento,
+      };
+    }
   }
 
   return null;

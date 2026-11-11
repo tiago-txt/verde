@@ -169,7 +169,7 @@ describe("categorias no formulário de orçamento", () => {
     ]);
   });
 
-  it("orçamento legado sem data de início não bloqueia categoria invisível", () => {
+  it("orçamento legado sem versão ganha fallback e aparece na gestão", () => {
     const mercado = categoryIdByName("Mercado");
     const legacyId = crypto.randomUUID();
 
@@ -207,15 +207,17 @@ describe("categorias no formulário de orçamento", () => {
       .run();
 
     const form = getBudgetFormData(user.workspaceId, currentMonth());
-    expect(
-      form.categories.find((category) => category.id === mercado)?.blockedBy,
-    ).toBeNull();
+    // O fallback usa `mes` como início; o orçamento fica visível e bloqueia
+    // a categoria (não fica invisível bloqueando por trás).
     expect(
       form.activeBudgets.some((budget) => budget.budgetId === legacyId),
-    ).toBe(false);
+    ).toBe(true);
+    expect(
+      form.categories.find((category) => category.id === mercado)?.blockedBy,
+    ).toBe("Legado");
   });
 
-  it("mantém o indicador de estouro com a data em que o limite foi ultrapassado", async () => {
+  it("mantém a linha de orçamento com reserva zero quando estoura", async () => {
     const mercado = categoryIdByName("Mercado");
     const accountId = crypto.randomUUID();
     testDb.db
@@ -285,14 +287,24 @@ describe("categorias no formulário de orçamento", () => {
       ate: null,
     });
 
-    const estouro = events.find((event) => event.tipoEvento === "estouro");
-    expect(estouro).toBeTruthy();
-    expect(estouro?.valor).toBe(10_000);
-    expect(estouro?.data).toBe(second);
-    expect(estouro?.resumo.estouro).toBe(10_000);
-    expect(estouro?.resumo.restante).toBe(0);
+    const line = events.find(
+      (event) =>
+        event.tipoEvento === "provisao" &&
+        event.resumo.nome === "Alimentação",
+    );
+    expect(line).toBeTruthy();
+    expect(line?.valor).toBe(0);
+    expect(line?.resumo.estouro).toBe(10_000);
+    expect(line?.resumo.restante).toBe(0);
+    expect(
+      events.some(
+        (event) =>
+          event.tipoEvento === "sobra" &&
+          event.resumo.nome === "Alimentação",
+      ),
+    ).toBe(false);
 
-    // O indicador não é provisão/sobra e não altera o saldo previsto.
+    // A linha não altera o saldo previsto: a reserva é zero.
     expect(
       getBudgetAccountDeltasForMonth(user.workspaceId, currentMonth()).size,
     ).toBe(0);

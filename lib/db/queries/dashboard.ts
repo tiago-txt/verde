@@ -154,7 +154,9 @@ export const getDashboardUpcoming = cache(async (workspaceId: string) => {
   ]
     .filter(
       (invoice) =>
-        invoice.vencimento >= today && invoice.vencimento <= end,
+        invoice.restante > 0 &&
+        invoice.vencimento >= today &&
+        invoice.vencimento <= end,
     )
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
 

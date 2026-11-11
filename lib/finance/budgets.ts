@@ -2,6 +2,7 @@ import { addDaysISO, addMonths, dateInMonth } from "@/lib/dates";
 import type {
   BudgetOrigin,
   BudgetReserveDate,
+  BudgetVersionData,
   TransactionType,
 } from "@/lib/db/schema";
 import type { MonthSummary } from "./summary";
@@ -17,7 +18,7 @@ export type { BudgetOrigin, BudgetReserveDate } from "@/lib/db/schema";
  * `dia_fechamento` do mês seguinte.
  */
 
-export const BUDGET_EVENT_KINDS = ["provisao", "sobra", "estouro"] as const;
+export const BUDGET_EVENT_KINDS = ["provisao", "sobra"] as const;
 export type BudgetEventKind = (typeof BUDGET_EVENT_KINDS)[number];
 
 export type BudgetCycleConfig = {
@@ -89,6 +90,109 @@ export type BudgetCategoryUsage = {
   categoriaIds: string[];
 };
 
+export type BudgetVersionInput = BudgetVersionData & {
+  vigenteApartir: string;
+};
+
+export type BudgetCycleExceptionInput = {
+  ciclo: string;
+  tipo: "excluido" | "ajustado";
+  dados?: Partial<BudgetVersionData> | null;
+};
+
+export type BudgetSeriesInput = {
+  id: string;
+  nome: string;
+  dataInicio: string;
+  dataFim: string | null;
+  arquivado: boolean;
+  versions: BudgetVersionInput[];
+  exceptions: BudgetCycleExceptionInput[];
+};
+
+export type ResolvedBudgetCycle = BudgetVersionData & {
+  budgetId: string;
+  ciclo: string;
+  dataInicio: string;
+  dataFim: string | null;
+  arquivado: boolean;
+  exception: "excluido" | "ajustado" | null;
+};
+
+/**
+ * Resolve a configuração de um orçamento-série em um ciclo:
+ * 1. vigência da série (dataInicio/dataFim);
+ * 2. exceção do ciclo (excluído ou ajuste pontual);
+ * 3. versão mais recente com `vigenteApartir <= ciclo`.
+ *
+ * Retorna `null` quando o ciclo não existe para a série (fora da vigência ou
+ * excluído). Arquivamento é tratado por quem chama, pois a gestão precisa
+ * exibir orçamentos arquivados.
+ */
+export function resolverCiclo(
+  series: BudgetSeriesInput,
+  ciclo: string,
+): ResolvedBudgetCycle | null {
+  if (!ciclo) return null;
+  if (series.dataInicio && series.dataInicio > ciclo) return null;
+  if (series.dataFim && series.dataFim < ciclo) return null;
+
+  const exception =
+    series.exceptions.find((item) => item.ciclo === ciclo) ?? null;
+  if (exception?.tipo === "excluido") return null;
+
+  const version = [...series.versions]
+    .filter((item) => item.vigenteApartir <= ciclo)
+    .sort((a, b) => b.vigenteApartir.localeCompare(a.vigenteApartir))[0];
+  if (!version) return null;
+
+  const ajustes =
+    exception?.tipo === "ajustado" ? (exception.dados ?? {}) : {};
+  const resolved: BudgetVersionData = {
+    nome: ajustes.nome ?? version.nome ?? series.nome,
+    valorPadrao: ajustes.valorPadrao ?? version.valorPadrao,
+    diaFechamento: ajustes.diaFechamento ?? version.diaFechamento,
+    antecedenciaCiclos:
+      ajustes.antecedenciaCiclos ?? version.antecedenciaCiclos,
+    dataDaReserva: ajustes.dataDaReserva ?? version.dataDaReserva,
+    diaVencimento: ajustes.diaVencimento ?? version.diaVencimento,
+    origens: ajustes.origens ?? version.origens,
+    contaId: ajustes.contaId !== undefined ? ajustes.contaId : version.contaId,
+    cartaoId:
+      ajustes.cartaoId !== undefined ? ajustes.cartaoId : version.cartaoId,
+    cor: ajustes.cor ?? version.cor,
+    icone: ajustes.icone ?? version.icone,
+    categoriaIds: ajustes.categoriaIds ?? version.categoriaIds,
+  };
+
+  return {
+    ...resolved,
+    budgetId: series.id,
+    ciclo,
+    dataInicio: series.dataInicio,
+    dataFim: series.dataFim,
+    arquivado: series.arquivado,
+    exception: exception?.tipo ?? null,
+  };
+}
+
+/** Lista os ciclos entre `start` e `end` (inclusive), com limite de segurança. */
+export function ciclosEntre(
+  start: string,
+  end: string | null,
+  max = 240,
+): string[] {
+  if (!start) return [];
+  const result: string[] = [];
+  let current = start;
+  while (result.length < max) {
+    if (end && current > end) break;
+    result.push(current);
+    current = addMonths(current, 1);
+    if (!end && result.length >= max) break;
+  }
+  return result;
+}
 export type BudgetSpendingTransaction = {
   tipo: TransactionType;
   valor: number;
@@ -363,27 +467,14 @@ export function eventosDoCiclo(
   ciclo: string,
   gasto: number,
   overrides?: BudgetOverrides,
-  dataEstouro?: string,
 ): BudgetEvent[] {
   if (!orcamentoVigenteNoCiclo(budget, ciclo)) return [];
 
   const result = calcularCiclo(budget, ciclo, gasto, overrides);
 
-  // Estouro continua visível como indicador, mas não é provisão nem sobra e
-  // não altera saldos/previsto (o gasto real já está nos lançamentos).
-  if (result.estouro > 0) {
-    return [
-      {
-        tipo: "estouro",
-        data: dataEstouro ?? result.inicio,
-        valor: result.estouro,
-        ciclo,
-      },
-    ];
-  }
-
-  if (result.restante <= 0) return [];
-
+  // A linha de provisão existe sempre que o ciclo existe. Quando o envelope
+  // está consumido/estourado, a reserva é R$ 0,00 e o painel mostra o
+  // resultado final; a linha não some.
   if (budget.dataDaReserva === "vencimento_da_fatura") {
     // A reserva nasce no vencimento da fatura e não gera liberação.
     return [
@@ -401,10 +492,19 @@ export function eventosDoCiclo(
       ? intervaloDoCiclo(addMonths(ciclo, -1), budget.diaFechamento).inicio
       : result.inicio;
 
-  return [
+  const events: BudgetEvent[] = [
     { tipo: "provisao", data: provisionDate, valor: result.restante, ciclo },
-    { tipo: "sobra", data: result.fechamento, valor: result.restante, ciclo },
   ];
+  // Sem linha de liberação com valor zero.
+  if (result.restante > 0) {
+    events.push({
+      tipo: "sobra",
+      data: result.fechamento,
+      valor: result.restante,
+      ciclo,
+    });
+  }
+  return events;
 }
 
 export function resumirEventos(eventos: BudgetEvent[]): {
@@ -416,8 +516,7 @@ export function resumirEventos(eventos: BudgetEvent[]): {
   let sobras = 0;
   for (const event of eventos) {
     if (event.tipo === "provisao") provisoes += event.valor;
-    else if (event.tipo === "sobra") sobras += event.valor;
-    // "estouro" é apenas indicador visual; não entra no resumo.
+    else sobras += event.valor;
   }
   return { provisoes, sobras, liquido: sobras - provisoes };
 }
@@ -460,8 +559,8 @@ export function aplicarEventosAoSalsoDia(
 ): Record<string, number> {
   const deltas = new Map<string, number>();
   for (const event of eventos) {
-    if (event.tipo === "estouro") continue;
     const delta = event.tipo === "provisao" ? -event.valor : event.valor;
+    if (delta === 0) continue;
     deltas.set(event.data, (deltas.get(event.data) ?? 0) + delta);
   }
 
@@ -497,12 +596,7 @@ export function eventoPassaFiltros(
 
   if (filters.tipo) {
     if (filters.tipo === "transferencia") return false;
-    if (
-      (event.tipo === "provisao" || event.tipo === "estouro") &&
-      filters.tipo !== "despesa"
-    ) {
-      return false;
-    }
+    if (event.tipo === "provisao" && filters.tipo !== "despesa") return false;
     if (event.tipo === "sobra" && filters.tipo !== "receita") return false;
   }
 

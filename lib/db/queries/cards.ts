@@ -436,11 +436,13 @@ export function listCardInvoiceEventsForMonth(
     const invoices = invoicesForCard(card, movements, payments, hoje);
     for (const fatura of invoices) {
       if (!fatura.vencimento.startsWith(monthKey)) continue;
-      if (fatura.restante <= 0) continue;
+      if (fatura.total <= 0 && fatura.pago <= 0) continue;
 
       const passes = faturaPassaFiltros(
         {
           restante: fatura.restante,
+          total: fatura.total,
+          pago: fatura.pago,
           cartaoId: card.id,
           cartaoNome: card.nome,
           contaPagamentoId: card.contaPagamentoId,

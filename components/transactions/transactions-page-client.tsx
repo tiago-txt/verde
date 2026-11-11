@@ -58,6 +58,8 @@ import { TransactionFormDialog } from "./transaction-form-dialog";
 import { TransactionRow } from "./transaction-row";
 import { BudgetEventRow } from "./budget-event-row";
 import { CardInvoiceRow } from "./card-invoice-row";
+import { CardDetailView } from "@/components/cards/card-detail-view";
+import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import { useToast } from "@/components/ui/toast";
@@ -76,7 +78,7 @@ import type {
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
-import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
+import type { CardInvoiceEvent, CardInvoiceDetail } from "@/lib/db/queries/cards";
 import {
   addMonths,
   currentMonth,
@@ -233,6 +235,45 @@ export function TransactionsPageClient({
 
   const [selectedBudgetEvent, setSelectedBudgetEvent] =
     useState<BudgetEventView | null>(null);
+  const [invoiceTarget, setInvoiceTarget] = useState<{
+    cartaoId: string;
+    faturaChave: string;
+    pay: boolean;
+  } | null>(null);
+  const [invoiceDetail, setInvoiceDetail] =
+    useState<CardInvoiceDetail | null>(null);
+  const [invoiceAccounts, setInvoiceAccounts] = useState<
+    { id: string; nome: string; arquivada: boolean }[]
+  >([]);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+
+  function loadInvoice(target: {
+    cartaoId: string;
+    faturaChave: string;
+    pay: boolean;
+  }) {
+    setInvoiceTarget(target);
+    setInvoiceDetail(null);
+    setInvoiceError(null);
+    setInvoiceLoading(true);
+    void getCardInvoiceDetailAction(target.cartaoId, target.faturaChave)
+      .then((result) => {
+        if (result.ok) {
+          setInvoiceDetail(result.detail);
+          setInvoiceAccounts(result.accounts);
+        } else {
+          setInvoiceError(result.error);
+        }
+      })
+      .catch(() => setInvoiceError("Não foi possível carregar a fatura."))
+      .finally(() => setInvoiceLoading(false));
+  }
+
+  function reloadInvoice() {
+    if (!invoiceTarget) return;
+    loadInvoice({ ...invoiceTarget, pay: false });
+  }
 
   useEffect(() => {
     if (initialNew) setCreateOpen(true);
@@ -240,13 +281,20 @@ export function TransactionsPageClient({
 
   useEffect(() => {
     setSelectedIds((current) => {
-      const valid = new Set(transactions.map((transaction) => transaction.id));
+      const valid = new Set(
+        transactions
+          .filter(
+            (transaction) =>
+              filters.tipo === "transferencia" || !transaction.vinculadaFatura,
+          )
+          .map((transaction) => transaction.id),
+      );
       const next = new Set(
         [...current].filter((id) => valid.has(id)),
       );
       return next.size === current.size ? current : next;
     });
-  }, [transactions]);
+  }, [transactions, filters.tipo]);
 
   useEffect(() => {
     if (!detail) return;
@@ -279,7 +327,11 @@ export function TransactionsPageClient({
   }, [detail, optimisticTransactions, filters, router]);
 
   const groups = useMemo<TransactionDayGroup[]>(() => {
-    const base = groupTransactionsByDay(optimisticTransactions);
+    const visibleTransactions = optimisticTransactions.filter(
+      (transaction) =>
+        filters.tipo === "transferencia" || !transaction.vinculadaFatura,
+    );
+    const base = groupTransactionsByDay(visibleTransactions);
     const map = new Map<string, TransactionDayGroup>(
       base.map((group) => [
         group.day,
@@ -311,7 +363,7 @@ export function TransactionsPageClient({
     }
 
     return [...map.values()].sort((a, b) => a.day.localeCompare(b.day));
-  }, [optimisticTransactions, budgetEvents, cardInvoiceEvents]);
+  }, [optimisticTransactions, budgetEvents, cardInvoiceEvents, filters.tipo]);
   const visibleGroups = groups.slice(0, filters.dias);
   const summary = useMemo(
     () =>
@@ -1086,9 +1138,18 @@ export function TransactionsPageClient({
                       key={invoice.id}
                       event={invoice}
                       onOpen={(event) => {
-                        router.push(
-                          `/cartoes/${event.cartaoId}?fatura=${event.faturaChave}`,
-                        );
+                        loadInvoice({
+                          cartaoId: event.cartaoId,
+                          faturaChave: event.faturaChave,
+                          pay: false,
+                        });
+                      }}
+                      onPay={(event) => {
+                        loadInvoice({
+                          cartaoId: event.cartaoId,
+                          faturaChave: event.faturaChave,
+                          pay: true,
+                        });
                       }}
                     />
                   ))}
@@ -1145,6 +1206,46 @@ export function TransactionsPageClient({
         onNavigate={navigateDetail}
         onTogglePaid={handleDetailTogglePaid}
       />
+
+      <Dialog
+        open={Boolean(invoiceTarget)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setInvoiceTarget(null);
+            setInvoiceDetail(null);
+            setInvoiceError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[92dvh] overflow-y-auto p-0 sm:max-w-2xl">
+          <DialogHeader className="px-4 pt-4">
+            <DialogTitle className="sr-only">Fatura do cartão</DialogTitle>
+          </DialogHeader>
+          {invoiceLoading && (
+            <div className="flex items-center gap-2 px-4 py-6 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Carregando fatura…
+            </div>
+          )}
+          {invoiceError && (
+            <div className="px-4 py-4">
+              <FormError message={invoiceError} />
+            </div>
+          )}
+          {invoiceDetail && (
+            <div className="p-4">
+              <CardDetailView
+                embedded
+                detail={invoiceDetail}
+                formData={null}
+                accounts={invoiceAccounts}
+                initialPay={invoiceTarget?.pay ?? false}
+                onChanged={reloadInvoice}
+              />
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <BudgetDetailDialog
         detail={

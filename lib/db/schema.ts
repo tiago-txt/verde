@@ -61,6 +61,25 @@ export type BudgetReserveDate = (typeof BUDGET_RESERVE_DATES)[number];
 export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
 export type BudgetOrigin = (typeof BUDGET_ORIGINS)[number];
 
+export const BUDGET_EXCEPTION_TYPES = ["excluido", "ajustado"] as const;
+export type BudgetExceptionType = (typeof BUDGET_EXCEPTION_TYPES)[number];
+
+/** Campos de configuração que podem variar por vigência/exceção. */
+export type BudgetVersionData = {
+  nome: string;
+  valorPadrao: number;
+  diaFechamento: number;
+  antecedenciaCiclos: number;
+  dataDaReserva: BudgetReserveDate;
+  diaVencimento: number;
+  origens: BudgetOrigin;
+  contaId: string | null;
+  cartaoId: string | null;
+  cor: string;
+  icone: string;
+  categoriaIds: string[];
+};
+
 export const USER_ROLES = ["admin", "membro"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
@@ -470,6 +489,95 @@ export const budgetOverrides = sqliteTable(
   ],
 );
 
+/** Vigências de um orçamento-série (a mais recente <= ciclo vence). */
+export const budgetVersions = sqliteTable(
+  "budget_versions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    budgetId: text("budget_id")
+      .notNull()
+      .references(() => budgets.id, { onDelete: "cascade" }),
+    vigenteApartir: text("vigente_apartir").notNull(),
+    nome: text("nome").notNull(),
+    valorPadrao: integer("valor_padrao_centavos").notNull(),
+    diaFechamento: integer("dia_fechamento").notNull(),
+    antecedenciaCiclos: integer("antecedencia_ciclos").notNull(),
+    dataDaReserva: text("data_da_reserva", { enum: BUDGET_RESERVE_DATES })
+      .notNull()
+      .default("inicio_do_ciclo"),
+    diaVencimento: integer("dia_vencimento").notNull(),
+    origens: text("origens", { enum: BUDGET_ORIGINS })
+      .notNull()
+      .default("todas"),
+    contaId: text("conta_id").references(() => accounts.id, {
+      onDelete: "set null",
+    }),
+    cartaoId: text("cartao_id").references(() => creditCards.id, {
+      onDelete: "set null",
+    }),
+    cor: text("cor").notNull(),
+    icone: text("icone").notNull(),
+    categoriaIds: text("categoria_ids", { mode: "json" })
+      .$type<string[]>()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("budget_versions_workspace_idx").on(table.workspaceId),
+    index("budget_versions_budget_idx").on(table.budgetId),
+    uniqueIndex("budget_versions_budget_vigencia_unique").on(
+      table.budgetId,
+      table.vigenteApartir,
+    ),
+    check(
+      "budget_versions_fechamento_check",
+      sql`${table.diaFechamento} between 1 and 31`,
+    ),
+    check(
+      "budget_versions_vencimento_check",
+      sql`${table.diaVencimento} between 1 and 31`,
+    ),
+    check(
+      "budget_versions_antecedencia_check",
+      sql`${table.antecedenciaCiclos} in (0, 1)`,
+    ),
+  ],
+);
+
+/** Exceções de um ciclo: excluído ou ajuste pontual sobre a vigência. */
+export const budgetCycleExceptions = sqliteTable(
+  "budget_cycle_exceptions",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    budgetId: text("budget_id")
+      .notNull()
+      .references(() => budgets.id, { onDelete: "cascade" }),
+    ciclo: text("ciclo").notNull(),
+    tipo: text("tipo", { enum: BUDGET_EXCEPTION_TYPES }).notNull(),
+    dados: text("dados", { mode: "json" })
+      .$type<Partial<BudgetVersionData>>(),
+    ...timestamps,
+  },
+  (table) => [
+    index("budget_cycle_exceptions_workspace_idx").on(table.workspaceId),
+    index("budget_cycle_exceptions_budget_idx").on(table.budgetId),
+    uniqueIndex("budget_cycle_exceptions_budget_ciclo_unique").on(
+      table.budgetId,
+      table.ciclo,
+    ),
+    check(
+      "budget_cycle_exceptions_tipo_check",
+      sql`${table.tipo} in ('excluido', 'ajustado')`,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
@@ -489,3 +597,8 @@ export type Budget = typeof budgets.$inferSelect;
 export type NewBudget = typeof budgets.$inferInsert;
 export type BudgetCategory = typeof budgetCategories.$inferSelect;
 export type BudgetOverride = typeof budgetOverrides.$inferSelect;
+export type BudgetVersion = typeof budgetVersions.$inferSelect;
+export type NewBudgetVersion = typeof budgetVersions.$inferInsert;
+export type BudgetCycleException = typeof budgetCycleExceptions.$inferSelect;
+export type NewBudgetCycleException =
+  typeof budgetCycleExceptions.$inferInsert;

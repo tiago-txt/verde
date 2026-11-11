@@ -16,27 +16,33 @@ type BudgetEventRowProps = {
 export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
   const summary = event.resumo;
   const isProvision = event.tipoEvento === "provisao";
-  const isOverspend = event.tipoEvento === "estouro";
-  const Icon = isOverspend
+  const isOverspent = isProvision && summary.estouro > 0;
+  const isConsumed = isProvision && !isOverspent && summary.restante === 0;
+  const isAlert = isOverspent || isConsumed;
+  const Icon = isAlert
     ? AlertTriangle
     : isProvision
       ? getIcon(summary.icone)
       : PiggyBank;
 
+  const title = isOverspent
+    ? "Estouro do orçamento"
+    : isConsumed
+      ? "Orçamento consumido"
+      : isProvision
+        ? "Orçamento"
+        : "Sobra do orçamento";
+
   return (
     <button
       type="button"
       onClick={() => onOpen(event)}
-      aria-label={`${
-        isOverspend
-          ? "Estouro do orçamento"
-          : isProvision
-            ? "Orçamento"
-            : "Sobra do orçamento"
-      } ${summary.nome}, ${formatCurrency(event.valor)}`}
+      aria-label={`${title} ${summary.nome}, ${formatCurrency(
+        isAlert ? 0 : event.valor,
+      )}`}
       className={cn(
         "flex w-full items-start gap-3 border-l-2 border-dashed px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4",
-        isOverspend
+        isAlert
           ? "border-l-destructive/60 bg-destructive/[0.06]"
           : isProvision
             ? "border-l-primary/50 bg-primary/[0.04]"
@@ -46,7 +52,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
       <span
         className={cn(
           "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl",
-          isOverspend
+          isAlert
             ? "bg-destructive/10 text-destructive"
             : isProvision
               ? "bg-primary/10 text-primary"
@@ -58,33 +64,43 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-medium">
-            {isOverspend
-              ? "Estouro do orçamento"
-              : isProvision
-                ? "Orçamento"
-                : "Sobra do orçamento"}
-          </span>
+          <span className="text-sm font-medium">{title}</span>
           <span className="truncate text-sm text-muted-foreground">
             {summary.nome}
           </span>
           <Badge
             variant={
-              isOverspend ? "destructive" : isProvision ? "outline" : "success"
+              isOverspent
+                ? "destructive"
+                : isConsumed
+                  ? "warning"
+                  : isProvision
+                    ? "outline"
+                    : "success"
             }
           >
-            {isOverspend
+            {isOverspent
               ? "estouro"
-              : isProvision
-                ? "provisão"
-                : (event.status ?? "prevista")}
+              : isConsumed
+                ? "consumido"
+                : isProvision
+                  ? "provisão"
+                  : (event.status ?? "prevista")}
           </Badge>
         </span>
 
         <span className="mt-1 block text-[11px] text-muted-foreground">
-          {isOverspend ? (
+          {isOverspent ? (
             <>
-              Estourou {formatCurrency(summary.estouro)} de{" "}
+              Estourou {formatCurrency(summary.estouro)} (
+              {formatCurrency(summary.gasto)} de{" "}
+              {formatCurrency(summary.limite)}) · ciclo{" "}
+              {formatDate(summary.inicio).slice(0, 5)}–
+              {formatDate(summary.fim).slice(0, 5)}
+            </>
+          ) : isConsumed ? (
+            <>
+              Orçamento consumido · {formatCurrency(summary.gasto)} de{" "}
               {formatCurrency(summary.limite)} · ciclo{" "}
               {formatDate(summary.inicio).slice(0, 5)}–
               {formatDate(summary.fim).slice(0, 5)}
@@ -118,15 +134,16 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
       <span
         className={cn(
           "tabular mt-0.5 shrink-0 text-sm font-semibold",
-          isOverspend
+          isAlert
             ? "text-destructive"
             : isProvision
               ? "text-destructive"
               : "text-success",
         )}
       >
-        {isOverspend || isProvision ? "−" : "+"}
-        {formatCurrency(event.valor)}
+        {isAlert
+          ? formatCurrency(0)
+          : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
       </span>
     </button>
   );

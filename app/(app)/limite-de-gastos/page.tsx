@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import {
   getBudgetFormData,
   listBudgetCycleDetails,
+  listExcludedBudgetCycles,
 } from "@/lib/db/queries/budgets";
 import { currentMonth, isValidMonthKey } from "@/lib/dates";
 import { idSchema } from "@/lib/validation/common";
@@ -40,6 +41,7 @@ export default async function LimiteDeGastosPage({
     notFound();
   }
   const formData = getBudgetFormData(user.workspaceId, ciclo);
+  const excludedCycles = listExcludedBudgetCycles(user.workspaceId, ciclo);
 
   return (
     <BudgetsView
@@ -48,6 +50,7 @@ export default async function LimiteDeGastosPage({
       formData={formData}
       incluirArquivados={incluirArquivados}
       initialBudgetId={initialBudgetId}
+      excludedCycles={excludedCycles}
     />
   );
 }

@@ -71,6 +71,8 @@ export type TransactionListItem = {
   faturaChave: string | null;
   cartaoDiaFechamento: number | null;
   cartaoDiaVencimento: number | null;
+  /** Transferência real de pagamento de fatura (oculta na lista padrão). */
+  vinculadaFatura: boolean;
   categoriaId: string | null;
   categoriaNome: string | null;
   categoriaCor: string | null;
@@ -298,6 +300,7 @@ export function listMonthTransactions(
 
   return rows.map((row) => ({
     ...row,
+    vinculadaFatura: Boolean(row.faturaChave),
     tags: tagMap.get(row.id) ?? [],
   }));
 }
@@ -330,7 +333,11 @@ export function getTransactionById(
   if (!row) return null;
 
   const tagMap = getTagsForTransactions(workspaceId, [id]);
-  return { ...row, tags: tagMap.get(id) ?? [] };
+  return {
+    ...row,
+    vinculadaFatura: Boolean(row.faturaChave),
+    tags: tagMap.get(id) ?? [],
+  };
 }
 
 export function getTransactionDetail(

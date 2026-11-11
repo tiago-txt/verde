@@ -135,6 +135,11 @@ export function BudgetDetailDialog({
                     Estourou
                   </Badge>
                 )}
+                {summary.estouro === 0 &&
+                  summary.restante === 0 &&
+                  summary.gasto > 0 && (
+                    <Badge variant="warning">Consumido</Badge>
+                  )}
                 {summary.arquivado && <Badge variant="secondary">Arquivado</Badge>}
                 {summary.antecedenciaCiclos === 1 && (
                   <Badge variant="secondary">1 ciclo antes</Badge>
@@ -164,7 +169,11 @@ export function BudgetDetailDialog({
                 <p
                   className={cn(
                     "tabular text-sm font-semibold",
-                    summary.estouro > 0 ? "text-destructive" : "text-success",
+                    summary.estouro > 0
+                      ? "text-destructive"
+                      : summary.restante === 0
+                        ? "text-warning"
+                        : "text-success",
                   )}
                 >
                   {formatCurrency(
@@ -255,32 +264,88 @@ export function BudgetDetailDialog({
               <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm">
                 <p className="font-medium">Excluir {summary.nome}?</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Remove o orçamento e seus ajustes. Os lançamentos continuam
-                  intactos.
+                  Escolha o alcance. Lançamentos nunca são apagados.
                 </p>
-                <div className="mt-2 flex justify-end gap-2">
+                <div className="mt-3 grid gap-2">
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm" className="h-11 sm:h-9"
-                    onClick={() => setConfirmDelete(false)}
+                    variant="outline"
+                    size="sm"
+                    className="h-11 justify-start"
+                    onClick={() =>
+                      run(
+                        () =>
+                          deleteBudgetAction({
+                            id: summary.id,
+                            ciclo: summary.ciclo,
+                            scope: "single",
+                          }),
+                        {
+                          success: "Ciclo excluído.",
+                          close: true,
+                        },
+                      )
+                    }
                     disabled={isPending}
                   >
-                    Cancelar
+                    Só este ciclo ({formatMonthTitle(summary.ciclo)})
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 justify-start"
+                    onClick={() =>
+                      run(
+                        () =>
+                          deleteBudgetAction({
+                            id: summary.id,
+                            ciclo: summary.ciclo,
+                            scope: "future",
+                          }),
+                        {
+                          success: "Série encerrada a partir deste ciclo.",
+                          close: true,
+                        },
+                      )
+                    }
+                    disabled={isPending}
+                  >
+                    Este e os próximos
                   </Button>
                   <Button
                     type="button"
                     variant="destructive"
-                    size="sm" className="h-11 sm:h-9"
+                    size="sm"
+                    className="h-11 justify-start"
                     onClick={() =>
-                      run(() => deleteBudgetAction({ id: summary.id }), {
-                        success: "Orçamento excluído.",
-                        close: true,
-                      })
+                      run(
+                        () =>
+                          deleteBudgetAction({
+                            id: summary.id,
+                            scope: "all",
+                          }),
+                        {
+                          success: "Orçamento excluído.",
+                          close: true,
+                        },
+                      )
                     }
                     disabled={isPending}
                   >
-                    Excluir
+                    Todos (série inteira)
+                  </Button>
+                </div>
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-11 sm:h-9"
+                    onClick={() => setConfirmDelete(false)}
+                    disabled={isPending}
+                  >
+                    Cancelar
                   </Button>
                 </div>
               </div>

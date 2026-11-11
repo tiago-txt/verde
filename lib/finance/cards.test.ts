@@ -369,6 +369,8 @@ describe("resumo previsto e eventos de fatura", () => {
 describe("filtros da fatura virtual", () => {
   const fatura = {
     restante: 15000,
+    total: 20000,
+    pago: 5000,
     cartaoId: "card-1",
     cartaoNome: "Nu",
     contaPagamentoId: "conta-1",
@@ -422,9 +424,21 @@ describe("filtros da fatura virtual", () => {
     ).toBe(false);
   });
 
-  it("fatura quitada não aparece", () => {
+  it("fatura quitada permanece visível", () => {
     expect(
-      faturaPassaFiltros({ ...fatura, restante: 0 }, filters),
+      faturaPassaFiltros(
+        { ...fatura, restante: 0, total: 20000, pago: 20000 },
+        filters,
+      ),
+    ).toBe(true);
+  });
+
+  it("fatura sem valor e sem pagamento não aparece", () => {
+    expect(
+      faturaPassaFiltros(
+        { ...fatura, restante: 0, total: 0, pago: 0 },
+        filters,
+      ),
     ).toBe(false);
   });
 });

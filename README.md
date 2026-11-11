@@ -59,12 +59,22 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
 - **Orçamentos com ciclo** (`/limite-de-gastos`): envelope por categorias com dia
   de fechamento, valor por ciclo, overrides, vigências e eventos virtuais de
-  provisão/sobra no previsto, sem alterar o realizado. Quando o envelope estoura,
-  a tela de lançamentos mantém um indicador **“Estouro do orçamento”** na data em
-  que o limite foi ultrapassado, sem duplicar o gasto no saldo.
+  provisão/sobra no previsto, sem alterar o realizado. O orçamento é uma
+  **série**: cada ciclo é uma ocorrência e pode ser editado/excluído em três
+  escopos (só este, este e os próximos, todos). Exceções por ciclo permitem
+  ajustar valor/categorias/fechamento ou excluir só um mês, com restauração.
+  Quando o envelope estoura ou é consumido, a linha permanece visível com
+  reserva R$ 0,00, barra vermelha e o resultado final; ela nunca some por
+  `restante <= 0`.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
-  pagamento de fatura por transferência (parcial ou total, com desfazer).
+  pagamento de fatura por transferência (parcial ou total, com desfazer). Na
+  tela de lançamentos, cada fatura é **uma linha única** na data de vencimento,
+  com total, status, pago/restante e barra de quitação; ela permanece visível
+  mesmo após pagamento total. A linha abre o painel da fatura (compras,
+  pagamentos e Pagar) e as transferências vinculadas ficam ocultas por padrão,
+  aparecendo no filtro Tipo = Transferência e no painel. Os cálculos usam
+  apenas o restante da fatura + as transferências reais, sem dupla contagem.
 - **Performance**: lista paginada por dias visíveis (`dias` na URL), saldo do dia
   calculado por uma query agregada; faturas e orçamentos agregados em uma única
   consulta por página, com índices por cartão/data e fatura.
@@ -430,7 +440,7 @@ npm test
 npm run build
 ```
 
-Testes atuais (278): formatação/parse de BRL, datas/meses, máscara e parsing
+Testes atuais (294): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
 geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e
@@ -449,6 +459,15 @@ faturas/orçamentos imutáveis entre workspaces; “Outros” por workspace; usu
 inativo sem sessão; último admin protegido; `ALLOW_SIGNUP=false`; migration 0007
 validada contra um banco da etapa anterior e idempotente; e uma varredura que
 falha se houver query de domínio fora de `scopedDb`.
+
+Ajustes de orçamentos/faturas cobertos por testes: linha de orçamento mantida
+com reserva zero no estouro e no limite exato; ciclo passado visível; séries com
+exceção “só este ciclo”, edição “este e os próximos”, exclusão da série e
+restauração; conflito de categoria por ciclo; gasto em ciclo excluído não
+consome; migration 0008 de `budget_versions`/`budget_cycle_exceptions` e
+overrides; fatura visível após pagamento parcial/total; restante correto;
+transferência vinculada oculta; desfazer pagamento; saldo/previsto sem dupla
+contagem; pagamento em data diferente do vencimento.
 
 Decisões de segurança já aplicadas:
 
