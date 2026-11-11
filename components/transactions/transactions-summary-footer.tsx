@@ -95,16 +95,30 @@ function Statement({
       />
       <StatementRow label="despesa prevista" value={-values.saidasPrevistas} />
       <div className="border-t border-border/70" />
-      <StatementRow
-        label="saldo"
-        value={values.saldo}
-        tone={closingTone(values.saldo)}
-      />
-      <StatementRow
-        label="previsto"
-        value={values.previsto}
-        tone={closingTone(values.previsto)}
-      />
+      <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 pt-0.5">
+        <span className="flex items-baseline gap-2">
+          <span className="text-xs text-muted-foreground">saldo</span>
+          <span
+            className={cn(
+              "tabular text-sm font-semibold",
+              closingTone(values.saldo),
+            )}
+          >
+            {plainNumber.format(values.saldo / 100)}
+          </span>
+        </span>
+        <span className="flex items-baseline gap-2">
+          <span className="text-xs text-muted-foreground">previsto</span>
+          <span
+            className={cn(
+              "tabular text-sm font-semibold",
+              closingTone(values.previsto),
+            )}
+          >
+            {plainNumber.format(values.previsto / 100)}
+          </span>
+        </span>
+      </div>
     </dl>
   );
 }

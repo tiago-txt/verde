@@ -120,7 +120,7 @@ export function CategoryPicker({
               "relative flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
               value === null
                 ? "border-primary/50 bg-primary/10 text-primary"
-                : "border-border hover:bg-accent",
+                : "border-border hover:border-primary/40 hover:bg-accent",
             )}
           >
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
@@ -147,7 +147,7 @@ export function CategoryPicker({
                 "relative flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
                 selected
                   ? "border-primary/50 bg-primary/10 text-primary"
-                  : "border-border hover:bg-accent",
+                  : "border-border hover:border-primary/40 hover:bg-accent",
               )}
             >
               <CategoryIcon

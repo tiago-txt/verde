@@ -336,7 +336,7 @@ export function QuickCategoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4 sm:max-w-lg">
+      <DialogContent className="max-h-[var(--verde-sheet-max-h,92dvh)] space-y-4 overflow-y-auto p-4 sm:max-w-lg">
         <DialogHeader className="pr-10">
           <DialogTitle>Trocar categoria</DialogTitle>
           <DialogDescription>

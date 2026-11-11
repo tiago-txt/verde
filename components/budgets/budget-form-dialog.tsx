@@ -327,7 +327,7 @@ export function BudgetFormDialog({
                           "relative flex min-h-[76px] flex-col items-center justify-center gap-1 rounded-xl border px-1 py-2 text-center transition-colors",
                           checked
                             ? "border-primary/50 bg-primary/10 text-primary"
-                            : "border-border hover:bg-accent",
+                            : "border-border hover:border-primary/40 hover:bg-accent",
                           blocked && "cursor-not-allowed opacity-50",
                         )}
                       >

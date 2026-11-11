@@ -329,7 +329,7 @@ function CategoryFilter({
           "relative flex min-h-[76px] w-full min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-xl border px-1 py-2 text-center transition-colors",
           checked
             ? "border-primary/50 bg-primary/10 text-primary"
-            : "border-border hover:bg-accent",
+            : "border-border hover:border-primary/40 hover:bg-accent",
         )}
       >
         <CategoryIcon
