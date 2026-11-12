@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { TileSize, TileVariant } from "@/lib/design/tile-types";
+import type { BankIconDefinition } from "@/lib/finance/bank-icons";
 
 const MOTIFS = [
   // 0 — círculo com quatro pontos
@@ -63,11 +64,11 @@ const MOTIFS = [
   </>,
 ];
 
-const DIMENSIONS: Record<TileSize, { box: string; icon: string }> = {
-  xs: { box: "h-8 w-8", icon: "h-3.5 w-3.5" },
-  sm: { box: "h-10 w-10", icon: "h-4 w-4" },
-  md: { box: "h-12 w-12", icon: "h-5 w-5" },
-  lg: { box: "h-14 w-14", icon: "h-6 w-6" },
+const DIMENSIONS: Record<TileSize, { box: string; icon: string; bank: string }> = {
+  xs: { box: "h-8 w-8", icon: "h-3.5 w-3.5", bank: "h-5 w-5" },
+  sm: { box: "h-10 w-10", icon: "h-4 w-4", bank: "h-6 w-6" },
+  md: { box: "h-12 w-12", icon: "h-5 w-5", bank: "h-7 w-7" },
+  lg: { box: "h-14 w-14", icon: "h-6 w-6", bank: "h-8 w-8" },
 };
 
 /**
@@ -76,6 +77,7 @@ const DIMENSIONS: Record<TileSize, { box: string; icon: string }> = {
  */
 export function Tile({
   icon: Icon,
+  bank,
   motif,
   variant = "neutral",
   color,
@@ -85,6 +87,7 @@ export function Tile({
   iconClassName,
 }: {
   icon: LucideIcon;
+  bank?: BankIconDefinition | null;
   motif: number;
   variant?: TileVariant;
   color?: string | null;
@@ -115,7 +118,37 @@ export function Tile({
       >
         {MOTIFS[motif % MOTIFS.length]}
       </svg>
-      <Icon className={cn("tile-icon relative z-10", dimension.icon, iconClassName)} />
+      {bank ? (
+        <span
+          className={cn(
+            "relative z-10 grid place-items-center rounded-[5px] bg-white/95 p-[2px] shadow-sm ring-1 ring-black/10",
+            dimension.bank,
+          )}
+        >
+          <svg viewBox="0 0 32 32" className="h-full w-full" aria-hidden="true">
+            {bank.shape === "circle" ? (
+              <circle cx="16" cy="16" r="14" fill={bank.brandColor} />
+            ) : bank.shape === "diamond" ? (
+              <path d="M16 2 30 16 16 30 2 16Z" fill={bank.brandColor} />
+            ) : (
+              <rect x="2" y="2" width="28" height="28" rx="7" fill={bank.brandColor} />
+            )}
+            <text
+              x="16"
+              y="20.5"
+              textAnchor="middle"
+              fontFamily="var(--font-body), sans-serif"
+              fontSize={bank.initials.length > 2 ? 7 : 10}
+              fontWeight="700"
+              fill={bank.inkColor}
+            >
+              {bank.initials}
+            </text>
+          </svg>
+        </span>
+      ) : (
+        <Icon className={cn("tile-icon relative z-10", dimension.icon, iconClassName)} />
+      )}
     </span>
   );
 }

@@ -21,6 +21,7 @@ import { FieldError, FormError } from "@/components/form-feedback";
 import type { CreditCard } from "@/lib/db/schema";
 import { CARD_BRANDS } from "@/lib/db/schema";
 import { createCardSchema, type CardFormValues } from "@/lib/validation/cards";
+import { resolveEntityIcon } from "@/lib/icon-selection";
 import { EntityTile } from "@/components/entity-tile";
 
 type CardAccountOption = {
@@ -62,7 +63,7 @@ function defaults(
       fechamentoCompra: card.fechamentoCompra,
       contaPagamentoId: card.contaPagamentoId,
       cor: card.cor,
-      icone: card.icone as CardFormValues["icone"],
+      icone: resolveEntityIcon(card.icone, "CreditCard"),
     };
   }
 
@@ -316,7 +317,23 @@ export function CardFormDialog({
                     control={control}
                     name="icone"
                     render={({ field }) => (
-                      <IconPicker value={field.value} onChange={field.onChange} />
+                      <IconPicker
+                        kind="cartao"
+                        allowBanks
+                        value={field.value}
+                        defaultTab={card ? undefined : "banks"}
+                        onChange={(icon, bank) => {
+                          field.onChange(icon);
+                          if (!bank) return;
+                          const currentColor = form.getValues("cor");
+                          if (!card || currentColor === "#818cf8") {
+                            form.setValue("cor", bank.brandColor, {
+                              shouldDirty: true,
+                              shouldValidate: true,
+                            });
+                          }
+                        }}
+                      />
                     )}
                   />
                 </div>

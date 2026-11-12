@@ -12,6 +12,20 @@ type ColorPickerProps = {
 export function ColorPicker({ value, onChange, disabled }: ColorPickerProps) {
   return (
     <div className="flex flex-wrap gap-2" role="group" aria-label="Cor">
+      {!COLOR_PALETTE.some(
+        (color) => value.toLowerCase() === color.value.toLowerCase(),
+      ) && (
+        <button
+          type="button"
+          onClick={() => onChange(value)}
+          disabled={disabled}
+          aria-label="Cor da instituição"
+          aria-pressed
+          title="Cor da instituição"
+          className="h-9 w-9 scale-110 rounded-full border-2 border-foreground shadow-sm transition-transform focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          style={{ backgroundColor: value }}
+        />
+      )}
       {COLOR_PALETTE.map((color) => {
         const selected = value.toLowerCase() === color.value.toLowerCase();
         return (

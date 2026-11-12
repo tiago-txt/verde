@@ -3,10 +3,10 @@
 import { useEffect, useState } from "react";
 import { Controller, useForm, type Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { toIconName } from "@/lib/icon-names";
 import { Loader2 } from "lucide-react";
 import type { AccountWithBalance } from "@/lib/db/queries/accounts";
 import { ACCOUNT_TYPES, type AccountType } from "@/lib/db/schema";
+import { resolveEntityIcon } from "@/lib/icon-selection";
 import { DEFAULT_COLOR } from "@/lib/colors";
 import { accountInputSchema, type AccountInput } from "@/lib/validation/accounts";
 import { createAccountAction, updateAccountAction } from "@/lib/actions/accounts";
@@ -58,7 +58,7 @@ export function AccountFormDialog({
       tipo: account?.tipo ?? "corrente",
       saldoInicial: account?.saldoInicial ?? 0,
       cor: account?.cor ?? DEFAULT_COLOR,
-      icone: toIconName(account?.icone, "Wallet"),
+      icone: resolveEntityIcon(account?.icone, "Wallet"),
     },
   });
 
@@ -72,7 +72,7 @@ export function AccountFormDialog({
       tipo: account?.tipo ?? "corrente",
       saldoInicial: account?.saldoInicial ?? 0,
       cor: account?.cor ?? DEFAULT_COLOR,
-      icone: toIconName(account?.icone, "Wallet"),
+      icone: resolveEntityIcon(account?.icone, "Wallet"),
     });
   }, [open, account, reset]);
 
@@ -170,7 +170,22 @@ export function AccountFormDialog({
               control={control}
               name="icone"
               render={({ field }) => (
-                <IconPicker value={field.value} onChange={field.onChange} />
+                <IconPicker
+                  value={field.value}
+                  allowBanks
+                  defaultTab={account ? undefined : "banks"}
+                  onChange={(icon, bank) => {
+                    field.onChange(icon);
+                    if (!bank) return;
+                    const currentColor = form.getValues("cor");
+                    if (!account || currentColor === DEFAULT_COLOR) {
+                      form.setValue("cor", bank.brandColor, {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                    }
+                  }}
+                />
               )}
             />
             <FieldError message={formState.errors.icone?.message} />

@@ -80,6 +80,17 @@ describe("guarda de design", () => {
     }
   });
 
+  it("só a pastilha renderiza a marca bancária", () => {
+    for (const file of sourceFiles.filter((item) => item.endsWith(".tsx"))) {
+      const content = fs.readFileSync(file, "utf8");
+      if (!content.includes("bank.initials")) continue;
+      expect(
+        path.relative(process.cwd(), file),
+        "marca bancária renderizada fora de Tile",
+      ).toBe(path.join("components", "tile.tsx"));
+    }
+  });
+
   it("define os tokens de decoração nos três níveis e nos dois temas", () => {
     const css = fs.readFileSync(
       path.join(process.cwd(), "app", "globals.css"),

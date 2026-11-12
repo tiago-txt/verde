@@ -7,6 +7,10 @@ import {
 import { getIcon } from "@/lib/icons";
 import { tileMotif } from "@/lib/design/tile-motif";
 import type { TileVariant } from "@/lib/design/tile-types";
+import {
+  findBankIcon,
+  type BankIconDefinition,
+} from "@/lib/finance/bank-icons";
 
 export type TileEntityKind =
   | "categoria"
@@ -28,6 +32,7 @@ export type TileEntity = {
 export type TileSpec = {
   color: string;
   icon: LucideIcon;
+  bank?: BankIconDefinition | null;
   motif: number;
   variant: TileVariant;
   seed: string;
@@ -56,22 +61,30 @@ export function tileSpec(
   entity: TileEntity = {},
 ): TileSpec {
   switch (kind) {
-    case "conta":
+    case "conta": {
+      const bank = findBankIcon(entity.icone);
+      const storedIcon = entity.icone?.startsWith("bank:") ? null : entity.icone;
       return {
-        color: entity.cor || PRIMARY,
-        icon: getIcon(entity.icone || "Wallet"),
+        color: entity.cor || bank?.brandColor || PRIMARY,
+        icon: getIcon(storedIcon || "Wallet"),
+        bank,
         motif: tileMotif(seedFor(kind, entity)),
         variant: "gold",
         seed: seedFor(kind, entity),
       };
-    case "cartao":
+    }
+    case "cartao": {
+      const bank = findBankIcon(entity.icone);
+      const storedIcon = entity.icone?.startsWith("bank:") ? null : entity.icone;
       return {
-        color: entity.cor || INFO,
-        icon: getIcon(entity.icone || "CreditCard"),
+        color: entity.cor || bank?.brandColor || INFO,
+        icon: getIcon(storedIcon || "CreditCard"),
+        bank,
         motif: 7,
         variant: "band",
         seed: seedFor(kind, entity),
       };
+    }
     case "orcamento":
       return {
         color: entity.cor || AMBER,

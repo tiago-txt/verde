@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { CARD_BRANDS, CARD_CLOSING_BEHAVIORS } from "@/lib/db/schema";
 import {
+  bankOrIconNameSchema,
   hexColorSchema,
-  iconNameSchema,
   idSchema,
   isoDateSchema,
   monthKeySchema,
@@ -32,7 +32,7 @@ const cardFields = z.object({
   fechamentoCompra: z.enum(CARD_CLOSING_BEHAVIORS).optional(),
   contaPagamentoId: idSchema.nullable(),
   cor: hexColorSchema,
-  icone: iconNameSchema,
+  icone: bankOrIconNameSchema,
 });
 
 export const createCardSchema = cardFields;

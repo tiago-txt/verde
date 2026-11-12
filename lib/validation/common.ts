@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { isValidISODate, isValidMonthKey } from "@/lib/dates";
-import { ICON_NAMES } from "@/lib/icon-names";
+import { ICON_NAMES, isIconName } from "@/lib/icon-names";
+import { isBankIconId } from "@/lib/finance/bank-icons";
 
 export const idSchema = z
   .string()
@@ -22,6 +23,14 @@ export const hexColorSchema = z
   .regex(/^#[0-9a-f]{6}$/i, "Cor inválida");
 
 export const iconNameSchema = z.enum(ICON_NAMES);
+
+/** Ícone genérico ou identificador local `bank:*`. */
+export const bankOrIconNameSchema = z
+  .string()
+  .refine(
+    (value) => isIconName(value) || isBankIconId(value),
+    "Ícone inválido",
+  );
 
 export const centsSchema = z
   .number()

@@ -26,6 +26,7 @@ export function EntityTile({
   return (
     <Tile
       icon={spec.icon}
+      bank={spec.bank}
       motif={spec.motif}
       variant={spec.variant}
       color={spec.color}

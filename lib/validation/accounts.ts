@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { ACCOUNT_TYPES } from "@/lib/db/schema";
 import {
+  bankOrIconNameSchema,
   centsSchema,
   hexColorSchema,
-  iconNameSchema,
 } from "./common";
 
 export const accountInputSchema = z.object({
@@ -15,7 +15,7 @@ export const accountInputSchema = z.object({
   tipo: z.enum(ACCOUNT_TYPES),
   saldoInicial: centsSchema,
   cor: hexColorSchema,
-  icone: iconNameSchema,
+  icone: bankOrIconNameSchema,
 });
 
 export type AccountInput = z.infer<typeof accountInputSchema>;
