@@ -18,8 +18,10 @@ import { DashboardSkeleton } from "@/components/dashboard/skeleton";
 import { BudgetCycleOverview } from "@/components/budgets/budget-cycle-overview";
 import { BudgetProgress } from "@/components/budgets/budget-progress";
 import { UpcomingBlock } from "@/components/dashboard/upcoming-block";
+import { ForecastMiniCard } from "@/components/forecast/forecast-mini-card";
 import { requireUser } from "@/lib/auth/current-user";
 import { listBudgetCycleDetails } from "@/lib/db/queries/budgets";
+import { getForecastData } from "@/lib/db/queries/forecast";
 import {
   getDashboardBalance,
   getDashboardCards,
@@ -117,8 +119,14 @@ export default async function DashboardPage({
           </Suspense>
         </div>
 
-        {/* Etapa 6: previsão de saldo. Slot reservado, sem placeholder visível. */}
-        <div className="hidden lg:col-span-12" data-slot="forecast" aria-hidden="true" />
+        {/* Etapa 6: previsão de saldo. */}
+        <div className="order-8 lg:col-span-5">
+          <Suspense fallback={<DashboardSkeleton lines={4} />}>
+            <BlockBoundary label="a previsão">
+              <ForecastBlock userId={user.id} workspaceId={workspaceId} />
+            </BlockBoundary>
+          </Suspense>
+        </div>
       </div>
     </div>
   );
@@ -418,6 +426,17 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
       </CardContent>
     </Card>
   );
+}
+
+async function ForecastBlock({
+  userId,
+  workspaceId,
+}: {
+  userId: string;
+  workspaceId: string;
+}) {
+  const data = getForecastData(workspaceId, userId);
+  return <ForecastMiniCard data={data} />;
 }
 
 async function BudgetsBlock({

@@ -21,6 +21,7 @@ import { getSystemCategoryIds } from "@/lib/db/queries/categories";
 import { getCardById } from "@/lib/db/queries/cards";
 import { getBudgetNoticeForTransactions } from "@/lib/db/queries/budgets";
 import { ensureRecurrencesForMonth } from "@/lib/db/queries/transactions";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import { idsForCategoryChange } from "@/lib/finance/batch";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import { buildInstallmentPlan } from "@/lib/finance/installments";
@@ -45,6 +46,7 @@ function fail(error: string, code?: string): ActionResult {
 }
 
 function revalidateTransactions() {
+  invalidateForecastCache();
   revalidatePath("/");
   revalidatePath("/lancamentos");
   revalidatePath("/contas");

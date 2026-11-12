@@ -24,6 +24,7 @@ import {
 } from "@/lib/db/queries/budgets";
 import { listAllCategories } from "@/lib/db/queries/categories";
 import { getTransactionRaw } from "@/lib/db/queries/transactions";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import {
   calcularCiclo,
   ciclosEntre,
@@ -52,6 +53,7 @@ function fail(error: string): ActionResult {
 }
 
 function revalidateBudgets() {
+  invalidateForecastCache();
   revalidatePath("/limite-de-gastos");
   revalidatePath("/lancamentos");
   revalidatePath("/");

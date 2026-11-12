@@ -29,6 +29,8 @@ export type BudgetCycleConfig = {
   arquivado?: boolean;
   /** Origens de gasto que consomem o envelope. */
   origens?: BudgetOrigin;
+  /** Modo indicador: acompanha gasto sem gerar reserva/liberação. */
+  modoIndicador?: boolean;
 };
 
 export type BudgetCycleInfo = {
@@ -396,6 +398,7 @@ export function eventosDoCiclo(
   overrides?: BudgetOverrides,
 ): BudgetEvent[] {
   if (!orcamentoVigenteNoCiclo(budget, ciclo)) return [];
+  if (budget.modoIndicador) return [];
 
   const result = calcularCiclo(budget, ciclo, gasto, overrides);
 

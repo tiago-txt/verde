@@ -8,7 +8,7 @@ e dashboard no computador), self-hosted em um único container Docker, com SQLit
 > lançamentos completos, recorrência/parcelamento, orçamentos com ciclo,
 > cartões/faturas, dashboard, relatórios, exportação/importação e PWA. Esta
 > entrega adiciona **multiusuário com isolamento total por workspace** (sem
-> compartilhamento). A previsão de saldo continua reservada para a Etapa 6.
+> compartilhamento) e a **previsão de saldo da Etapa 6**.
 
 ---
 
@@ -142,7 +142,27 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - O chip do lançamento e o painel do orçamento mostram o ciclo real consumido e,
   no cartão, "via fatura de DD/MM".
 
-Ainda são placeholders: previsão de saldo (etapa 6).
+### Previsão de saldo (Etapa 6)
+
+- `/previsao` projeta o saldo diário a partir do saldo atual (contas corrente,
+  poupança e dinheiro por padrão), com horizonte de 6, 12 ou 24 meses.
+- A série compõe somente eventos já produzidos pelas regras existentes:
+  lançamentos reais futuros/não pagos, recorrências virtuais sem gravar,
+  restante das faturas no vencimento, reservas/liberações de orçamento e
+  transferências entre contas incluídas.
+- Cada evento tem certeza `certo` (lançamentos, parcelas e faturas) ou
+  `estimado` (recorrências virtuais, orçamento e receitas anuais). A chave
+  “Incluir estimativas” mostra os dois cenários quando divergem.
+- A margem de segurança é configurável; abaixo dela o período é negativo.
+  A recuperação só pode ser causada por entrada real ou recorrência de receita —
+  reserva, liberação de orçamento e transferência nunca contam como causa.
+- Avisos no modal, banner dispensável em `/lancamentos`, cartão no dashboard e
+  tabela mensal usam a mesma série. Preferências ficam por usuário em
+  `forecast_preferences` (migration 0011) e o cache curto é invalidado pelas
+  actions de lançamentos, contas, cartões, orçamentos e dados.
+- A simulação “e se” do modal não grava nada; ela injeta o rascunho, incluindo
+  parcelas, cartão/fatura e efeito no orçamento, e devolve antes/depois.
+- A previsão é determinística, em pt-BR, com alternativa textual no gráfico.
 
 ---
 
@@ -499,6 +519,16 @@ overrides; fatura visível após pagamento parcial/total; restante correto;
 transferência vinculada oculta; desfazer pagamento; saldo/previsto sem dupla
 contagem; pagamento em data diferente do vencimento.
 
+Previsão de saldo coberta por testes: série sem eventos/reta, soma dos eventos,
+salário e despesas no mesmo mês, parcelas 12x com recuperação por 13º, reserva/
+liberação/transferência fora das causas de recuperação, sem recuperação, margem,
+atrasados, recorrências virtuais sem duplicar, fatura restante/parcial/total,
+reserva de orçamento e estouro, indicador sem evento, transferências anulando,
+conta fora do escopo, estimativas ligadas/desligadas, simulação antes/depois,
+parcela máxima segura, resumo mensal/virada de ano, consistência com saldo do dia,
+Zod, cache e preferências isoladas por workspace, e rejeição de conta/cartão/
+categoria de outro workspace.
+
 Decisões de segurança já aplicadas:
 
 - senha com **bcrypt** (custo 12), sem cadastro público por padrão;
@@ -519,8 +549,9 @@ Decisões de segurança já aplicadas:
   workspace;
 - preferências de interface (tema e sidebar) ficam no `localStorage`; a sidebar
   é namespaced por `userId` e o logout limpa tema, sidebar, `sessionStorage` e
-  caches do service worker. Não há tabela de preferências no servidor nesta
-  etapa.
+  caches do service worker. As preferências da previsão (horizonte, margem,
+  contas e estimativas) ficam no servidor por usuário em
+  `forecast_preferences`.
 
 ---
 
@@ -529,9 +560,9 @@ Decisões de segurança já aplicadas:
 - [x] **Etapa 1** — scaffold, Docker, banco + migrations, auth, shell responsivo
 - [x] **Etapa 2** — contas, categorias, tags e CRUD de lançamentos (recorrência e parcelas)
 - [x] **Etapa 3** — tela de Lançamentos completa, calendário, filtros, painel, saldo do dia, lote e CSV
-- [ ] **Etapa 4** — cartões e faturas
-- [ ] **Etapa 5** — dashboard, relatórios e limite de gastos
-- [ ] **Etapa 6** - previsão de saldo (PWA, exportação/importação, backup,
+- [x] **Etapa 4** — cartões e faturas
+- [x] **Etapa 5** — dashboard, relatórios e limite de gastos
+- [x] **Etapa 6** — previsão de saldo (PWA, exportação/importação, backup,
   multiusuário e gestão de usuários já implementados)
 
 Fora do escopo por enquanto: Open Finance, IA de categorização, multi-moeda,

@@ -10,6 +10,7 @@ import { accounts, creditCards, transactions } from "@/lib/db/schema";
 import { getCardInvoiceDetail } from "@/lib/db/queries/cards";
 import { countCardTransactions } from "@/lib/db/queries/cards";
 import { listAllAccounts } from "@/lib/db/queries/accounts";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import {
   datasDaFatura,
   faturaDaCompra,
@@ -63,6 +64,7 @@ export async function getCardInvoiceDetailAction(
 }
 
 function revalidateCards(cardId?: string) {
+  invalidateForecastCache();
   revalidatePath("/cartoes");
   if (cardId) revalidatePath(`/cartoes/${cardId}`);
   revalidatePath("/lancamentos");

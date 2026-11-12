@@ -177,6 +177,7 @@ function invoicesForCard(
   movements: MovementRow[],
   payments: PaymentRow[],
   hoje: string,
+  extraMovements: MovementRow[] = [],
 ): CardInvoiceSummary[] {
   const config = cardConfig(card);
   const buckets = new Map<string, { total: number; pago: number }>();
@@ -187,7 +188,7 @@ function invoicesForCard(
     return current;
   }
 
-  for (const movement of movements) {
+  for (const movement of [...movements, ...extraMovements]) {
     if (movement.cartaoId !== card.id) continue;
     if (movement.tipo === "transferencia") continue;
     const key = faturaDaCompra(movement.data, config);
@@ -235,6 +236,37 @@ function invoicesForCard(
 
 function emptyInvoice(card: CreditCard, chave: string, hoje: string) {
   return montarResumoFatura(chave, cardConfig(card), 0, 0, hoje);
+}
+
+export type ForecastCardInvoice = {
+  card: CreditCard;
+  invoice: CardInvoiceSummary;
+};
+
+/**
+ * Todas as faturas calculadas, incluindo compras virtuais de recorrências.
+ * Usa a mesma função `invoicesForCard` da tela de cartões.
+ */
+export function listCardInvoicesForForecast(
+  workspaceId: string,
+  extraMovements: MovementRow[] = [],
+): ForecastCardInvoice[] {
+  const { db, ws } = scopedDb(workspaceId);
+  const hoje = todayISO();
+  const cards = db
+    .select()
+    .from(creditCards)
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
+    .orderBy(asc(creditCards.arquivado), asc(creditCards.nome))
+    .all();
+  if (cards.length === 0) return [];
+
+  const { movements, payments } = loadLedger(workspaceId);
+  return cards.flatMap((card) =>
+    invoicesForCard(card, movements, payments, hoje, extraMovements).map(
+      (invoice) => ({ card, invoice }),
+    ),
+  );
 }
 
 export function listCards(workspaceId: string): CardWithInvoice[] {

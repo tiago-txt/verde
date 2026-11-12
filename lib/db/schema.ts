@@ -141,6 +141,35 @@ export const users = sqliteTable(
   ],
 );
 
+/** Preferências da previsão de saldo, por usuário e workspace. */
+export const forecastPreferences = sqliteTable(
+  "forecast_preferences",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    horizonte: integer("horizonte").notNull().default(12),
+    margem: integer("margem").notNull().default(0),
+    /** JSON com IDs de contas incluídas. */
+    contas: text("contas").notNull().default("[]"),
+    incluirEstimativas: integer("incluir_estimativas", { mode: "boolean" })
+      .notNull()
+      .default(true),
+    ...timestamps,
+  },
+  (table) => [
+    index("forecast_preferences_workspace_idx").on(table.workspaceId),
+    check(
+      "forecast_preferences_horizonte_check",
+      sql`${table.horizonte} in (6, 12, 24)`,
+    ),
+    check("forecast_preferences_margem_check", sql`${table.margem} >= 0`),
+  ],
+);
+
 export const accounts = sqliteTable(
   "accounts",
   {

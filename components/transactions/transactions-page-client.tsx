@@ -81,6 +81,8 @@ import type {
 } from "@/lib/db/queries/transactions";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import type { CardInvoiceEvent, CardInvoiceDetail } from "@/lib/db/queries/cards";
+import { ForecastBanner } from "@/components/forecast/forecast-banner";
+import type { ForecastAlert } from "@/lib/db/queries/forecast";
 import {
   addMonths,
   currentMonth,
@@ -171,6 +173,8 @@ type TransactionsPageClientProps = {
   today: string;
   overdueIds: string[];
   initialNew: boolean;
+  userId: string;
+  forecastAlert: ForecastAlert | null;
 };
 
 type TransactionDayGroup = {
@@ -192,6 +196,8 @@ export function TransactionsPageClient({
   today,
   overdueIds,
   initialNew,
+  userId,
+  forecastAlert,
 }: TransactionsPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -833,6 +839,13 @@ export function TransactionsPageClient({
 
   return (
     <div className="space-y-4 pb-48 lg:pb-28">
+      {forecastAlert && (
+        <ForecastBanner
+          userId={userId}
+          month={filters.mes}
+          alert={forecastAlert}
+        />
+      )}
       <div className="flex items-center gap-1 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
         <div className="hidden min-w-0 lg:block">
           <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>

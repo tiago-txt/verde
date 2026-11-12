@@ -8,6 +8,7 @@ import {
   BarChart3,
   CreditCard,
   LayoutDashboard,
+  LineChart,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Visão geral", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/previsao", label: "Previsão", icon: LineChart },
   { href: "/limite-de-gastos", label: "Orçamentos", icon: Target },
   { href: "/contas", label: "Contas", icon: Wallet },
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
@@ -40,6 +42,7 @@ const MOBILE_NAV: NavItem[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
+  { href: "/previsao", label: "Previsão", icon: LineChart },
   { href: "/limite-de-gastos", label: "Orçamentos", icon: Target },
   { href: "/configuracoes", label: "Perfil", icon: Settings },
 ];
@@ -62,6 +65,7 @@ export function AppShell({ user, children }: AppShellProps) {
     pathname === "/" ||
     pathname.startsWith("/limite-de-gastos") ||
     pathname.startsWith("/relatorios") ||
+    pathname.startsWith("/previsao") ||
     pathname.startsWith("/cartoes");
 
   useEffect(() => {
@@ -259,7 +263,7 @@ export function AppShell({ user, children }: AppShellProps) {
         aria-label="Navegação principal"
         className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar/95 backdrop-blur lg:hidden"
       >
-        <div className="grid h-16 grid-cols-5">
+        <div className="grid h-16 grid-cols-6">
           {MOBILE_NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (

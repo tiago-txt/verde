@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  AlertTriangle,
   ArrowRight,
   Check,
   ChevronDown,
@@ -53,6 +54,10 @@ import {
   getBudgetHintAction,
   type BudgetHint,
 } from "@/lib/actions/budgets";
+import {
+  simulateForecastAction,
+  type ForecastHint,
+} from "@/lib/actions/forecast";
 import { createTagAction } from "@/lib/actions/tags";import type {
   RecentDescription,
   TransactionFormData,
@@ -66,7 +71,7 @@ import {
 } from "@/lib/finance/installments";
 import { datasDaFatura, faturaDaCompra } from "@/lib/finance/cards";
 import type { Scope } from "@/lib/finance/scopes";
-import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { keypadDisplay } from "@/lib/finance/numeric-keypad";
@@ -283,6 +288,7 @@ export function TransactionFormDialog({
     "repetir" | "obs" | "tags" | "orcamento" | null
   >(null);
   const [budgetHint, setBudgetHint] = useState<BudgetHint | null>(null);
+  const [forecastHint, setForecastHint] = useState<ForecastHint | null>(null);
   const [extraTags, setExtraTags] = useState<{ id: string; nome: string }[]>([]);
   const [newTagName, setNewTagName] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
@@ -425,6 +431,59 @@ export function TransactionFormDialog({
     };
   }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId, orcamentoDeslocamento]);
 
+  useEffect(() => {
+    if (
+      !open ||
+      tipo !== "despesa" ||
+      valor <= 0 ||
+      !data ||
+      !Number.isFinite(valor)
+    ) {
+      setForecastHint(null);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void simulateForecastAction({
+        tipo,
+        descricao: descricao.trim() || "Nova compra",
+        valor,
+        data,
+        parcelas: repeticao === "parcelada" ? parcelas : 1,
+        baseValor,
+        contaId: contaId ?? null,
+        cartaoId: cartaoId ?? null,
+        categoriaId: categoriaId ?? null,
+        orcamentoDeslocamento,
+      })
+        .then((result) => {
+          if (!cancelled) setForecastHint(result.ok ? result.hint : null);
+        })
+        .catch(() => {
+          if (!cancelled) setForecastHint(null);
+        });
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    open,
+    tipo,
+    descricao,
+    valor,
+    data,
+    repeticao,
+    parcelas,
+    baseValor,
+    contaId,
+    cartaoId,
+    categoriaId,
+    orcamentoDeslocamento,
+  ]);
+
   const repetitionChipLabel =
     mode === "edit"
       ? isInstallment
@@ -540,6 +599,15 @@ export function TransactionFormDialog({
       toast({
         description: result.budgetNotice.message,
         tone: result.budgetNotice.tone,
+      });
+    }
+
+    if (forecastHint?.temAlerta && forecastHint.periodo) {
+      toast({
+        description: `Previsão: saldo negativo a partir de ${formatMonthShort(
+          forecastHint.periodo.inicio.slice(0, 7),
+        )}. Menor saldo: ${formatCurrency(forecastHint.periodo.menorSaldo)}.`,
+        tone: "warning",
       });
     }
 
@@ -1131,6 +1199,73 @@ export function TransactionFormDialog({
                           )}
                         </span>
                       </p>
+                    )}
+                    {forecastHint?.temAlerta && forecastHint.periodo && (
+                      <div
+                        aria-live="polite"
+                        className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-muted-foreground"
+                      >
+                        <AlertTriangle
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
+                          aria-hidden="true"
+                        />
+                        <div className="min-w-0 space-y-1">
+                          <p>
+                            Com esta compra, seu saldo fica negativo a partir de{" "}
+                            <span className="font-medium text-destructive">
+                              {formatMonthShort(
+                                forecastHint.periodo.inicio.slice(0, 7),
+                              )}
+                            </span>
+                            {forecastHint.periodo.eventoInicial?.parcelaAtual
+                              ? ` (parcela ${forecastHint.periodo.eventoInicial.parcelaAtual}/${forecastHint.periodo.eventoInicial.parcelaTotal})`
+                              : ""}
+                            . Menor saldo:{" "}
+                            <span className="font-medium text-destructive">
+                              {formatCurrency(forecastHint.periodo.menorSaldo)}
+                            </span>
+                            .{" "}
+                            {forecastHint.periodo.recuperacao
+                              ? `Volta ao positivo em ${formatMonthShort(
+                                  forecastHint.periodo.recuperacao.data.slice(0, 7),
+                                )} com ${forecastHint.periodo.recuperacao.descricao}.`
+                              : "Sem previsão de recuperação no horizonte."}
+                          </p>
+                          {forecastHint.maxParcela &&
+                            forecastHint.maxParcela.valorParcela > 0 && (
+                              <p className="flex flex-wrap items-center gap-1.5">
+                                <span>
+                                  Para não ficar negativo, o máximo por parcela é{" "}
+                                  <strong>
+                                    {formatCurrency(
+                                      forecastHint.maxParcela.valorParcela,
+                                    )}
+                                  </strong>
+                                  .
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const next =
+                                      baseValor === "total"
+                                        ? forecastHint.maxParcela!.valorTotal
+                                        : forecastHint.maxParcela!.valorParcela;
+                                    setValue("valor", next, {
+                                      shouldValidate: true,
+                                      shouldDirty: true,
+                                    });
+                                  }}
+                                  className="min-h-12 rounded-md border border-primary/40 px-2 font-medium text-primary hover:bg-primary/10 sm:min-h-8"
+                                >
+                                  Usar{" "}
+                                  {formatCurrency(
+                                    forecastHint.maxParcela.valorParcela,
+                                  )}
+                                </button>
+                              </p>
+                            )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </>

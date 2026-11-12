@@ -274,6 +274,9 @@ describe("eventos de provisão e sobra", () => {
       eventosDoCiclo({ ...budget, dataFim: "2026-10" }, "2026-11", 0),
     ).toEqual([]);
     expect(eventosDoCiclo({ ...budget, arquivado: true }, "2026-11", 0)).toEqual([]);
+    expect(
+      eventosDoCiclo({ ...budget, modoIndicador: true }, "2026-11", 30000),
+    ).toEqual([]);
 
     const override = eventosDoCiclo(
       budget,

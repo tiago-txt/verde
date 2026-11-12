@@ -832,6 +832,82 @@ export function getBudgetEventsForMonth(
   );
 }
 
+export type ForecastBudgetEvent = {
+  id: string;
+  budgetId: string;
+  budgetNome: string;
+  budgetCiclo: string;
+  tipo: "provisao" | "sobra";
+  data: string;
+  valor: number;
+  contaId: string | null;
+  cor: string;
+  icone: string;
+};
+
+/**
+ * Eventos de orçamento no intervalo da previsão. Reutiliza exatamente
+ * `resolverCiclo`, `loadSpending` e `eventosDoCiclo` da tela de orçamentos.
+ */
+export function listBudgetForecastEvents(
+  workspaceId: string,
+  startDate: string,
+  endDate: string,
+): ForecastBudgetEvent[] {
+  const series = loadBudgetSeries(workspaceId);
+  if (series.length === 0) return [];
+
+  const categoriesById = categoryInfoMap(workspaceId);
+  const startMonth = addMonths(startDate.slice(0, 7), -2);
+  const endMonth = addMonths(endDate.slice(0, 7), 1);
+  const minDate = `${addMonths(startDate.slice(0, 7), -1)}-01`;
+  const pairs: SpendingPair[] = [];
+
+  for (const row of series) {
+    if (row.arquivado) continue;
+    for (const ciclo of ciclosEntre(startMonth, endMonth)) {
+      const budget = toResolvedBudget(row, ciclo, categoriesById);
+      if (budget) pairs.push({ budget, ciclo });
+    }
+  }
+
+  const spending = loadSpending(workspaceId, pairs);
+  const events: ForecastBudgetEvent[] = [];
+
+  for (const { budget, ciclo } of pairs) {
+    const data = spending.get(pairKey(budget.id, ciclo));
+    if (!data) continue;
+
+    const cycleEvents = eventosDoCiclo(
+      cycleConfigFromBudget(budget),
+      ciclo,
+      data.info.gasto,
+      {},
+    );
+    for (const event of cycleEvents) {
+      if (event.data < minDate || event.data > endDate) continue;
+      if (event.valor <= 0) continue;
+      events.push({
+        id: `${budget.id}:${ciclo}:${event.tipo}`,
+        budgetId: budget.id,
+        budgetNome: budget.nome,
+        budgetCiclo: ciclo,
+        tipo: event.tipo,
+        data: event.data,
+        valor: event.valor,
+        contaId: budget.contaId,
+        cor: budget.cor,
+        icone: budget.icone,
+      });
+    }
+  }
+
+  return events.sort(
+    (a, b) =>
+      a.data.localeCompare(b.data) || a.budgetNome.localeCompare(b.budgetNome),
+  );
+}
+
 function emptyBudgetFilters(monthKey: string): TransactionFilters {
   return {
     mes: monthKey,

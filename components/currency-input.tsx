@@ -16,6 +16,7 @@ type CurrencyInputProps = {
   className?: string;
   inputMode?: "numeric" | "decimal" | "none";
   onKeyDown?: React.KeyboardEventHandler<HTMLInputElement>;
+  onBlur?: React.FocusEventHandler<HTMLInputElement>;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 };
@@ -35,6 +36,7 @@ export function CurrencyInput({
   className,
   inputMode = "numeric",
   onKeyDown,
+  onBlur,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: CurrencyInputProps) {
@@ -64,6 +66,7 @@ export function CurrencyInput({
           value={display}
           onChange={handleChange}
           onKeyDown={onKeyDown}
+          onBlur={onBlur}
           inputMode={inputMode}
           autoComplete="off"
           disabled={disabled}

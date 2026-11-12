@@ -97,6 +97,20 @@ describe("migration 0009 (competência e fechamento do cartão)", () => {
         ?.dflt_value,
     ).toBe("'proxima_fatura'");
 
+    const preferenceColumns = testDb.sqlite
+      .prepare("pragma table_info(forecast_preferences)")
+      .all() as { name: string }[];
+    expect(preferenceColumns.map((column) => column.name)).toEqual(
+      expect.arrayContaining([
+        "user_id",
+        "workspace_id",
+        "horizonte",
+        "margem",
+        "contas",
+        "incluir_estimativas",
+      ]),
+    );
+
     // Idempotente: reaplicar não muda o valor convertido.
     migrateRemaining(testDb);
     expect(

@@ -40,6 +40,7 @@ import {
   type NormalizedImportRow,
 } from "@/lib/finance/csv-import";
 import { clampBudgetOffset } from "@/lib/finance/competence";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import {
   importRequestSchema,
   type ImportRequestInput,
@@ -1016,6 +1017,7 @@ function currentMonthKey(): string {
 }
 
 function revalidateAfterDataChange() {
+  invalidateForecastCache();
   revalidatePath("/");
   revalidatePath("/lancamentos");
   revalidatePath("/contas");

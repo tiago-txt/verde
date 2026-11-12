@@ -11,10 +11,12 @@ import {
   getAccountById,
 } from "@/lib/db/queries/accounts";
 import { accountInputSchema, type AccountInput } from "@/lib/validation/accounts";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import { idSchema } from "@/lib/validation/common";
 import type { ActionResult } from "./result";
 
 function revalidateAccounts() {
+  invalidateForecastCache();
   revalidatePath("/");
   revalidatePath("/contas");
   revalidatePath("/lancamentos");

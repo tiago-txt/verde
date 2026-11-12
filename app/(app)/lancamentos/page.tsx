@@ -10,6 +10,7 @@ import {
   listMonthTransactions,
 } from "@/lib/db/queries/transactions";
 import { getBudgetEventsForMonth, getBudgetEventsForDayBalances } from "@/lib/db/queries/budgets";
+import { getForecastBanner } from "@/lib/db/queries/forecast";
 import { listCardInvoiceEventsForMonth, listCardInvoiceEventsForDayBalances } from "@/lib/db/queries/cards";
 import { todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
@@ -59,6 +60,7 @@ export default async function LancamentosPage({
     : null;
   if (filters.detalhe && !detail) notFound();
   const today = todayISO();
+  const forecastAlert = getForecastBanner(workspaceId, user.id, filters.mes);
   const overdueIds = transactions
     .filter(
       (transaction) =>
@@ -79,6 +81,8 @@ export default async function LancamentosPage({
       today={today}
       overdueIds={overdueIds}
       initialNew={params.novo === "1"}
+      userId={user.id}
+      forecastAlert={forecastAlert}
     />
   );
 }
