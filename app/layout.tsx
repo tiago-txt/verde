@@ -71,6 +71,7 @@ const themeScript = `
       dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     }
     root.classList.toggle("dark", dark);
+    root.classList.toggle("light", !dark);
     var decorations = localStorage.getItem("verde-decorations");
     if (decorations === "on") decorations = "sutis";
     root.dataset.decorations = decorations === "off" || decorations === "normais" ? decorations : "sutis";

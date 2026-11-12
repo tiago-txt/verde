@@ -30,7 +30,9 @@ export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
 
   function apply(next: Theme) {
     const root = document.documentElement;
-    root.classList.toggle("dark", resolveDark(next));
+    const dark = resolveDark(next);
+    root.classList.toggle("dark", dark);
+    root.classList.toggle("light", !dark);
     try {
       localStorage.setItem("verde-theme", next);
     } catch {

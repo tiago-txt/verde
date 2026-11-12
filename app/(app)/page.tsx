@@ -27,6 +27,8 @@ import {
   getDashboardUpcoming,
 } from "@/lib/db/queries/dashboard";
 import { monthRange, isValidMonthKey, currentMonth, todayISO } from "@/lib/dates";
+import { monthRatio } from "@/lib/finance/month-ratio";
+import { cn } from "@/lib/utils";
 import { reportTransactionsHref, type ReportFilters } from "@/lib/finance/report-filters";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 
@@ -52,7 +54,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4">
-      <section className="relative overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] sm:p-6">
+      <section className="relative flex min-h-32 items-center overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] sm:min-h-36 sm:p-7">
         <div
           aria-hidden="true"
           className="deco-pattern-hero azulejo absolute inset-0"
@@ -65,16 +67,10 @@ export default async function DashboardPage({
           aria-hidden="true"
           className="decor-glow pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-forest-highest/40 blur-3xl"
         />
-        <div className="relative z-10 space-y-1">
+        <div className="relative z-10">
           <h1 className="font-display text-[34px] font-bold leading-[42px] tracking-tight sm:text-[48px] sm:leading-[56px]">
             Olá, {firstName}
           </h1>
-          <p className="flex flex-wrap items-center gap-2 text-[15px] leading-[22px] text-on-surface/80">
-            Resumo de{" "}
-            <span className="rounded border border-grout bg-forest-high px-2 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-primary">
-              {formatMonthTitle(month)}
-            </span>
-          </p>
         </div>
       </section>
 
@@ -245,13 +241,14 @@ async function MonthBlock({
 }) {
   const data = await getDashboardMonth(workspaceId, month);
   const { current, previous, expenseVariation, incomeVariation } = data;
+  const ratio = monthRatio(current.receitas, current.despesas);
 
   return (
-    <Card className="h-full">
+    <Card className="flex h-full flex-col">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm">Receitas × despesas</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="flex flex-1 flex-col gap-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="relative overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
             <span className="absolute inset-x-0 top-0 h-1 bg-emerald" aria-hidden="true" />
@@ -284,6 +281,68 @@ async function MonthBlock({
             </p>
           </div>
         </div>
+
+        <div className="mt-auto rounded-lg border border-grout bg-forest-container/50 p-3">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <span className="font-mono text-xs uppercase tracking-[0.08em] text-outline">
+              Comprometimento da receita
+            </span>
+            <span
+              className={cn(
+                "tabular text-sm font-semibold",
+                ratio.excedeu ? "text-clay" : "text-primary",
+              )}
+            >
+              {ratio.vazio ? "—" : `${ratio.comprometidoPct.toFixed(1)}%`}
+            </span>
+          </div>
+          <div
+            role="img"
+            aria-label={
+              ratio.vazio
+                ? "Sem receitas ou despesas no mês"
+                : `Receitas ${Math.round(ratio.receitaShare * 100)}% e despesas ${Math.round(
+                    ratio.despesaShare * 100,
+                  )}% do total`
+            }
+            className="mt-2 flex h-2 overflow-hidden rounded-full border border-grout/60 bg-forest-highest"
+          >
+            {!ratio.vazio && (
+              <>
+                <span
+                  className="h-full bg-emerald"
+                  style={{ width: `${ratio.receitaShare * 100}%` }}
+                />
+                <span
+                  className="h-full bg-clay"
+                  style={{ width: `${ratio.despesaShare * 100}%` }}
+                />
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {ratio.vazio ? (
+              "Sem movimento no mês."
+            ) : ratio.excedeu ? (
+              <>
+                Despesas superam receitas em{" "}
+                <span className="tabular font-medium text-clay">
+                  {formatCurrency(Math.abs(ratio.economia))}
+                </span>
+                .
+              </>
+            ) : (
+              <>
+                Economia do mês:{" "}
+                <span className="tabular font-medium text-primary">
+                  {formatCurrency(ratio.economia)}
+                </span>
+                .
+              </>
+            )}
+          </p>
+        </div>
+
         {current.receitas === 0 && current.despesas === 0 && (
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             Nenhum movimento neste mês.

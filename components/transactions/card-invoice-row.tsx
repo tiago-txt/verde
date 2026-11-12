@@ -33,19 +33,20 @@ export function CardInvoiceRow({
   const isPaid = event.status === "paga";
 
   return (
-    <div
-      className={cn(
-        "flex w-full items-stretch border-l-2 border-dashed",
-        isPaid
-          ? "border-l-success/60 bg-success/[0.05]"
-          : "border-l-info/60 bg-info/[0.05]",
-      )}
-    >
+    <div className="group relative flex min-h-[72px] w-full items-stretch overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)] opacity-90">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-y-0 left-0 z-10 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
+          isPaid ? "border-l-success/70" : "border-l-info/70",
+        )}
+      />
+
       <button
         type="button"
         onClick={() => onOpen(event)}
         aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}`}
-        className="flex min-w-0 flex-1 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
+        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
       >
         <EntityTile
           kind="fatura"
@@ -55,14 +56,13 @@ export function CardInvoiceRow({
             cor: event.cartaoCor,
             icone: event.cartaoIcone,
           }}
-          size="sm"
           dashed={!isPaid}
-          className="mt-0.5"
+          className="h-10 w-10 sm:h-12 sm:w-12"
         />
 
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5">
-            <span className="text-sm font-medium">
+            <span className="row-title">
               Fatura {event.cartaoNome}
             </span>
             <Badge
@@ -75,25 +75,27 @@ export function CardInvoiceRow({
                       ? "warning"
                       : "outline"
               }
+              className="px-1.5 py-0 text-xs"
             >
               {isOverdue && !isPaid
                 ? "vencida"
                 : STATUS_LABELS[event.status]}
             </Badge>
             {isPaid && (
-              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-primary">
                 <Check className="h-3 w-3" aria-hidden="true" />
                 quitada
               </span>
             )}
           </span>
 
-          <span className="mt-1 block text-xs text-muted-foreground">
-            pago {formatCurrency(event.pago)} · restam{" "}
-            {formatCurrency(event.restante)}
-          </span>
-
-          <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <span>
+              pago <span className="tabular">{formatCurrency(event.pago)}</span>{" "}
+              · restam{" "}
+              <span className="tabular">{formatCurrency(event.restante)}</span>
+            </span>
+            <span aria-hidden="true">·</span>
             <span>vence {formatDate(event.vencimento)}</span>
             <span aria-hidden="true">·</span>
             <span>
@@ -103,7 +105,7 @@ export function CardInvoiceRow({
             {isOverdue && !isPaid && (
               <>
                 <span aria-hidden="true">·</span>
-                <span className="inline-flex items-center gap-0.5 text-destructive">
+                <span className="inline-flex items-center gap-0.5 text-clay">
                   <AlertTriangle className="h-3 w-3" aria-hidden="true" />
                   vencida
                 </span>
@@ -111,12 +113,8 @@ export function CardInvoiceRow({
             )}
           </span>
 
-          <span className="mt-1.5 block">
-            <PaymentProgress
-              pago={event.pago}
-              total={event.total}
-              className="max-w-[220px]"
-            />
+          <span className="mt-1 block max-w-[220px]">
+            <PaymentProgress pago={event.pago} total={event.total} />
           </span>
         </span>
       </button>
@@ -124,12 +122,12 @@ export function CardInvoiceRow({
       <div className="flex shrink-0 flex-col items-end justify-center gap-1.5 py-3 pr-3 sm:pr-4">
         <span
           className={cn(
-            "tabular text-sm font-semibold",
+            "row-value",
             isPaid
-              ? "text-success"
+              ? "text-primary"
               : isOverdue
-                ? "text-destructive"
-                : "text-foreground",
+                ? "text-clay"
+                : "text-on-surface",
           )}
         >
           −{formatCurrency(event.total)}

@@ -97,7 +97,7 @@ export function Tile({
   return (
     <span
       className={cn(
-        "tile relative grid shrink-0 place-items-center overflow-hidden rounded-[12px] border border-grout bg-forest-high",
+        "tile tile-entity relative grid shrink-0 place-items-center overflow-hidden rounded-[12px] border border-grout",
         dimension.box,
         variant === "gold" && "ring-1 ring-amber/45",
         variant === "band" && "border-info/35",

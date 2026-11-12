@@ -50,18 +50,27 @@
     --terracotta: 12 58% 40%;
     --amber: 36 82% 32%;
     --error-text: 12 70% 36%;
-    --deco-corner-opacity: 0.045;
-    --deco-emblem-opacity: 0.1;
-    --deco-pattern-opacity: 0.025;
-    --deco-hero-pattern-opacity: 0.05;
+    --tile-surface: 150 22% 28%;
+    --deco-corner-opacity: 0.07;
+    --deco-emblem-opacity: 0.16;
+    --deco-pattern-opacity: 0.06;
+    --deco-hero-pattern-opacity: 0.09;
     --radius: 0.75rem;
   }
 
-  :root[data-decorations="normais"] {
-    --deco-corner-opacity: 0.08;
-    --deco-emblem-opacity: 0.18;
-    --deco-pattern-opacity: 0.045;
+  .light,
+  :root[data-theme="light"] {
+    --deco-corner-opacity: 0.07;
+    --deco-emblem-opacity: 0.16;
+    --deco-pattern-opacity: 0.06;
     --deco-hero-pattern-opacity: 0.09;
+  }
+
+  :root[data-decorations="normais"] {
+    --deco-corner-opacity: 0.1;
+    --deco-emblem-opacity: 0.2;
+    --deco-pattern-opacity: 0.1;
+    --deco-hero-pattern-opacity: 0.15;
   }
 
   :root[data-decorations="off"] {
@@ -118,18 +127,19 @@
     --terracotta: 12 55% 52%;
     --amber: 39 70% 50%;
     --error-text: 6 100% 84%;
-    --deco-corner-opacity: 0.05;
-    --deco-emblem-opacity: 0.12;
-    --deco-pattern-opacity: 0.03;
-    --deco-hero-pattern-opacity: 0.06;
+    --tile-surface: 147 27% 15%;
+    --deco-corner-opacity: 0.07;
+    --deco-emblem-opacity: 0.14;
+    --deco-pattern-opacity: 0.045;
+    --deco-hero-pattern-opacity: 0.075;
     --radius: 0.75rem;
   }
 
   .dark[data-decorations="normais"] {
-    --deco-corner-opacity: 0.09;
+    --deco-corner-opacity: 0.1;
     --deco-emblem-opacity: 0.2;
-    --deco-pattern-opacity: 0.054;
-    --deco-hero-pattern-opacity: 0.108;
+    --deco-pattern-opacity: 0.08;
+    --deco-hero-pattern-opacity: 0.13;
   }
 
   .dark[data-decorations="off"] {
@@ -205,7 +215,7 @@
     box-shadow: inset 0 0 0 1px hsl(var(--gold) / 0.45);
   }
   .azulejo {
-    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72' opacity='.3'%3E%3Cg fill='none' stroke='%234ae087' stroke-width='1.1'%3E%3Cpath d='M36 0 72 36 36 72 0 36Z'/%3E%3Cpath d='M0 0 16 16M72 0 56 16M72 72 56 56M0 72 16 56'/%3E%3C/g%3E%3Ccircle cx='36' cy='36' r='9' fill='none' stroke='%2310b981' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='2.5' fill='%234ae087'/%3E%3Crect x='30' y='30' width='12' height='12' fill='none' stroke='%23d99b26' stroke-width='.8' transform='rotate(45 36 36)'/%3E%3Cg fill='none' stroke='%23d99b26' stroke-width='.8'%3E%3Ccircle cx='0' cy='0' r='6'/%3E%3Ccircle cx='72' cy='0' r='6'/%3E%3Ccircle cx='72' cy='72' r='6'/%3E%3Ccircle cx='0' cy='72' r='6'/%3E%3C/g%3E%3C/svg%3E");
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg fill='none' stroke='%234ae087' stroke-width='1.1'%3E%3Cpath d='M36 0 72 36 36 72 0 36Z'/%3E%3Cpath d='M0 0 16 16M72 0 56 16M72 72 56 56M0 72 16 56'/%3E%3C/g%3E%3Ccircle cx='36' cy='36' r='9' fill='none' stroke='%2310b981' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='2.5' fill='%234ae087'/%3E%3Crect x='30' y='30' width='12' height='12' fill='none' stroke='%23d99b26' stroke-width='.8' transform='rotate(45 36 36)'/%3E%3Cg fill='none' stroke='%23d99b26' stroke-width='.8'%3E%3Ccircle cx='0' cy='0' r='6'/%3E%3Ccircle cx='72' cy='0' r='6'/%3E%3Ccircle cx='72' cy='72' r='6'/%3E%3Ccircle cx='0' cy='72' r='6'/%3E%3C/g%3E%3C/svg%3E");
     background-size: 72px 72px;
   }
   .deco-pattern {
@@ -219,6 +229,28 @@
   }
   .tile-emblem {
     opacity: var(--deco-emblem-opacity);
+  }
+  .tile-entity {
+    background-color: hsl(var(--tile-surface));
+  }
+  .row-title {
+    font-size: 15px;
+    line-height: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  .row-value {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 18px;
+    line-height: 24px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  @media (min-width: 640px) {
+    .row-value {
+      font-size: 20px;
+      line-height: 28px;
+    }
   }
   .azulejo-mask {
     mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 78%);

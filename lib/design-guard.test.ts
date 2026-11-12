@@ -80,7 +80,7 @@ describe("guarda de design", () => {
     }
   });
 
-  it("define os tokens de decoração nos três níveis", () => {
+  it("define os tokens de decoração nos três níveis e nos dois temas", () => {
     const css = fs.readFileSync(
       path.join(process.cwd(), "app", "globals.css"),
       "utf8",
@@ -90,10 +90,28 @@ describe("guarda de design", () => {
       "--deco-emblem-opacity",
       "--deco-pattern-opacity",
       "--deco-hero-pattern-opacity",
+      "--tile-surface",
     ]) {
       expect(css).toContain(token);
     }
+    expect(css).toContain(".light");
+    expect(css).toContain(".dark");
     expect(css).toContain('[data-decorations="normais"]');
     expect(css).toContain('[data-decorations="off"]');
+  });
+
+  it("mantém fatura e orçamento no mesmo container dos lançamentos", () => {
+    for (const relative of [
+      "components/transactions/budget-event-row.tsx",
+      "components/transactions/card-invoice-row.tsx",
+    ]) {
+      const content = fs.readFileSync(path.join(process.cwd(), relative), "utf8");
+      expect(content).toContain("min-h-[72px]");
+      expect(content).toContain("bg-surface-low");
+      expect(content).toContain("border-dashed");
+      expect(content).toContain("EntityTile");
+      expect(content).toContain("row-value");
+      expect(content).toContain("row-title");
+    }
   });
 });

@@ -351,7 +351,7 @@ export function TransactionRow({
             >
               <span
                 className={cn(
-                  "truncate text-[15px] font-semibold underline-offset-4 group-hover/name:underline",
+                  "row-title truncate underline-offset-4 group-hover/name:underline",
                   !transaction.pago && !isCardPurchase && "text-foreground/80",
                 )}
               >
@@ -481,7 +481,7 @@ export function TransactionRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className={cn("tabular text-[18px] font-semibold sm:text-xl", valueColor)}>
+          <span className={cn("row-value", valueColor)}>
             {sign}
             {formatCurrency(transaction.valor)}
           </span>
