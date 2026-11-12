@@ -16,6 +16,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CategoryIcon } from "@/components/category-icon";
+import { EntityTile } from "@/components/entity-tile";
 import type { CardOption } from "@/lib/db/queries/cards";
 import type { ReportFilters } from "@/lib/finance/report-filters";
 import {
@@ -25,7 +26,13 @@ import {
 import { reportPeriodRange, type ReportPeriod } from "@/lib/finance/reports";
 import { cn } from "@/lib/utils";
 
-type AccountOption = { id: string; nome: string; arquivada: boolean };
+type AccountOption = {
+  id: string;
+  nome: string;
+  arquivada: boolean;
+  cor: string;
+  icone: string;
+};
 type CategoryOption = {
   id: string;
   nome: string;
@@ -213,6 +220,16 @@ export function ReportFiltersBar({
                       patch({ contas: toggleId(filters.contas, account.id) })
                     }
                   />
+                  <EntityTile
+                    kind="conta"
+                    entity={{
+                      id: account.id,
+                      nome: account.nome,
+                      cor: account.cor,
+                      icone: account.icone,
+                    }}
+                    size="xs"
+                  />
                   <span className="truncate">{account.nome}</span>
                 </label>
               ))}
@@ -232,10 +249,15 @@ export function ReportFiltersBar({
                       patch({ cartoes: toggleId(filters.cartoes, card.id) })
                     }
                   />
-                  <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: card.cor }}
-                    aria-hidden="true"
+                  <EntityTile
+                    kind="cartao"
+                    entity={{
+                      id: card.id,
+                      nome: card.nome,
+                      cor: card.cor,
+                      icone: card.icone,
+                    }}
+                    size="xs"
                   />
                   <span className="truncate">{card.nome}</span>
                 </label>
@@ -271,6 +293,7 @@ export function ReportFiltersBar({
                     }
                   />
                   <CategoryIcon
+                    id={category.id}
                     icon={category.icone}
                     color={category.cor}
                     className="h-6 w-6"

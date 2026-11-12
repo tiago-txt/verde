@@ -33,7 +33,7 @@ import type { Scope } from "@/lib/finance/scopes";
 import type { BudgetFormValues } from "@/lib/validation/budgets";
 import { addMonths } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 
 type BudgetsViewProps = {
@@ -346,7 +346,6 @@ export function BudgetsView({
         <div className="grid gap-3 md:grid-cols-2">
           {details.map((detail) => {
             const summary = detail.resumo;
-            const Icon = getIcon(summary.icone);
             const tone = budgetTone(summary.gasto, summary.limite);
             return (
               <button
@@ -359,15 +358,16 @@ export function BudgetsView({
                 )}
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                    style={{
-                      backgroundColor: `${summary.cor}22`,
-                      color: summary.cor,
+                  <EntityTile
+                    kind="orcamento"
+                    entity={{
+                      id: summary.id,
+                      nome: summary.nome,
+                      cor: summary.cor,
+                      icone: summary.icone,
                     }}
-                  >
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span className="truncate text-sm font-semibold">

@@ -100,6 +100,7 @@ export function CategoryPicker({
             className="flex h-11 flex-1 items-center gap-2 rounded-xl border border-border px-3 text-sm hover:bg-accent"
           >
             <CategoryIcon
+              id={parent.id}
               icon={parent.icone}
               color={parent.cor}
               className="h-7 w-7"
@@ -151,6 +152,7 @@ export function CategoryPicker({
               )}
             >
               <CategoryIcon
+                id={option.id}
                 icon={option.icone}
                 color={option.cor}
                 className="h-9 w-9"

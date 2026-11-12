@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import Link from "next/link";
-import { CalendarClock, Check, CreditCard, Loader2 } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { EntityTile } from "@/components/entity-tile";
 import { useToast } from "@/components/ui/toast";
 import { setTransactionPaidAction } from "@/lib/actions/transactions";
 import type { UpcomingExpense } from "@/lib/db/queries/reports";
@@ -16,6 +17,7 @@ type UpcomingInvoice = {
   cartaoId: string;
   cartaoNome: string;
   cartaoCor: string;
+  cartaoIcone: string;
   faturaChave: string;
   vencimento: string;
   restante: number;
@@ -81,13 +83,20 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
           className="flex flex-col gap-2 py-2.5 sm:flex-row sm:items-center"
         >
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted">
-              {item.kind === "invoice" ? (
-                <CreditCard className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <CalendarClock className="h-4 w-4" aria-hidden="true" />
-              )}
-            </span>
+            {item.kind === "invoice" ? (
+              <EntityTile
+                kind="cartao"
+                entity={{
+                  id: item.data.cartaoId,
+                  nome: item.data.cartaoNome,
+                  cor: item.data.cartaoCor,
+                  icone: item.data.cartaoIcone,
+                }}
+                size="sm"
+              />
+            ) : (
+              <EntityTile kind="tipo" entity={{ tipo: "despesa" }} size="sm" />
+            )}
 
             <span className="min-w-0 flex-1">
               <span className="block truncate text-sm font-medium">

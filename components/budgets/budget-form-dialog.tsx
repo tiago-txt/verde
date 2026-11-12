@@ -30,7 +30,7 @@ import {
   type BudgetFormValues,
 } from "@/lib/validation/budgets";
 import { formatMonthTitle } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 
 type BudgetFormDialogProps = {
@@ -138,8 +138,6 @@ export function BudgetFormDialog({
       category.nome.toLowerCase().includes(query),
     );
   }, [formData.categories, search]);
-
-  const SelectedIcon = getIcon(icone);
 
   async function submit(values: BudgetFormValues) {
     setError(null);
@@ -381,6 +379,7 @@ export function BudgetFormDialog({
                         )}
                       >
                         <CategoryIcon
+                          id={category.id}
                           icon={category.icone}
                           color={category.cor}
                           className="h-9 w-9"
@@ -539,10 +538,10 @@ export function BudgetFormDialog({
 
             <details className="rounded-md border border-border">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-muted-foreground">
-                <SelectedIcon
-                  className="h-4 w-4"
-                  style={{ color: cor }}
-                  aria-hidden="true"
+                <EntityTile
+                  kind="orcamento"
+                  entity={{ nome: "Orçamento", cor, icone }}
+                  size="xs"
                 />
                 Aparência
                 <span

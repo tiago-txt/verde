@@ -16,6 +16,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { CurrencyInput } from "@/components/currency-input";
+import { EntityTile } from "@/components/entity-tile";
 import { FormError } from "@/components/form-feedback";
 import { saveForecastPreferencesAction } from "@/lib/actions/forecast";
 import type { ForecastAccount, ForecastHorizon } from "@/lib/finance/forecast";
@@ -153,6 +154,16 @@ export function ForecastControls({
                   onCheckedChange={() => toggleConta(conta.id)}
                   aria-label={`Incluir ${conta.nome}`}
                 />
+                <EntityTile
+                  kind="conta"
+                  entity={{
+                    id: conta.id,
+                    nome: conta.nome,
+                    cor: conta.cor,
+                    icone: conta.icone,
+                  }}
+                  size="xs"
+                />
                 <span className="truncate">{conta.nome}</span>
               </label>
             ))}
@@ -193,6 +204,16 @@ export function ForecastControls({
                   checked={state.contas.includes(conta.id)}
                   onCheckedChange={() => toggleConta(conta.id)}
                   aria-label={`Incluir ${conta.nome}`}
+                />
+                <EntityTile
+                  kind="conta"
+                  entity={{
+                    id: conta.id,
+                    nome: conta.nome,
+                    cor: conta.cor,
+                    icone: conta.icone,
+                  }}
+                  size="sm"
                 />
                 <span className="truncate">{conta.nome}</span>
               </label>

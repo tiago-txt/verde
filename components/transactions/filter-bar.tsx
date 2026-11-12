@@ -34,6 +34,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { CategoryIcon } from "@/components/category-icon";
+import { EntityTile } from "@/components/entity-tile";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import type { TransactionType } from "@/lib/db/schema";
 import {
@@ -185,6 +186,16 @@ function AccountFilter({
               checked={selected.includes(account.id)}
               onCheckedChange={() => onChange(toggleId(selected, account.id))}
             />
+            <EntityTile
+              kind="conta"
+              entity={{
+                id: account.id,
+                nome: account.nome,
+                cor: account.cor,
+                icone: account.icone,
+              }}
+              size="xs"
+            />
             <span className="min-w-0 flex-1 truncate">
               {account.nome}
               {account.arquivada ? " (arquivada)" : ""}
@@ -223,10 +234,15 @@ function CardFilter({
               checked={selected.includes(card.id)}
               onCheckedChange={() => onChange(toggleId(selected, card.id))}
             />
-            <span
-              className="h-2.5 w-2.5 shrink-0 rounded-full"
-              style={{ backgroundColor: card.cor }}
-              aria-hidden="true"
+            <EntityTile
+              kind="cartao"
+              entity={{
+                id: card.id,
+                nome: card.nome,
+                cor: card.cor,
+                icone: card.icone,
+              }}
+              size="xs"
             />
             <span className="min-w-0 flex-1 truncate">
               {card.nome}
@@ -333,6 +349,7 @@ function CategoryFilter({
         )}
       >
         <CategoryIcon
+          id={category.id}
           icon={category.icone}
           color={category.cor}
           className="h-9 w-9"

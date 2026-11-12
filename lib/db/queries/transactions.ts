@@ -90,6 +90,8 @@ export type TransactionListItem = {
   /** Nome e ciclo do orçamento realmente consumido (competência). */
   orcamentoNome: string | null;
   orcamentoCiclo: string | null;
+  orcamentoCor: string | null;
+  orcamentoIcone: string | null;
   /** Vencimento da fatura que define a competência, quando é cartão. */
   orcamentoViaFatura: string | null;
   /** Transferência real de pagamento de fatura (oculta na lista padrão). */
@@ -226,6 +228,8 @@ type BudgetChipInfo = {
   orcamentoNome: string | null;
   orcamentoCiclo: string | null;
   orcamentoViaFatura: string | null;
+  orcamentoCor: string | null;
+  orcamentoIcone: string | null;
 };
 
 type BudgetChipRow = {
@@ -302,6 +306,8 @@ function resolveBudgetChips(
           orcamentoCiclo: ciclo,
           orcamentoViaFatura:
             faturaDaTransacao(transaction, card)?.vencimento ?? null,
+          orcamentoCor: resolved.cor,
+          orcamentoIcone: resolved.icone,
         });
         found = true;
       }
@@ -321,6 +327,8 @@ function withBudgetChip<T extends BudgetChipRow>(
     ...row,
     orcamentoNome: chip?.orcamentoNome ?? null,
     orcamentoCiclo: chip?.orcamentoCiclo ?? null,
+    orcamentoCor: chip?.orcamentoCor ?? null,
+    orcamentoIcone: chip?.orcamentoIcone ?? null,
     orcamentoViaFatura: chip?.orcamentoViaFatura ?? null,
   };
 }
@@ -434,6 +442,8 @@ export function listMonthTransactions(
       ...row,
       orcamentoNome: chip?.orcamentoNome ?? null,
       orcamentoCiclo: chip?.orcamentoCiclo ?? null,
+      orcamentoCor: chip?.orcamentoCor ?? null,
+      orcamentoIcone: chip?.orcamentoIcone ?? null,
       orcamentoViaFatura: chip?.orcamentoViaFatura ?? null,
       vinculadaFatura: Boolean(row.faturaChave),
       tags: tagMap.get(row.id) ?? [],

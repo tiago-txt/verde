@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-export type TileKind = "categoria" | "transferencia" | "orcamento" | "fatura";
+import type { TileSize, TileVariant } from "@/lib/design/tile-types";
 
 const MOTIFS = [
   // 0 — círculo com quatro pontos
@@ -53,7 +52,7 @@ const MOTIFS = [
     <rect x="12" y="12" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.2" transform="rotate(45 20 20)" />
     <circle cx="20" cy="20" r="3" fill="currentColor" />
   </>,
-  // 7 — faixa de azulejo (fatura)
+  // 7 — faixa de azulejo (fatura/cartão)
   <>
     <path d="M4 10h32M4 20h32M4 30h32" fill="none" stroke="currentColor" strokeWidth="1.2" />
     <circle cx="10" cy="10" r="2" fill="currentColor" />
@@ -64,18 +63,21 @@ const MOTIFS = [
   </>,
 ];
 
-export function tileMotif(seed: string): number {
-  let hash = 0;
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0;
-  }
-  return hash % MOTIFS.length;
-}
+const DIMENSIONS: Record<TileSize, { box: string; icon: string }> = {
+  xs: { box: "h-8 w-8", icon: "h-3.5 w-3.5" },
+  sm: { box: "h-10 w-10", icon: "h-4 w-4" },
+  md: { box: "h-12 w-12", icon: "h-5 w-5" },
+  lg: { box: "h-14 w-14", icon: "h-6 w-6" },
+};
 
+/**
+ * Pastilha cerâmica. Import interno: use `EntityTile`/`tileSpec` para escolher
+ * cor, ícone, motivo e variação por entidade.
+ */
 export function Tile({
   icon: Icon,
-  seed,
-  kind = "categoria",
+  motif,
+  variant = "neutral",
   color,
   size = "md",
   dashed = false,
@@ -83,30 +85,24 @@ export function Tile({
   iconClassName,
 }: {
   icon: LucideIcon;
-  seed?: string;
-  kind?: TileKind;
+  motif: number;
+  variant?: TileVariant;
   color?: string | null;
-  size?: "sm" | "md";
+  size?: TileSize;
   dashed?: boolean;
   className?: string;
   iconClassName?: string;
 }) {
-  const motif =
-    kind === "transferencia"
-      ? 2
-      : kind === "orcamento"
-        ? 3
-        : kind === "fatura"
-          ? 7
-          : tileMotif(seed ?? "verde");
-  const dimension = size === "sm" ? "h-10 w-10" : "h-12 w-12";
-
+  const dimension = DIMENSIONS[size];
   return (
     <span
       className={cn(
         "tile relative grid shrink-0 place-items-center overflow-hidden rounded-[12px] border border-grout bg-forest-high",
-        dimension,
-        dashed && "border-dashed opacity-80",
+        dimension.box,
+        variant === "gold" && "ring-1 ring-amber/45",
+        variant === "band" && "border-info/35",
+        variant === "target" && "border-amber/25",
+        dashed && "border-dashed opacity-75",
         className,
       )}
       style={{ color: color ?? undefined }}
@@ -114,12 +110,12 @@ export function Tile({
     >
       <svg
         viewBox="0 0 40 40"
-        className="decor-pattern pointer-events-none absolute inset-0 h-full w-full opacity-30"
+        className="tile-emblem pointer-events-none absolute inset-0 h-full w-full"
         fill="none"
       >
-        {MOTIFS[motif]}
+        {MOTIFS[motif % MOTIFS.length]}
       </svg>
-      <Icon className={cn("relative z-10 h-5 w-5", iconClassName)} />
+      <Icon className={cn("relative z-10", dimension.icon, iconClassName)} />
     </span>
   );
 }

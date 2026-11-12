@@ -1,0 +1,26 @@
+{
+  "rules": {
+    "no-restricted-imports": [
+      "error",
+      {
+        "paths": [
+          {
+            "name": "@/components/tile",
+            "message": "Use EntityTile/tileSpec para escolher cor, ícone, motivo e variação."
+          }
+        ]
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "components/entity-tile.tsx",
+        "lib/design/tile-spec.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    }
+  ]
+}

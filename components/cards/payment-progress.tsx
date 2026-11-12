@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { filledSegments } from "@/lib/design/progress";
 
 export function PaymentProgress({
   pago,
@@ -13,7 +14,7 @@ export function PaymentProgress({
 }) {
   const ratio = total > 0 ? Math.min(1, Math.max(0, pago / total)) : 0;
   const segments = 12;
-  const filled = Math.round(ratio * segments);
+  const filled = filledSegments(ratio * 100, segments);
   const tone =
     ratio >= 1 ? "bg-emerald" : ratio > 0 ? "bg-primary" : "bg-forest-highest";
 

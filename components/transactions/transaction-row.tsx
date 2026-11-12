@@ -2,8 +2,6 @@
 
 import { useRef, useState } from "react";
 import {
-  ArrowLeftRight,
-  CreditCard,
   Pencil,
   Repeat,
   StickyNote,
@@ -14,11 +12,10 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Tile } from "@/components/tile";
+import { EntityTile } from "@/components/entity-tile";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type TransactionRowProps = {
@@ -44,21 +41,24 @@ function canHover(): boolean {
 }
 
 function AccountBadge({
+  id,
   nome,
   icone,
   cor,
+  kind = "conta",
 }: {
+  id?: string | null;
   nome: string | null;
   icone: string | null;
   cor: string | null;
+  kind?: "conta" | "cartao";
 }) {
-  const Icon = getIcon(icone);
   return (
-    <span className="inline-flex min-w-0 items-center gap-1">
-      <Icon
-        className="h-3.5 w-3.5 shrink-0"
-        style={{ color: cor ?? undefined }}
-        aria-hidden="true"
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      <EntityTile
+        kind={kind}
+        entity={{ id, nome, icone, cor }}
+        size="xs"
       />
       <span className="truncate">{nome ?? "Sem conta"}</span>
     </span>
@@ -109,7 +109,6 @@ export function TransactionRow({
     : transaction.tipo === "receita"
       ? "text-primary"
       : "text-clay";
-  const CategoryGlyph = getIcon(transaction.categoriaIcone);
   const barColor = isTransfer
     ? "bg-info"
     : transaction.tipo === "receita"
@@ -249,18 +248,29 @@ export function TransactionRow({
         )}
 
         {isTransfer ? (
-          <Tile
-            icon={isInvoicePayment ? CreditCard : ArrowLeftRight}
+          <EntityTile
             kind={isInvoicePayment ? "fatura" : "transferencia"}
-            color="hsl(var(--info))"
-            seed={transaction.id}
+            entity={
+              isInvoicePayment
+                ? {
+                    id: transaction.cartaoDestinoId,
+                    nome: transaction.cartaoDestinoNome,
+                    cor: transaction.cartaoDestinoCor,
+                    icone: "CreditCard",
+                  }
+                : { id: transaction.id, nome: transaction.descricao }
+            }
             className="h-10 w-10 sm:h-12 sm:w-12"
           />
         ) : isCardPurchase ? (
-          <Tile
-            icon={CreditCard}
-            seed={transaction.categoriaId ?? transaction.id}
-            color={transaction.cartaoCor}
+          <EntityTile
+            kind="cartao"
+            entity={{
+              id: transaction.cartaoId,
+              nome: transaction.cartaoNome,
+              cor: transaction.cartaoCor,
+              icone: transaction.cartaoIcone,
+            }}
             className="h-10 w-10 sm:h-12 sm:w-12"
           />
         ) : (
@@ -283,10 +293,14 @@ export function TransactionRow({
             title="Trocar categoria"
             className="hover-action group/cat relative shrink-0 rounded-[12px] outline-none transition-shadow hover:ring-2 hover:ring-primary/60 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <Tile
-              icon={CategoryGlyph}
-              seed={transaction.categoriaId ?? transaction.id}
-              color={transaction.categoriaCor}
+            <EntityTile
+              kind="categoria"
+              entity={{
+                id: transaction.categoriaId,
+                nome: transaction.categoriaNome,
+                icone: transaction.categoriaIcone,
+                cor: transaction.categoriaCor,
+              }}
               className="h-10 w-10 transition-transform group-hover/cat:scale-105 sm:h-12 sm:w-12"
             />
             <span
@@ -365,17 +379,29 @@ export function TransactionRow({
               </Badge>
             )}
             {transaction.orcamentoCiclo && (
-              <Badge
-                variant="outline"
-                className="px-1.5 py-0 text-xs"
-                title={
-                  transaction.orcamentoNome
-                    ? `Orçamento ${transaction.orcamentoNome}`
-                    : "Orçamento consumido"
-                }
-              >
-                Orçamento {formatMonthShort(transaction.orcamentoCiclo)}
-              </Badge>
+              <span className="inline-flex items-center gap-1">
+                <EntityTile
+                  kind="orcamento"
+                  entity={{
+                    id: transaction.orcamentoNome,
+                    nome: transaction.orcamentoNome,
+                    cor: transaction.orcamentoCor,
+                    icone: transaction.orcamentoIcone,
+                  }}
+                  size="xs"
+                />
+                <Badge
+                  variant="outline"
+                  className="px-1.5 py-0 text-xs"
+                  title={
+                    transaction.orcamentoNome
+                      ? `Orçamento ${transaction.orcamentoNome}`
+                      : "Orçamento consumido"
+                  }
+                >
+                  Orçamento {formatMonthShort(transaction.orcamentoCiclo)}
+                </Badge>
+              </span>
             )}
             {transaction.observacao && (
               <StickyNote
@@ -397,6 +423,7 @@ export function TransactionRow({
             {isTransfer ? (
               <>
                 <AccountBadge
+                  id={transaction.contaId}
                   nome={transaction.contaNome}
                   icone={transaction.contaIcone}
                   cor={transaction.contaCor}
@@ -404,12 +431,15 @@ export function TransactionRow({
                 <span aria-hidden="true">→</span>
                 {isInvoicePayment ? (
                   <AccountBadge
+                    id={transaction.cartaoDestinoId}
                     nome={transaction.cartaoDestinoNome}
                     icone="CreditCard"
                     cor={transaction.cartaoDestinoCor}
+                    kind="cartao"
                   />
                 ) : (
                   <AccountBadge
+                    id={transaction.contaDestinoId}
                     nome={transaction.contaDestinoNome}
                     icone={transaction.contaDestinoIcone}
                     cor={transaction.contaDestinoCor}
@@ -419,9 +449,11 @@ export function TransactionRow({
             ) : isCardPurchase ? (
               <>
                 <AccountBadge
+                  id={transaction.cartaoId}
                   nome={transaction.cartaoNome}
-                  icone="CreditCard"
+                  icone={transaction.cartaoIcone}
                   cor={transaction.cartaoCor}
+                  kind="cartao"
                 />
                 {transaction.categoriaNome && (
                   <span className="truncate">· {transaction.categoriaNome}</span>

@@ -21,7 +21,7 @@ import { FieldError, FormError } from "@/components/form-feedback";
 import type { CreditCard } from "@/lib/db/schema";
 import { CARD_BRANDS } from "@/lib/db/schema";
 import { createCardSchema, type CardFormValues } from "@/lib/validation/cards";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 
 type CardAccountOption = {
   id: string;
@@ -97,7 +97,6 @@ export function CardFormDialog({
   const { control, register, handleSubmit, reset, watch, formState } = form;
   const cor = watch("cor");
   const icone = watch("icone");
-  const SelectedIcon = getIcon(icone);
 
   useEffect(() => {
     if (!open) return;
@@ -289,10 +288,10 @@ export function CardFormDialog({
 
             <details className="rounded-md border border-border">
               <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-xs font-medium text-muted-foreground">
-                <SelectedIcon
-                  className="h-4 w-4"
-                  style={{ color: cor }}
-                  aria-hidden="true"
+                <EntityTile
+                  kind="cartao"
+                  entity={{ nome: "Cartão", cor, icone }}
+                  size="xs"
                 />
                 Aparência
                 <span

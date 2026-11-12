@@ -42,7 +42,7 @@ import {
 import type { CardWithInvoice } from "@/lib/db/queries/cards";
 import type { CreditCard as CreditCardRow } from "@/lib/db/schema";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 import type { CardFormValues } from "@/lib/validation/cards";
 
@@ -173,7 +173,6 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {visible.map((card) => {
-            const Icon = getIcon(card.icone);
             const tone = budgetTone(card.limiteUsado, card.limite);
             const ratio =
               card.limite > 0 ? card.limiteUsado / card.limite : 0;
@@ -188,15 +187,16 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                 )}
               >
                 <div className="flex items-start gap-3">
-                  <span
-                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                    style={{
-                      backgroundColor: `${card.cor}22`,
-                      color: card.cor,
+                  <EntityTile
+                    kind="cartao"
+                    entity={{
+                      id: card.id,
+                      nome: card.nome,
+                      cor: card.cor,
+                      icone: card.icone,
                     }}
-                  >
-                    <Icon className="h-5 w-5" aria-hidden="true" />
-                  </span>
+                    size="sm"
+                  />
 
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-1.5">

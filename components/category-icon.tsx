@@ -1,8 +1,8 @@
-import { getIcon } from "@/lib/icons";
-import { Tile } from "@/components/tile";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 
 type CategoryIconProps = {
+  id?: string | null;
   icon: string | null | undefined;
   color?: string | null;
   className?: string;
@@ -10,18 +10,16 @@ type CategoryIconProps = {
 };
 
 export function CategoryIcon({
+  id,
   icon,
   color,
   className,
   iconClassName,
 }: CategoryIconProps) {
-  const Icon = getIcon(icon);
-
   return (
-    <Tile
-      icon={Icon}
-      seed={`${icon ?? "outros"}:${color ?? ""}`}
-      color={color}
+    <EntityTile
+      kind="categoria"
+      entity={{ id, icone: icon, cor: color }}
       className={cn(className)}
       iconClassName={iconClassName}
     />

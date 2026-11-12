@@ -175,8 +175,10 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   (corpo) e JetBrains Mono (números/rótulos). Texto mínimo 12px.
 - Pastilhas `Tile` com 8 motivos derivados do hash da categoria e motivos fixos
   para transferência, orçamento e fatura; linhas virtuais tracejadas.
-- Decorações (padrões, brilhos e glifos) podem ser desligadas em
-  Configurações > Aparência; pastilhas e emblemas continuam.
+- Decorações têm modos **Desligadas | Sutis | Normais** em Configurações >
+  Aparência (padrão Sutis); os três níveis usam tokens CSS de opacidade para
+  glifo de canto, emblema e padrão. Pastilhas continuam, com emblema a 0% quando
+  desligadas.
 - `lib/design-guard.test.ts` falha se voltarem dependências externas
   (`fonts.googleapis`, `cdn.tailwindcss`, `googleusercontent`,
   `material-symbols`) ou texto abaixo de 12px.

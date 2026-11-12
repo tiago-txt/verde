@@ -37,7 +37,13 @@ import type {
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-type ReportAccountOption = { id: string; nome: string; arquivada: boolean };
+type ReportAccountOption = {
+  id: string;
+  nome: string;
+  arquivada: boolean;
+  cor: string;
+  icone: string;
+};
 type CategoryOption = {
   id: string;
   nome: string;
@@ -338,6 +344,7 @@ function CategoryRows({
             )}
             <Link href={href} className="flex min-w-0 items-center gap-2 hover:underline">
               <CategoryIcon
+                id={item.id}
                 icon={item.icone}
                 color={item.cor}
                 className="h-6 w-6"
@@ -376,6 +383,7 @@ function CategoryRows({
               <td className="py-2 pl-14 pr-4">
                 <Link href={childHref} className="flex items-center gap-2 hover:underline">
                   <CategoryIcon
+                    id={child.id}
                     icon={child.icone}
                     color={child.cor}
                     className="h-5 w-5"

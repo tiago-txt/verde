@@ -1,12 +1,10 @@
 "use client";
 
-import { AlertTriangle, PiggyBank } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import { Tile } from "@/components/tile";
+import { EntityTile } from "@/components/entity-tile";
 import { BudgetProgress } from "@/components/budgets/budget-progress";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 type BudgetEventRowProps = {
@@ -20,11 +18,6 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
   const isOverspent = isProvision && summary.estouro > 0;
   const isConsumed = isProvision && !isOverspent && summary.restante === 0;
   const isAlert = isOverspent || isConsumed;
-  const Icon = isAlert
-    ? AlertTriangle
-    : isProvision
-      ? getIcon(summary.icone)
-      : PiggyBank;
 
   const title = isOverspent
     ? "Estouro do orçamento"
@@ -50,18 +43,16 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
             : "border-l-success/50 bg-success/[0.05]",
       )}
     >
-      <Tile
-        icon={Icon}
+      <EntityTile
         kind="orcamento"
+        entity={{
+          id: summary.id,
+          nome: summary.nome,
+          cor: summary.cor,
+          icone: summary.icone,
+        }}
         size="sm"
         dashed
-        color={
-          isAlert
-            ? "hsl(var(--destructive))"
-            : isProvision
-              ? "hsl(var(--amber))"
-              : "hsl(var(--primary))"
-        }
       />
 
       <span className="min-w-0 flex-1">

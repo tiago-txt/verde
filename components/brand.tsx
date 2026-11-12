@@ -6,14 +6,12 @@ type BrandProps = {
   compact?: boolean;
   className?: string;
   href?: string;
-  tagline?: boolean;
 };
 
 export function Brand({
   compact = false,
   className,
   href = "/",
-  tagline = false,
 }: BrandProps) {
   return (
     <Link
@@ -28,15 +26,8 @@ export function Brand({
         <Leaf className="h-5 w-5" aria-hidden="true" />
       </span>
       {!compact && (
-        <span className="flex min-w-0 flex-col">
-          <span className="font-display text-lg font-semibold leading-tight tracking-tight">
-            Verde
-          </span>
-          {tagline && (
-            <span className="font-mono text-[12px] uppercase tracking-[0.08em] text-primary">
-              Finanças & azulejos
-            </span>
-          )}
+        <span className="font-display text-lg font-semibold leading-tight tracking-tight">
+          Verde
         </span>
       )}
     </Link>

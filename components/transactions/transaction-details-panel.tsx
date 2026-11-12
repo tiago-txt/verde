@@ -23,13 +23,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { CategoryIcon } from "@/components/category-icon";
+import { EntityTile } from "@/components/entity-tile";
 import { FormError } from "@/components/form-feedback";
 import type { TransactionDetail } from "@/lib/db/queries/transactions";
 import type { RecurrenceFrequency } from "@/lib/db/schema";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
 const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
@@ -64,22 +63,24 @@ type TransactionDetailsPanelProps = {
 };
 
 function AccountLine({
+  id,
   nome,
   icone,
   cor,
+  kind = "conta",
 }: {
+  id?: string | null;
   nome: string | null;
   icone: string | null;
   cor: string | null;
+  kind?: "conta" | "cartao";
 }) {
-  const Icon = getIcon(icone);
-
   return (
     <span className="inline-flex min-w-0 items-center gap-1.5">
-      <Icon
-        className="h-4 w-4 shrink-0"
-        style={{ color: cor ?? undefined }}
-        aria-hidden="true"
+      <EntityTile
+        kind={kind}
+        entity={{ id, nome, icone, cor }}
+        size="xs"
       />
       <span className="truncate">{nome ?? "Sem conta"}</span>
     </span>
@@ -254,11 +255,15 @@ export function TransactionDetailsPanel({
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-muted-foreground">Categoria</dt>
                   <dd className="flex min-w-0 items-center gap-2">
-                    <CategoryIcon
-                      icon={detail.categoriaIcone}
-                      color={detail.categoriaCor}
-                      className="h-7 w-7"
-                      iconClassName="h-3.5 w-3.5"
+                    <EntityTile
+                      kind="categoria"
+                      entity={{
+                        id: detail.categoriaId,
+                        nome: detail.categoriaNome,
+                        icone: detail.categoriaIcone,
+                        cor: detail.categoriaCor,
+                      }}
+                      size="xs"
                     />
                     <span className="truncate">
                       {detail.categoriaNome ?? "Outros"}
@@ -270,17 +275,29 @@ export function TransactionDetailsPanel({
               {!isTransfer && detail.orcamentoCiclo && (
                 <div className="flex items-center justify-between gap-4">
                   <dt className="text-muted-foreground">Orçamento</dt>
-                  <dd className="min-w-0 text-right">
-                    <span className="block truncate">
-                      {detail.orcamentoNome ?? "Orçamento"} ·{" "}
-                      {formatMonthShort(detail.orcamentoCiclo)}
-                    </span>
-                    {detail.orcamentoViaFatura && (
-                      <span className="block text-xs text-muted-foreground">
-                        via fatura de{" "}
-                        {formatDate(detail.orcamentoViaFatura).slice(0, 5)}
+                  <dd className="flex min-w-0 items-center justify-end gap-1.5 text-right">
+                    <EntityTile
+                      kind="orcamento"
+                      entity={{
+                        id: detail.orcamentoNome,
+                        nome: detail.orcamentoNome,
+                        cor: detail.orcamentoCor,
+                        icone: detail.orcamentoIcone,
+                      }}
+                      size="xs"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate">
+                        {detail.orcamentoNome ?? "Orçamento"} ·{" "}
+                        {formatMonthShort(detail.orcamentoCiclo)}
                       </span>
-                    )}
+                      {detail.orcamentoViaFatura && (
+                        <span className="block text-xs text-muted-foreground">
+                          via fatura de{" "}
+                          {formatDate(detail.orcamentoViaFatura).slice(0, 5)}
+                        </span>
+                      )}
+                    </span>
                   </dd>
                 </div>
               )}
@@ -293,9 +310,11 @@ export function TransactionDetailsPanel({
                   {isCardPurchase ? (
                     <>
                       <AccountLine
+                        id={detail.cartaoId}
                         nome={detail.cartaoNome}
-                        icone="CreditCard"
+                        icone={detail.cartaoIcone}
                         cor={detail.cartaoCor}
+                        kind="cartao"
                       />
                       {cardInvoiceKey && (
                         <span className="text-xs text-muted-foreground">
@@ -308,6 +327,7 @@ export function TransactionDetailsPanel({
                   ) : (
                     <>
                       <AccountLine
+                        id={detail.contaId}
                         nome={detail.contaNome}
                         icone={detail.contaIcone}
                         cor={detail.contaCor}
@@ -316,9 +336,11 @@ export function TransactionDetailsPanel({
                         <>
                           <span aria-hidden="true">→</span>
                           <AccountLine
+                            id={detail.cartaoDestinoId}
                             nome={detail.cartaoDestinoNome}
                             icone="CreditCard"
                             cor={detail.cartaoDestinoCor}
+                            kind="cartao"
                           />
                         </>
                       ) : (

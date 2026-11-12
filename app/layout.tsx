@@ -72,7 +72,8 @@ const themeScript = `
     }
     root.classList.toggle("dark", dark);
     var decorations = localStorage.getItem("verde-decorations");
-    root.dataset.decorations = decorations === "off" ? "off" : "on";
+    if (decorations === "on") decorations = "sutis";
+    root.dataset.decorations = decorations === "off" || decorations === "normais" ? decorations : "sutis";
   } catch (e) {}
 })();
 `;

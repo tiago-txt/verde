@@ -87,6 +87,7 @@ function CategoryRow({
       )}
     >
       <CategoryIcon
+        id={category.id}
         icon={category.icone}
         color={category.cor}
         className="h-9 w-9"

@@ -4,11 +4,6 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
-  BarChart3,
-  CreditCard,
-  Leaf,
-  Plus,
-  Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +16,7 @@ import { BudgetCycleOverview } from "@/components/budgets/budget-cycle-overview"
 import { BudgetProgress } from "@/components/budgets/budget-progress";
 import { UpcomingBlock } from "@/components/dashboard/upcoming-block";
 import { ForecastMiniCard } from "@/components/forecast/forecast-mini-card";
+import { EntityTile } from "@/components/entity-tile";
 import { requireUser } from "@/lib/auth/current-user";
 import { listBudgetCycleDetails } from "@/lib/db/queries/budgets";
 import { getForecastData } from "@/lib/db/queries/forecast";
@@ -59,7 +55,7 @@ export default async function DashboardPage({
       <section className="relative overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] sm:p-6">
         <div
           aria-hidden="true"
-          className="decor-pattern azulejo absolute inset-0 opacity-[0.2]"
+          className="deco-pattern-hero azulejo absolute inset-0"
         />
         <div
           aria-hidden="true"
@@ -69,38 +65,16 @@ export default async function DashboardPage({
           aria-hidden="true"
           className="decor-glow pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-forest-highest/40 blur-3xl"
         />
-        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
-            <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.08em] text-primary">
-              <span className="grid h-6 w-6 place-items-center rounded bg-primary-fill text-primary-fill-foreground shadow-[0_0_12px_hsl(var(--primary)/.35)]">
-                <Leaf className="h-3.5 w-3.5" aria-hidden="true" />
-              </span>
-              Painel financeiro
-            </p>
-            <h1 className="font-display text-[34px] font-bold leading-[42px] tracking-tight sm:text-[48px] sm:leading-[56px]">
-              Olá, {firstName}
-            </h1>
-            <p className="flex flex-wrap items-center gap-2 text-[15px] leading-[22px] text-on-surface/80">
-              Resumo de{" "}
-              <span className="rounded border border-grout bg-forest-high px-2 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-primary">
-                {formatMonthTitle(month)}
-              </span>
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button asChild variant="outline" className="h-12 sm:h-10">
-              <Link href="/relatorios">
-                <BarChart3 className="h-4 w-4 text-amber" />
-                Relatórios
-              </Link>
-            </Button>
-            <Button asChild className="h-12 sm:h-10">
-              <Link href="/lancamentos?novo=1">
-                <Plus className="h-4 w-4 transition-transform hover:rotate-90" />
-                Novo lançamento
-              </Link>
-            </Button>
-          </div>
+        <div className="relative z-10 space-y-1">
+          <h1 className="font-display text-[34px] font-bold leading-[42px] tracking-tight sm:text-[48px] sm:leading-[56px]">
+            Olá, {firstName}
+          </h1>
+          <p className="flex flex-wrap items-center gap-2 text-[15px] leading-[22px] text-on-surface/80">
+            Resumo de{" "}
+            <span className="rounded border border-grout bg-forest-high px-2 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-primary">
+              {formatMonthTitle(month)}
+            </span>
+          </p>
         </div>
       </section>
 
@@ -197,9 +171,7 @@ async function BalanceBlock({
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <span className="tile grid h-8 w-8 place-items-center rounded-[12px] border border-grout bg-forest-container text-primary">
-            <Wallet className="h-4 w-4" aria-hidden="true" />
-          </span>
+          <EntityTile kind="conta" entity={{ nome: "Contas" }} size="xs" />
           Saldo atual
         </CardTitle>
       </CardHeader>
@@ -406,6 +378,7 @@ async function UpcomingServerBlock({ workspaceId }: { workspaceId: string }) {
     cartaoId: invoice.cartaoId,
     cartaoNome: invoice.cartaoNome,
     cartaoCor: invoice.cartaoCor,
+    cartaoIcone: invoice.cartaoIcone,
     faturaChave: invoice.faturaChave,
     vencimento: invoice.vencimento,
     restante: invoice.restante,
@@ -435,7 +408,7 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <CreditCard className="h-4 w-4 text-primary" aria-hidden="true" />
+          <EntityTile kind="cartao" size="xs" />
           Cartões
         </CardTitle>
       </CardHeader>
@@ -461,10 +434,22 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
               <Link
                 key={card.id}
                 href={`/cartoes/${card.id}?fatura=${card.currentInvoice.chave}`}
-                className="block space-y-1.5 rounded-lg border border-border p-2.5 transition-colors hover:bg-accent/40"
+                className="block space-y-1.5 rounded-lg border border-grout p-2.5 transition-colors hover:bg-forest-container/60"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-xs font-medium">{card.nome}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    <EntityTile
+                      kind="cartao"
+                      entity={{
+                        id: card.id,
+                        nome: card.nome,
+                        cor: card.cor,
+                        icone: card.icone,
+                      }}
+                      size="xs"
+                    />
+                    <span className="truncate text-xs font-medium">{card.nome}</span>
+                  </span>
                   <Badge variant={card.currentInvoice.status === "paga" ? "success" : "secondary"}>
                     {card.currentInvoice.status}
                   </Badge>

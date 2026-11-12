@@ -54,4 +54,46 @@ describe("guarda de design", () => {
       }
     }
   });
+
+  it("mantém o baseline de tamanhos arbitrários", () => {
+    const count = sourceFiles
+      .filter((item) => item.endsWith(".tsx"))
+      .reduce((total, file) => {
+        const content = fs.readFileSync(file, "utf8");
+        return total + (content.match(/text-\[[0-9]+px\]/g)?.length ?? 0);
+      }, 0);
+    expect(count).toBeLessThanOrEqual(8);
+  });
+
+  it("só o resolvedor importa Tile diretamente", () => {
+    const allowed = new Set([
+      path.join(process.cwd(), "components", "entity-tile.tsx"),
+      path.join(process.cwd(), "lib", "design", "tile-spec.ts"),
+    ]);
+    for (const file of sourceFiles) {
+      if (allowed.has(file)) continue;
+      const content = fs.readFileSync(file, "utf8");
+      expect(
+        content.includes('from "@/components/tile"'),
+        `${path.relative(process.cwd(), file)} importa Tile fora do resolvedor`,
+      ).toBe(false);
+    }
+  });
+
+  it("define os tokens de decoração nos três níveis", () => {
+    const css = fs.readFileSync(
+      path.join(process.cwd(), "app", "globals.css"),
+      "utf8",
+    );
+    for (const token of [
+      "--deco-corner-opacity",
+      "--deco-emblem-opacity",
+      "--deco-pattern-opacity",
+      "--deco-hero-pattern-opacity",
+    ]) {
+      expect(css).toContain(token);
+    }
+    expect(css).toContain('[data-decorations="normais"]');
+    expect(css).toContain('[data-decorations="off"]');
+  });
 });

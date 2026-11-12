@@ -50,7 +50,25 @@
     --terracotta: 12 58% 40%;
     --amber: 36 82% 32%;
     --error-text: 12 70% 36%;
+    --deco-corner-opacity: 0.045;
+    --deco-emblem-opacity: 0.1;
+    --deco-pattern-opacity: 0.025;
+    --deco-hero-pattern-opacity: 0.05;
     --radius: 0.75rem;
+  }
+
+  :root[data-decorations="normais"] {
+    --deco-corner-opacity: 0.08;
+    --deco-emblem-opacity: 0.18;
+    --deco-pattern-opacity: 0.045;
+    --deco-hero-pattern-opacity: 0.09;
+  }
+
+  :root[data-decorations="off"] {
+    --deco-corner-opacity: 0;
+    --deco-emblem-opacity: 0;
+    --deco-pattern-opacity: 0;
+    --deco-hero-pattern-opacity: 0;
   }
 
   .dark {
@@ -100,7 +118,25 @@
     --terracotta: 12 55% 52%;
     --amber: 39 70% 50%;
     --error-text: 6 100% 84%;
+    --deco-corner-opacity: 0.05;
+    --deco-emblem-opacity: 0.12;
+    --deco-pattern-opacity: 0.03;
+    --deco-hero-pattern-opacity: 0.06;
     --radius: 0.75rem;
+  }
+
+  .dark[data-decorations="normais"] {
+    --deco-corner-opacity: 0.09;
+    --deco-emblem-opacity: 0.2;
+    --deco-pattern-opacity: 0.054;
+    --deco-hero-pattern-opacity: 0.108;
+  }
+
+  .dark[data-decorations="off"] {
+    --deco-corner-opacity: 0;
+    --deco-emblem-opacity: 0;
+    --deco-pattern-opacity: 0;
+    --deco-hero-pattern-opacity: 0;
   }
 
   * {
@@ -128,6 +164,14 @@
   /* Foco visível e consistente */
   :focus-visible {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Clique do mouse não deixa anel de foco (só teclado). */
+  :where(a, button, input, select, textarea, [role="button"]):focus:not(
+      :focus-visible
+    ) {
+    outline: none;
+    box-shadow: none;
   }
 
   /* Rolagem discreta */
@@ -164,6 +208,18 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72' opacity='.3'%3E%3Cg fill='none' stroke='%234ae087' stroke-width='1.1'%3E%3Cpath d='M36 0 72 36 36 72 0 36Z'/%3E%3Cpath d='M0 0 16 16M72 0 56 16M72 72 56 56M0 72 16 56'/%3E%3C/g%3E%3Ccircle cx='36' cy='36' r='9' fill='none' stroke='%2310b981' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='2.5' fill='%234ae087'/%3E%3Crect x='30' y='30' width='12' height='12' fill='none' stroke='%23d99b26' stroke-width='.8' transform='rotate(45 36 36)'/%3E%3Cg fill='none' stroke='%23d99b26' stroke-width='.8'%3E%3Ccircle cx='0' cy='0' r='6'/%3E%3Ccircle cx='72' cy='0' r='6'/%3E%3Ccircle cx='72' cy='72' r='6'/%3E%3Ccircle cx='0' cy='72' r='6'/%3E%3C/g%3E%3C/svg%3E");
     background-size: 72px 72px;
   }
+  .deco-pattern {
+    opacity: var(--deco-pattern-opacity);
+  }
+  .deco-pattern-hero {
+    opacity: var(--deco-hero-pattern-opacity);
+  }
+  .deco-pattern-page {
+    opacity: var(--deco-pattern-opacity);
+  }
+  .tile-emblem {
+    opacity: var(--deco-emblem-opacity);
+  }
   .azulejo-mask {
     mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 78%);
     -webkit-mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 78%);
@@ -171,16 +227,20 @@
   .card-glyph {
     position: relative;
     overflow: hidden;
+    isolation: isolate;
   }
   .card-glyph::after {
     content: "";
     position: absolute;
-    right: -18px;
+    left: -18px;
     top: -18px;
     width: 112px;
     height: 112px;
     pointer-events: none;
-    opacity: 0.09;
+    z-index: -1;
+    opacity: var(--deco-corner-opacity);
+    mask-image: linear-gradient(135deg, black 0%, transparent 72%);
+    -webkit-mask-image: linear-gradient(135deg, black 0%, transparent 72%);
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,0 61,39 100,50 61,61 50,100 39,61 0,50 39,39' fill='%234ae087'/%3E%3Ccircle cx='50' cy='50' r='15' fill='none' stroke='%234ae087' stroke-width='4'/%3E%3C/svg%3E")
       center / contain no-repeat;
   }

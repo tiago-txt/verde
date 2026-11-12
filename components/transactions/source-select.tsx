@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronDown, CreditCard, Wallet } from "lucide-react";
+import { Check, ChevronDown } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -14,15 +14,18 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { EntityTile } from "@/components/entity-tile";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { cn } from "@/lib/utils";
 
 type SourceOption = {
+  id: string;
   value: string;
   nome: string;
   detalhe: string;
   cor: string | null;
   icone: "conta" | "cartao";
+  iconeNome: string;
   arquivado: boolean;
 };
 
@@ -64,17 +67,20 @@ export function SourceSelect({
     const accountOptions = accounts
       .filter((account) => account.id !== excludeAccountId)
       .map<SourceOption>((account) => ({
+        id: account.id,
         value: `conta:${account.id}`,
         nome: account.nome,
         detalhe: account.arquivada ? "Conta arquivada" : "Conta",
         cor: account.cor,
         icone: "conta",
+        iconeNome: account.icone,
         arquivado: account.arquivada,
       }));
 
     if (accountsOnly) return accountOptions;
 
     const cardOptions = cards.map<SourceOption>((card) => ({
+      id: card.id,
       value: `cartao:${card.id}`,
       nome: card.nome,
       detalhe: card.arquivado
@@ -82,6 +88,7 @@ export function SourceSelect({
         : `${card.bandeira} · fecha dia ${card.diaFechamento}`,
       cor: card.cor,
       icone: "cartao",
+      iconeNome: card.icone,
       arquivado: card.arquivado,
     }));
 
@@ -128,7 +135,6 @@ export function SourceSelect({
           >
             {group.items.map((option) => {
               const active = option.value === value;
-              const Icon = option.icone === "cartao" ? CreditCard : Wallet;
               return (
                 <button
                   key={option.value}
@@ -143,16 +149,16 @@ export function SourceSelect({
                     option.arquivado && !active && "opacity-50",
                   )}
                 >
-                  <span
-                    className="tile grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                    style={{
-                      backgroundColor: `color-mix(in srgb, ${option.cor ?? "hsl(var(--emerald))"} 14%, transparent)`,
-                      color: option.cor ?? undefined,
+                  <EntityTile
+                    kind={option.icone}
+                    entity={{
+                      id: option.id,
+                      nome: option.nome,
+                      cor: option.cor,
+                      icone: option.iconeNome,
                     }}
-                    aria-hidden="true"
-                  >
-                    <Icon className="h-5 w-5" />
-                  </span>
+                    size="sm"
+                  />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold">
                       {option.nome}
@@ -186,27 +192,18 @@ export function SourceSelect({
       )}
     >
       {selected ? (
-        <span
-          className="tile grid h-8 w-8 shrink-0 place-items-center rounded-lg"
-          style={{
-            backgroundColor: `color-mix(in srgb, ${selected.cor ?? "hsl(var(--emerald))"} 14%, transparent)`,
-            color: selected.cor ?? undefined,
+        <EntityTile
+          kind={selected.icone}
+          entity={{
+            id: selected.id,
+            nome: selected.nome,
+            cor: selected.cor,
+            icone: selected.iconeNome,
           }}
-          aria-hidden="true"
-        >
-          {selected.icone === "cartao" ? (
-            <CreditCard className="h-4 w-4" />
-          ) : (
-            <Wallet className="h-4 w-4" />
-          )}
-        </span>
+          size="xs"
+        />
       ) : (
-        <span
-          className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground"
-          aria-hidden="true"
-        >
-          <Wallet className="h-4 w-4" />
-        </span>
+        <EntityTile kind="conta" size="xs" />
       )}
       <span className="min-w-0 flex-1">
         <span

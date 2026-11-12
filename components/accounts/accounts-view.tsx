@@ -44,7 +44,7 @@ import {
 import type { AccountWithBalance } from "@/lib/db/queries/accounts";
 import type { AccountType } from "@/lib/db/schema";
 import { formatCurrency } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 
 const TYPE_LABELS: Record<AccountType, string> = {
@@ -177,7 +177,6 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {accounts.map((account) => {
-            const Icon = getIcon(account.icone);
             const isPending = pendingId === account.id;
 
             return (
@@ -190,15 +189,16 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
               >
                 <CardContent className="space-y-4 p-5">
                   <div className="flex items-start gap-3">
-                    <span
-                      className="grid h-11 w-11 shrink-0 place-items-center rounded-xl"
-                      style={{
-                        backgroundColor: `${account.cor}1f`,
-                        color: account.cor,
+                    <EntityTile
+                      kind="conta"
+                      entity={{
+                        id: account.id,
+                        nome: account.nome,
+                        cor: account.cor,
+                        icone: account.icone,
                       }}
-                    >
-                      <Icon className="h-5 w-5" aria-hidden="true" />
-                    </span>
+                      size="sm"
+                    />
 
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">

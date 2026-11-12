@@ -62,6 +62,7 @@ export function CategorySelect({
       <span className="flex min-w-0 items-center gap-2">
         {selected ? (
           <CategoryIcon
+            id={selected.id}
             icon={selected.icone}
             color={selected.cor}
             className="h-6 w-6"

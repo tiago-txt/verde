@@ -120,7 +120,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="relative min-h-dvh bg-background">
       <div
         aria-hidden="true"
-        className="decor-pattern azulejo azulejo-mask pointer-events-none fixed inset-0 z-0 opacity-[0.12]"
+        className="deco-pattern-page azulejo azulejo-mask pointer-events-none fixed inset-0 z-0"
       />
       <aside
         className={cn(
@@ -136,7 +136,7 @@ export function AppShell({ user, children }: AppShellProps) {
         >
           <div
             aria-hidden="true"
-            className="decor-pattern azulejo absolute inset-0 opacity-[0.2]"
+            className="deco-pattern-hero azulejo absolute inset-0"
           />
           {collapsed ? (
             <button
@@ -150,7 +150,7 @@ export function AppShell({ user, children }: AppShellProps) {
             </button>
           ) : (
             <>
-              <Brand tagline className="relative z-10" />
+              <Brand className="relative z-10" />
               <button
                 type="button"
                 onClick={toggleSidebar}
@@ -165,7 +165,7 @@ export function AppShell({ user, children }: AppShellProps) {
         </div>
 
         {!collapsed && (
-          <p className="px-5 pb-1 pt-4 font-mono text-[12px] uppercase tracking-[0.08em] text-outline">
+          <p className="px-5 pb-1 pt-4 font-mono text-xs uppercase tracking-[0.08em] text-outline">
             Módulos
           </p>
         )}

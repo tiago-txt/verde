@@ -1,9 +1,9 @@
 "use client";
 
-import { AlertTriangle, Check, CreditCard } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Tile } from "@/components/tile";
+import { EntityTile } from "@/components/entity-tile";
 import { PaymentProgress } from "@/components/cards/payment-progress";
 import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import { addDaysISO } from "@/lib/dates";
@@ -47,12 +47,16 @@ export function CardInvoiceRow({
         aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}`}
         className="flex min-w-0 flex-1 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
       >
-        <Tile
-          icon={isPaid ? Check : CreditCard}
+        <EntityTile
           kind="fatura"
+          entity={{
+            id: event.cartaoId,
+            nome: event.cartaoNome,
+            cor: event.cartaoCor,
+            icone: event.cartaoIcone,
+          }}
           size="sm"
           dashed={!isPaid}
-          color={event.cartaoCor}
           className="mt-0.5"
         />
 

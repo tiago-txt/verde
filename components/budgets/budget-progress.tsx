@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import { filledSegments } from "@/lib/design/progress";
 
 type BudgetProgressProps = {
   gasto: number;
@@ -36,7 +37,7 @@ export function BudgetProgress({
   const tone = budgetTone(gasto, limite);
   const width = Math.min(100, Math.max(0, percent));
   const segments = 12;
-  const filled = Math.round((width / 100) * segments);
+  const filled = filledSegments(percent, segments);
 
   return (
     <div

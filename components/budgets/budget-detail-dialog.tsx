@@ -34,7 +34,7 @@ import {
 } from "@/lib/actions/budgets";
 import type { BudgetCycleDetail } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 import { BudgetProgress } from "./budget-progress";
 
@@ -74,7 +74,6 @@ export function BudgetDetailDialog({
   if (!detail) return null;
 
   const summary = detail.resumo;
-  const Icon = getIcon(summary.icone);
   const percent =
     summary.limite > 0
       ? Math.round((summary.gasto / summary.limite) * 100)
@@ -108,12 +107,16 @@ export function BudgetDetailDialog({
           <div className="flex-1 space-y-5 overflow-y-auto p-5 pt-14 sm:pt-14">
             <DialogHeader>
               <div className="flex items-center gap-3">
-                <span
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-xl"
-                  style={{ backgroundColor: `${summary.cor}22`, color: summary.cor }}
-                >
-                  <Icon className="h-5 w-5" aria-hidden="true" />
-                </span>
+                <EntityTile
+                  kind="orcamento"
+                  entity={{
+                    id: summary.id,
+                    nome: summary.nome,
+                    cor: summary.cor,
+                    icone: summary.icone,
+                  }}
+                  size="sm"
+                />
                 <div className="min-w-0 flex-1">
                   <DialogTitle className="truncate text-lg">
                     {summary.nome}

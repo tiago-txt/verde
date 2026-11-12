@@ -14,7 +14,6 @@ import {
   Plus,
   ReceiptText,
   Trash2,
-  Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +43,7 @@ import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { addMonths, todayISO } from "@/lib/dates";
 import { intervaloDaFatura } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthTitle, formatMonthShort } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 
 type CardDetailViewProps = {
@@ -113,7 +112,6 @@ export function CardDetailView({
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
   }, [detail.purchases]);
 
-  const Icon = getIcon(detail.card.icone);
   const fatura = detail.fatura;
   const cycle = intervaloDaFatura(fatura.chave, detail.card);
   const tone = budgetTone(detail.limiteUsado, detail.card.limite);
@@ -216,12 +214,15 @@ export function CardDetailView({
           <ChevronLeft className="h-5 w-5" />
         </Link>
 
-        <span
-          className="tile grid h-12 w-12 shrink-0 place-items-center rounded-xl"
-          style={{ backgroundColor: `${detail.card.cor}22`, color: detail.card.cor }}
-        >
-          <Icon className="h-6 w-6" aria-hidden="true" />
-        </span>
+        <EntityTile
+          kind="cartao"
+          entity={{
+            id: detail.card.id,
+            nome: detail.card.nome,
+            cor: detail.card.cor,
+            icone: detail.card.icone,
+          }}
+        />
 
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-lg font-semibold">{detail.card.nome}</h1>
@@ -499,7 +500,16 @@ export function CardDetailView({
                 key={payment.id}
                 className="flex flex-wrap items-center gap-2 px-4 py-2.5"
               >
-                <Wallet className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                <EntityTile
+                  kind="conta"
+                  entity={{
+                    id: payment.contaId,
+                    nome: payment.contaNome,
+                    cor: payment.contaCor,
+                    icone: payment.contaIcone,
+                  }}
+                  size="xs"
+                />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">
                     {payment.contaNome ?? "Conta"} → {detail.card.nome}

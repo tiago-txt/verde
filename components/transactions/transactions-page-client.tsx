@@ -89,6 +89,7 @@ import {
   todayISO,
 } from "@/lib/dates";
 import type { Scope } from "@/lib/finance/scopes";
+import { countLabel } from "@/lib/design/plural";
 import {
   buildTransactionHref,
   buildTransactionSearchParams,
@@ -1077,6 +1078,21 @@ export function TransactionsPageClient({
               selectedIds.has(item.id),
             );
             const balance = dayBalances[group.day] ?? 0;
+            const summaryParts = [
+              group.items.length === 0
+                ? "Nenhum lançamento"
+                : countLabel(group.items.length, "lançamento", "lançamentos"),
+            ];
+            if (group.events.length > 0) {
+              summaryParts.push(
+                countLabel(group.events.length, "orçamento", "orçamentos"),
+              );
+            }
+            if (group.invoices.length > 0) {
+              summaryParts.push(
+                countLabel(group.invoices.length, "fatura", "faturas"),
+              );
+            }
 
             return (
               <div
@@ -1126,13 +1142,7 @@ export function TransactionsPageClient({
                   </div>
                   <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span className="shrink-0">
-                      {group.items.length} lançamento(s)
-                      {group.events.length > 0
-                        ? ` · ${group.events.length} orçamento(s)`
-                        : ""}
-                      {group.invoices.length > 0
-                        ? ` · ${group.invoices.length} fatura(s)`
-                        : ""}
+                      {summaryParts.join(" · ")}
                     </span>
                     {!filters.de && !filters.ate && (
                       <span

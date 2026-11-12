@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Target } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import type { BudgetCycleSummary } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatMonthTitle } from "@/lib/format";
-import { getIcon } from "@/lib/icons";
+import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 import { BudgetProgress } from "./budget-progress";
 
@@ -46,20 +46,24 @@ export function BudgetCycleOverview({
 
       {budgets.length === 0 ? (
         <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
-          <Target className="h-4 w-4" aria-hidden="true" />
+          <EntityTile kind="orcamento" size="xs" dashed />
           Nenhum orçamento neste ciclo.
         </div>
       ) : (
         <div className="space-y-3">
           {budgets.map((budget) => {
-            const Icon = getIcon(budget.icone);
             return (
               <div key={budget.id} className="space-y-1.5">
                 <div className="flex items-center gap-2">
-                  <Icon
-                    className="h-3.5 w-3.5 shrink-0"
-                    style={{ color: budget.cor }}
-                    aria-hidden="true"
+                  <EntityTile
+                    kind="orcamento"
+                    entity={{
+                      id: budget.id,
+                      nome: budget.nome,
+                      cor: budget.cor,
+                      icone: budget.icone,
+                    }}
+                    size="xs"
                   />
                   <span className="min-w-0 flex-1 truncate text-xs font-medium">
                     {budget.nome}
