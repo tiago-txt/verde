@@ -1,4 +1,5 @@
 import { getIcon } from "@/lib/icons";
+import { Tile } from "@/components/tile";
 import { cn } from "@/lib/utils";
 
 type CategoryIconProps = {
@@ -17,18 +18,12 @@ export function CategoryIcon({
   const Icon = getIcon(icon);
 
   return (
-    <span
-      className={cn(
-        "tile grid h-10 w-10 shrink-0 place-items-center rounded-xl",
-        className,
-      )}
-      style={{
-        backgroundColor: color ? `${color}1f` : undefined,
-        color: color ?? undefined,
-      }}
-      aria-hidden="true"
-    >
-      <Icon className={cn("h-5 w-5", iconClassName)} />
-    </span>
+    <Tile
+      icon={Icon}
+      seed={`${icon ?? "outros"}:${color ?? ""}`}
+      color={color}
+      className={cn(className)}
+      iconClassName={iconClassName}
+    />
   );
 }

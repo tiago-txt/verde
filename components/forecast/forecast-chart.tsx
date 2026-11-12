@@ -135,7 +135,7 @@ export function ForecastChart({
           <XAxis
             dataKey="data"
             tickFormatter={(value) => formatMonthShort(String(value).slice(0, 7))}
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
             axisLine={{ stroke: "hsl(var(--border))" }}
             tickLine={false}
             minTickGap={24}
@@ -144,7 +144,7 @@ export function ForecastChart({
             tickFormatter={(value) =>
               formatCurrencyCompact(Number(value)).replace("R$", "")
             }
-            tick={{ fill: "#94a3b8", fontSize: 10 }}
+            tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
             axisLine={false}
             tickLine={false}
             width={46}

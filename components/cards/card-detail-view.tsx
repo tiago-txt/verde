@@ -300,13 +300,13 @@ export function CardDetailView({
         <div className="space-y-3 rounded-xl border border-border bg-card p-4">
           <div className="flex flex-wrap items-start justify-between gap-2">
             <div>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Período do ciclo
               </p>
               <p className="text-sm font-medium">
                 {formatDate(fatura.inicio)} a {formatDate(cycle.fim)}
               </p>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Fecha em {formatDate(fatura.fechamento)} · vence em{" "}
                 {formatDate(fatura.vencimento)}
               </p>
@@ -352,13 +352,13 @@ export function CardDetailView({
           />
 
           {canPay ? (
-            <p className="flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-[11px] text-warning">
+            <p className="flex items-center gap-1.5 rounded-md bg-warning/10 px-2 py-1.5 text-xs text-warning">
               <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
               Fatura {fatura.vencida ? "vencida" : "em aberto"} com{" "}
               {formatCurrency(fatura.restante)} a pagar.
             </p>
           ) : (
-            <p className="flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-1.5 text-[11px] text-success">
+            <p className="flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-1.5 text-xs text-success">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               Fatura quitada.
             </p>
@@ -379,7 +379,7 @@ export function CardDetailView({
             limite={detail.card.limite}
             label={`Limite usado do cartão ${detail.card.nome}`}
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Disponível:{" "}
             <span
               className={cn(
@@ -397,7 +397,7 @@ export function CardDetailView({
           </p>
           {detail.futureInvoices.length > 0 && (
             <div className="border-t border-border pt-2">
-              <p className="mb-1 text-[11px] font-medium text-muted-foreground">
+              <p className="mb-1 text-xs font-medium text-muted-foreground">
                 Próximas faturas
               </p>
               <div className="space-y-1">
@@ -437,7 +437,7 @@ export function CardDetailView({
           <div className="divide-y divide-border">
             {groupedPurchases.map(([day, purchases]) => (
               <div key={day}>
-                <div className="bg-muted/30 px-4 py-1.5 text-[11px] font-medium text-muted-foreground">
+                <div className="bg-muted/30 px-4 py-1.5 text-xs font-medium text-muted-foreground">
                   {formatDate(day)}
                 </div>
                 {purchases.map((purchase) => (
@@ -455,12 +455,12 @@ export function CardDetailView({
                           {purchase.descricao}
                         </span>
                         {purchase.parcelaAtual && purchase.parcelaTotal && (
-                          <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+                          <Badge variant="secondary" className="px-1.5 py-0 text-xs">
                             {purchase.parcelaAtual}/{purchase.parcelaTotal}
                           </Badge>
                         )}
                       </span>
-                      <span className="block text-[11px] text-muted-foreground">
+                      <span className="block text-xs text-muted-foreground">
                         {purchase.categoriaNome ?? "Outros"}
                       </span>
                     </span>
@@ -504,7 +504,7 @@ export function CardDetailView({
                   <span className="block text-sm font-medium">
                     {payment.contaNome ?? "Conta"} → {detail.card.nome}
                   </span>
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {formatDate(payment.data)}
                     {payment.pago ? "" : " · não pago"}
                   </span>
@@ -543,7 +543,7 @@ export function CardDetailView({
         )}
       </div>
 
-      <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
         Compra feita no dia do fechamento entra na fatura seguinte. Parcelas
         futuras já aparecem no limite usado.
@@ -585,7 +585,7 @@ export function CardDetailView({
               <p className="text-xs text-muted-foreground">Valor</p>
               <CurrencyInput value={payValue} onChange={setPayValue} />
               {payValue > fatura.restante && (
-                <p className="text-[11px] text-warning">
+                <p className="text-xs text-warning">
                   Acima do restante: {formatCurrency(payValue - fatura.restante)}{" "}
                   ficará como crédito.
                 </p>
@@ -648,7 +648,7 @@ function Metric({
 }) {
   return (
     <div className="rounded-md border border-border p-2">
-      <p className="text-[10px] text-muted-foreground">{label}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
       <p className={cn("tabular truncate text-sm font-semibold", tone)}>{value}</p>
     </div>
   );

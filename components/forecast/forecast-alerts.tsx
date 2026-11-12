@@ -76,7 +76,7 @@ export function ForecastAlerts({
               <div className="mt-2 space-y-2 border-t border-border/70 pt-2">
                 {alert.causas.length > 0 && (
                   <div>
-                    <p className="text-[11px] font-medium text-muted-foreground">
+                    <p className="text-xs font-medium text-muted-foreground">
                       Maiores causas
                     </p>
                     <ul className="mt-1 space-y-0.5 text-xs">
@@ -114,7 +114,7 @@ export function ForecastAlerts({
                   {alert.eventos.slice(0, 20).map((event) => (
                     <div
                       key={event.id}
-                      className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-[11px]"
+                      className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1 text-xs"
                     >
                       <span className="min-w-0 truncate">
                         {formatMonthShort(event.data.slice(0, 7))} ·{" "}

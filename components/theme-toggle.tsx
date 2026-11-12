@@ -1,10 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { Monitor, Moon, Sun } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
-type Theme = "dark" | "light";
+type Theme = "dark" | "light" | "system";
+
+function resolveDark(theme: Theme): boolean {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  }
+  return theme === "dark";
+}
 
 export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
   const [theme, setTheme] = useState<Theme>("dark");
@@ -12,15 +20,17 @@ export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
 
   useEffect(() => {
     setMounted(true);
+    const stored = localStorage.getItem("verde-theme");
     setTheme(
-      document.documentElement.classList.contains("dark") ? "dark" : "light",
+      stored === "light" || stored === "system" || stored === "dark"
+        ? stored
+        : "dark",
     );
   }, []);
 
-  function toggle() {
-    const next: Theme = theme === "dark" ? "light" : "dark";
+  function apply(next: Theme) {
     const root = document.documentElement;
-    root.classList.toggle("dark", next === "dark");
+    root.classList.toggle("dark", resolveDark(next));
     try {
       localStorage.setItem("verde-theme", next);
     } catch {
@@ -29,33 +39,46 @@ export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
     setTheme(next);
   }
 
+  function toggle() {
+    apply(resolveDark(theme) ? "light" : "dark");
+  }
+
   const label =
-    theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro";
+    resolveDark(theme) ? "Mudar para tema claro" : "Mudar para tema escuro";
 
   if (withLabel) {
+    const options: { value: Theme; label: string; icon: typeof Sun }[] = [
+      { value: "light", label: "Claro", icon: Sun },
+      { value: "dark", label: "Escuro", icon: Moon },
+      { value: "system", label: "Sistema", icon: Monitor },
+    ];
     return (
-      <div className="flex items-center justify-between gap-4">
+      <div className="space-y-3">
         <div>
           <p className="text-sm font-medium">Tema da interface</p>
           <p className="text-sm text-muted-foreground">
-            {theme === "dark" ? "Escuro" : "Claro"} — você pode alternar quando
-            quiser.
+            Escolha claro, escuro ou siga o sistema.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="icon"
-          onClick={toggle}
-          aria-label={label}
-          title={label}
-        >
-          {mounted && theme === "dark" ? (
-            <Sun className="h-5 w-5" />
-          ) : (
-            <Moon className="h-5 w-5" />
-          )}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {options.map((option) => {
+            const Icon = option.icon;
+            const active = theme === option.value;
+            return (
+              <Button
+                key={option.value}
+                type="button"
+                variant={active ? "default" : "outline"}
+                className={cn("h-12 sm:h-10", active && "enamel")}
+                aria-pressed={active}
+                onClick={() => apply(option.value)}
+              >
+                <Icon className="h-4 w-4" />
+                {option.label}
+              </Button>
+            );
+          })}
+        </div>
       </div>
     );
   }
@@ -69,7 +92,7 @@ export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
       aria-label={label}
       title={label}
     >
-      {mounted && theme === "dark" ? (
+      {mounted && resolveDark(theme) ? (
         <Sun className="h-5 w-5" />
       ) : (
         <Moon className="h-5 w-5" />

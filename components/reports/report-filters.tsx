@@ -73,7 +73,7 @@ function MultiPopover({
         <Button type="button" variant="outline" className="h-11 gap-2">
           {label}
           {count > 0 && (
-            <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+            <Badge variant="default" className="px-1.5 py-0 text-xs">
               {count}
             </Badge>
           )}
@@ -157,7 +157,7 @@ export function ReportFiltersBar({
     <div className="space-y-3 rounded-xl border border-border bg-card p-3">
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
-          <Label htmlFor="report-period" className="text-[11px] text-muted-foreground">
+          <Label htmlFor="report-period" className="text-xs text-muted-foreground">
             Período
           </Label>
           <NativeSelect
@@ -175,7 +175,7 @@ export function ReportFiltersBar({
         </div>
 
         <div className="space-y-1">
-          <span className="block text-[11px] text-muted-foreground">Tipo</span>
+          <span className="block text-xs text-muted-foreground">Tipo</span>
           <div className="flex h-11 items-center gap-1 rounded-md bg-muted p-1">
             {(["despesa", "receita"] as ReportType[]).map((tipo) => (
               <button
@@ -199,7 +199,7 @@ export function ReportFiltersBar({
         <MultiPopover label="Origem" count={originCount}>
           <div className="max-h-72 space-y-3 overflow-y-auto">
             <div>
-              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+              <p className="px-2 text-xs font-medium text-muted-foreground">
                 Contas
               </p>
               {accounts.map((account) => (
@@ -218,7 +218,7 @@ export function ReportFiltersBar({
               ))}
             </div>
             <div>
-              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+              <p className="px-2 text-xs font-medium text-muted-foreground">
                 Cartões
               </p>
               {cards.map((card) => (
@@ -328,7 +328,7 @@ export function ReportFiltersBar({
       {filters.periodo === "personalizado" && (
         <div className="flex flex-wrap items-end gap-2 border-t border-border pt-2">
           <div className="space-y-1">
-            <span className="block text-[11px] text-muted-foreground">De</span>
+            <span className="block text-xs text-muted-foreground">De</span>
             <DatePicker
               value={de}
               onChange={(value) => applyCustom(value, ate)}
@@ -336,14 +336,14 @@ export function ReportFiltersBar({
             />
           </div>
           <div className="space-y-1">
-            <span className="block text-[11px] text-muted-foreground">Até</span>
+            <span className="block text-xs text-muted-foreground">Até</span>
             <DatePicker
               value={ate}
               onChange={(value) => applyCustom(de, value)}
               className="w-40"
             />
           </div>
-          <p className="pb-2 text-[11px] text-muted-foreground">
+          <p className="pb-2 text-xs text-muted-foreground">
             <Filter className="mr-1 inline h-3 w-3" aria-hidden="true" />
             O período anterior equivalente é usado na comparação.
           </p>

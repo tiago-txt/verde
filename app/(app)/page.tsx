@@ -4,13 +4,15 @@ import {
   ArrowDownRight,
   ArrowRight,
   ArrowUpRight,
+  BarChart3,
   CreditCard,
+  Leaf,
+  Plus,
   Wallet,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { PageHeader } from "@/components/page-header";
 import { BlockBoundary } from "@/components/dashboard/block-boundary";
 import { DashboardMonthHeader } from "@/components/dashboard/month-header";
 import { CategoryDonut, EvolutionChart } from "@/components/dashboard/report-charts";
@@ -54,11 +56,53 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4">
-      <PageHeader
-        title={`Olá, ${firstName}`}
-        description={`Resumo de ${formatMonthTitle(month)}.`}
-        className="azulejo rounded-2xl border border-border/60 p-4"
-      />
+      <section className="relative overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] sm:p-6">
+        <div
+          aria-hidden="true"
+          className="decor-pattern azulejo absolute inset-0 opacity-[0.2]"
+        />
+        <div
+          aria-hidden="true"
+          className="decor-glow pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-emerald/10 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="decor-glow pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-forest-highest/40 blur-3xl"
+        />
+        <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-1">
+            <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.08em] text-primary">
+              <span className="grid h-6 w-6 place-items-center rounded bg-primary-fill text-primary-fill-foreground shadow-[0_0_12px_hsl(var(--primary)/.35)]">
+                <Leaf className="h-3.5 w-3.5" aria-hidden="true" />
+              </span>
+              Painel financeiro
+            </p>
+            <h1 className="font-display text-[34px] font-bold leading-[42px] tracking-tight sm:text-[48px] sm:leading-[56px]">
+              Olá, {firstName}
+            </h1>
+            <p className="flex flex-wrap items-center gap-2 text-[15px] leading-[22px] text-on-surface/80">
+              Resumo de{" "}
+              <span className="rounded border border-grout bg-forest-high px-2 py-0.5 font-mono text-xs uppercase tracking-[0.08em] text-primary">
+                {formatMonthTitle(month)}
+              </span>
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button asChild variant="outline" className="h-12 sm:h-10">
+              <Link href="/relatorios">
+                <BarChart3 className="h-4 w-4 text-amber" />
+                Relatórios
+              </Link>
+            </Button>
+            <Button asChild className="h-12 sm:h-10">
+              <Link href="/lancamentos?novo=1">
+                <Plus className="h-4 w-4 transition-transform hover:rotate-90" />
+                Novo lançamento
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
 
       <DashboardMonthHeader month={month} />
 
@@ -66,7 +110,7 @@ export default async function DashboardPage({
         <div className="order-1 lg:col-span-4">
           <Suspense fallback={<DashboardSkeleton lines={4} />}>
             <BlockBoundary label="o saldo">
-              <BalanceBlock workspaceId={workspaceId} />
+              <BalanceBlock workspaceId={workspaceId} month={month} />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -132,29 +176,49 @@ export default async function DashboardPage({
   );
 }
 
-async function BalanceBlock({ workspaceId }: { workspaceId: string }) {
+async function BalanceBlock({
+  workspaceId,
+  month,
+}: {
+  workspaceId: string;
+  month: string;
+}) {
   const data = await getDashboardBalance(workspaceId);
+  const previsto = data.accounts
+    .filter(
+      (account) =>
+        !account.deletedAt &&
+        account.tipo !== "investimento" &&
+        !account.arquivada,
+    )
+    .reduce((sum, account) => sum + account.saldoPrevisto, 0);
 
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <Wallet className="h-4 w-4 text-primary" aria-hidden="true" />
-          Saldo total
+          <span className="tile grid h-8 w-8 place-items-center rounded-[12px] border border-grout bg-forest-container text-primary">
+            <Wallet className="h-4 w-4" aria-hidden="true" />
+          </span>
+          Saldo atual
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="tabular text-2xl font-semibold">
+        <p className="tabular text-[28px] font-semibold leading-[34px]">
           {formatCurrency(data.operational)}
         </p>
         <dl className="space-y-1 text-xs text-muted-foreground">
+          <div className="flex justify-between gap-2">
+            <dt>Previsto até fim de {formatMonthTitle(month)}</dt>
+            <dd className="tabular">{formatCurrency(previsto)}</dd>
+          </div>
           <div className="flex justify-between gap-2">
             <dt>Investimentos (separado)</dt>
             <dd className="tabular">{formatCurrency(data.investments)}</dd>
           </div>
           <div className="flex justify-between gap-2">
             <dt>Faturas em aberto</dt>
-            <dd className="tabular text-warning">
+            <dd className="tabular text-amber">
               {formatCurrency(data.cardDebt)}
             </dd>
           </div>
@@ -217,30 +281,33 @@ async function MonthBlock({
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] text-muted-foreground">Receitas</p>
-            <p className="tabular text-lg font-semibold text-success">
+          <div className="relative overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+            <span className="absolute inset-x-0 top-0 h-1 bg-emerald" aria-hidden="true" />
+            <p className="text-xs text-muted-foreground">Receitas</p>
+            <p className="tabular text-lg font-semibold text-primary">
               {formatCurrency(current.receitas)}
             </p>
             <Variation value={incomeVariation} />
           </div>
-          <div>
-            <p className="text-[11px] text-muted-foreground">Despesas</p>
-            <p className="tabular text-lg font-semibold text-destructive">
+          <div className="relative overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+            <span className="absolute inset-x-0 top-0 h-1 bg-clay" aria-hidden="true" />
+            <p className="text-xs text-muted-foreground">Despesas</p>
+            <p className="tabular text-lg font-semibold text-clay">
               {formatCurrency(current.despesas)}
             </p>
             <Variation value={expenseVariation} invert />
           </div>
-          <div className="col-span-2 sm:col-span-1">
-            <p className="text-[11px] text-muted-foreground">Saldo do mês</p>
+          <div className="relative col-span-2 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 sm:col-span-1">
+            <span className="absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true" />
+            <p className="text-xs text-muted-foreground">Saldo do mês</p>
             <p
               className={`tabular text-lg font-semibold ${
-                current.saldo >= 0 ? "text-success" : "text-destructive"
+                current.saldo >= 0 ? "text-primary" : "text-clay"
               }`}
             >
               {formatCurrency(current.saldo)}
             </p>
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               anterior: {formatCurrency(previous.saldo)}
             </p>
           </div>
@@ -405,7 +472,7 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
                 <p className="tabular text-sm font-semibold">
                   {formatCurrency(card.currentInvoice.restante)}
                 </p>
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   vence {formatDate(card.currentInvoice.vencimento)}
                 </p>
                 <BudgetProgress
@@ -414,7 +481,7 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
                   size="sm"
                   label={`Limite usado do cartão ${card.nome}`}
                 />
-                <p className={`text-[10px] ${toneText}`}>
+                <p className={`text-xs ${toneText}`}>
                   {ratio >= 0.8
                     ? `Limite em ${Math.round(ratio * 100)}%`
                     : `${formatCurrency(card.disponivel)} disponível`}

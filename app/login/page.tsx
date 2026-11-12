@@ -45,10 +45,10 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       {/* Painel de marca (desktop) */}
-      <section className="azulejo relative hidden overflow-hidden border-r border-border bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
+      <section className="azulejo decor-pattern relative hidden overflow-hidden border-r border-grout bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(52,211,153,0.16),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(120,80,40,0.14),transparent_50%)]"
+          className="decor-glow pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(52,211,153,0.16),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(120,80,40,0.14),transparent_50%)]"
         />
 
         <Brand className="relative" />
@@ -123,11 +123,11 @@ export default async function LoginPage({
 
           <div className="rounded-lg border border-border bg-card px-4 py-3 text-xs text-muted-foreground">
             Primeiro acesso? O usuário inicial é criado a partir de{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">
               ADMIN_EMAIL
             </code>{" "}
             e{" "}
-            <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
+            <code className="rounded bg-muted px-1 py-0.5 text-xs">
               ADMIN_PASSWORD
             </code>{" "}
             no primeiro boot.

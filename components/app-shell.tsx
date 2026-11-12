@@ -13,6 +13,7 @@ import {
   PanelLeftOpen,
   Plus,
   Settings,
+  SunMoon,
   Target,
   Wallet,
   type LucideIcon,
@@ -116,38 +117,46 @@ export function AppShell({ user, children }: AppShellProps) {
   }
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className="relative min-h-dvh bg-background">
+      <div
+        aria-hidden="true"
+        className="decor-pattern azulejo azulejo-mask pointer-events-none fixed inset-0 z-0 opacity-[0.12]"
+      />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-border/80 bg-sidebar transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-grout/70 bg-surface-lowest shadow-[0_12px_32px_-8px_rgba(7,16,11,0.9)] transition-[width] duration-200 lg:flex",
           collapsed ? "w-[72px]" : "w-[260px]",
         )}
       >
         <div
           className={cn(
-            "azulejo relative flex h-16 shrink-0 items-center border-b border-border/70",
+            "relative flex h-20 shrink-0 items-center overflow-hidden border-b border-grout/60 bg-gradient-to-b from-forest-container to-transparent",
             collapsed ? "justify-center px-2" : "justify-between px-4",
           )}
         >
+          <div
+            aria-hidden="true"
+            className="decor-pattern azulejo absolute inset-0 opacity-[0.2]"
+          />
           {collapsed ? (
             <button
               type="button"
               onClick={toggleSidebar}
               aria-label="Expandir menu"
               title="Expandir menu ([)"
-              className="grid h-11 w-11 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              className="relative z-10 grid h-12 w-12 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-forest-high hover:text-foreground"
             >
               <PanelLeftOpen className="h-5 w-5" />
             </button>
           ) : (
             <>
-              <Brand />
+              <Brand tagline className="relative z-10" />
               <button
                 type="button"
                 onClick={toggleSidebar}
                 aria-label="Recolher menu"
                 title="Recolher menu ([)"
-                className="grid h-10 w-10 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                className="relative z-10 grid h-12 w-12 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-forest-high hover:text-foreground"
               >
                 <PanelLeftClose className="h-5 w-5" />
               </button>
@@ -155,9 +164,15 @@ export function AppShell({ user, children }: AppShellProps) {
           )}
         </div>
 
+        {!collapsed && (
+          <p className="px-5 pb-1 pt-4 font-mono text-[12px] uppercase tracking-[0.08em] text-outline">
+            Módulos
+          </p>
+        )}
+
         <nav
           className={cn(
-            "flex-1 space-y-1 overflow-y-auto py-4",
+            "flex-1 space-y-1 overflow-y-auto py-2",
             collapsed ? "px-2" : "px-3",
           )}
           aria-label="Navegação principal"
@@ -171,21 +186,21 @@ export function AppShell({ user, children }: AppShellProps) {
                 aria-current={active ? "page" : undefined}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "relative flex h-12 items-center rounded-xl text-sm font-medium transition-colors",
+                  "relative flex h-12 items-center rounded-lg border text-sm font-medium transition-colors",
                   collapsed ? "justify-center px-0" : "gap-3 px-3",
                   active
-                    ? "bg-primary/15 text-primary shadow-[inset_0_0_0_1px_hsl(var(--gold)/.35)]"
-                    : "text-sidebar-foreground/75 hover:bg-accent hover:text-sidebar-foreground",
+                    ? "border-primary/30 bg-primary/20 text-primary"
+                    : "border-transparent text-sidebar-foreground/75 hover:bg-forest-high hover:text-sidebar-foreground",
                 )}
               >
-                <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                <item.icon
+                  className={cn(
+                    "h-5 w-5 shrink-0",
+                    active ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden="true"
+                />
                 {!collapsed && <span className="truncate">{item.label}</span>}
-                {active && (
-                  <span
-                    className="absolute left-0 top-1/2 h-6 w-0.5 -translate-y-1/2 rounded-full bg-gold"
-                    aria-hidden="true"
-                  />
-                )}
               </Link>
             );
           })}
@@ -193,7 +208,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
         <div
           className={cn(
-            "space-y-1 border-t border-border/70 p-2",
+            "space-y-2 border-t border-grout/60 bg-forest-container/40 p-2",
             collapsed && "flex flex-col items-center",
           )}
         >
@@ -204,34 +219,40 @@ export function AppShell({ user, children }: AppShellProps) {
             }
             title={collapsed ? "Configurações" : undefined}
             className={cn(
-              "flex h-12 items-center rounded-xl text-sm font-medium transition-colors",
+              "flex h-12 items-center rounded-lg border border-transparent text-sm font-medium transition-colors",
               collapsed ? "w-12 justify-center" : "gap-3 px-3",
               pathname.startsWith("/configuracoes")
-                ? "bg-primary/15 text-primary"
-                : "text-sidebar-foreground/75 hover:bg-accent hover:text-sidebar-foreground",
+                ? "border-primary/30 bg-primary/20 text-primary"
+                : "text-sidebar-foreground/75 hover:bg-forest-high hover:text-sidebar-foreground",
             )}
           >
-            <Settings className="h-5 w-5 shrink-0" aria-hidden="true" />
+            <Settings className="h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
             {!collapsed && "Configurações"}
           </Link>
           <div
             className={cn(
-              "flex items-center gap-1",
-              collapsed ? "flex-col" : "justify-between",
+              "flex items-center gap-2 rounded-lg border border-grout/50 bg-surface-lowest/70 px-2",
+              collapsed ? "flex-col py-1" : "justify-between py-1.5",
             )}
           >
+            {!collapsed && (
+              <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                <SunMoon className="h-4 w-4 text-amber" aria-hidden="true" />
+                Tema
+              </span>
+            )}
             <ThemeToggle />
-            <UserMenu
-              nome={user.nome}
-              email={user.email}
-              isAdmin={user.isAdmin}
-              compact={collapsed}
-            />
           </div>
+          <UserMenu
+            nome={user.nome}
+            email={user.email}
+            isAdmin={user.isAdmin}
+            compact={collapsed}
+          />
         </div>
       </aside>
 
-      <div className="transition-[padding] duration-200 lg:pl-[var(--sidebar-width,260px)]">
+      <div className="relative z-10 transition-[padding] duration-200 lg:pl-[var(--sidebar-width,260px)]">
         <main className="mx-auto w-full max-w-7xl px-4 pb-40 pt-4 lg:px-8 lg:pb-28 lg:pt-7">
           {children}
         </main>
@@ -245,7 +266,7 @@ export function AppShell({ user, children }: AppShellProps) {
             onClick={() =>
               window.dispatchEvent(new Event("verde:new-transaction"))
             }
-            className="verde-fab pressable fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
+            className="verde-fab enamel pressable fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
           >
             <Plus className="h-8 w-8" aria-hidden="true" />
           </button>
@@ -253,7 +274,7 @@ export function AppShell({ user, children }: AppShellProps) {
           <Link
             href="/lancamentos?novo=1"
             aria-label="Novo lançamento"
-            className="verde-fab pressable fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
+            className="verde-fab enamel pressable fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
           >
             <Plus className="h-8 w-8" aria-hidden="true" />
           </Link>
@@ -261,7 +282,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
       <nav
         aria-label="Navegação principal"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-border bg-sidebar/95 backdrop-blur lg:hidden"
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 backdrop-blur lg:hidden"
       >
         <div className="grid h-16 grid-cols-6">
           {MOBILE_NAV.map((item) => {
@@ -272,7 +293,7 @@ export function AppShell({ user, children }: AppShellProps) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-12 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors",
+                  "relative flex min-h-12 flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >

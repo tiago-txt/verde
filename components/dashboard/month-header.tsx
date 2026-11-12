@@ -15,12 +15,12 @@ export function DashboardMonthHeader({ month }: { month: string }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 rounded-lg border border-grout bg-forest-container/90 p-1 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)]">
         <Button
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11"
+          className="h-11 w-11 rounded-lg"
           aria-label="Mês anterior"
           onClick={() => go(addMonths(month, -1))}
         >
@@ -31,7 +31,7 @@ export function DashboardMonthHeader({ month }: { month: string }) {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11"
+          className="h-11 w-11 rounded-lg"
           aria-label="Próximo mês"
           onClick={() => go(addMonths(month, 1))}
         >

@@ -276,7 +276,7 @@ export function BudgetsView({
           <p className="text-sm font-medium">
             Ciclos excluídos em {formatMonthTitle(ciclo)}
           </p>
-          <p className="mb-2 text-[11px] text-muted-foreground">
+          <p className="mb-2 text-xs text-muted-foreground">
             Eles não consomem gastos nem geram reserva. Você pode restaurar.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -390,7 +390,7 @@ export function BudgetsView({
                         <Badge variant="secondary">Arquivado</Badge>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {formatDate(summary.inicio).slice(0, 5)} a{" "}
                       {formatDate(summary.fim).slice(0, 5)} ·{" "}
                       fecha {formatDate(summary.fechamento).slice(0, 5)}
@@ -429,7 +429,7 @@ export function BudgetsView({
                 </div>
 
                 {summary.estouro > 0 && (
-                  <p className="text-[11px] font-medium text-destructive">
+                  <p className="text-xs font-medium text-destructive">
                     Estourou {formatCurrency(summary.estouro)} neste ciclo
                   </p>
                 )}
@@ -506,7 +506,7 @@ function Total({
 }) {
   return (
     <div className="rounded-lg border border-border bg-card p-3">
-      <p className="flex items-center gap-1 text-[11px] text-muted-foreground">
+      <p className="flex items-center gap-1 text-xs text-muted-foreground">
         {label}
         {children}
       </p>

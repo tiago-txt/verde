@@ -255,11 +255,11 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
           <CardContent className="space-y-3">
             <div className="flex flex-wrap items-end gap-2">
               <div className="space-y-1">
-                <span className="block text-[11px] text-muted-foreground">De</span>
+                <span className="block text-xs text-muted-foreground">De</span>
                 <DatePicker value={de} onChange={setDe} className="w-40" />
               </div>
               <div className="space-y-1">
-                <span className="block text-[11px] text-muted-foreground">Até</span>
+                <span className="block text-xs text-muted-foreground">Até</span>
                 <DatePicker value={ate} onChange={setAte} className="w-40" />
               </div>
             </div>
@@ -378,7 +378,7 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
             <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
               {MAPPING_FIELDS.map((field) => (
                 <div key={field.key} className="space-y-1">
-                  <Label className="text-[11px] text-muted-foreground">
+                  <Label className="text-xs text-muted-foreground">
                     {field.label}
                     {field.required ? " *" : ""}
                   </Label>
@@ -497,7 +497,7 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
             </div>
           )}
 
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Valores importados entram como lançamentos comuns (sem cartão). O
             campo Pago, se mapeado, é respeitado; sem ele, assume pago.
           </p>
@@ -551,7 +551,7 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
                 </Button>
               </div>
             )}
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Contas e categorias criadas pela importação são mantidas; apenas os
               lançamentos do lote são removidos.
             </p>

@@ -117,7 +117,7 @@ export function SourceSelect({
       )}
       {groups.map((group) => (
         <div key={group.key} className="space-y-2">
-          <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {group.label}
           </p>
           <div
@@ -146,7 +146,7 @@ export function SourceSelect({
                   <span
                     className="tile grid h-10 w-10 shrink-0 place-items-center rounded-xl"
                     style={{
-                      backgroundColor: `${option.cor ?? "#34d399"}22`,
+                      backgroundColor: `color-mix(in srgb, ${option.cor ?? "hsl(var(--emerald))"} 14%, transparent)`,
                       color: option.cor ?? undefined,
                     }}
                     aria-hidden="true"
@@ -157,7 +157,7 @@ export function SourceSelect({
                     <span className="block truncate text-sm font-semibold">
                       {option.nome}
                     </span>
-                    <span className="block truncate text-[11px] text-muted-foreground">
+                    <span className="block truncate text-xs text-muted-foreground">
                       {option.detalhe}
                     </span>
                   </span>
@@ -189,7 +189,7 @@ export function SourceSelect({
         <span
           className="tile grid h-8 w-8 shrink-0 place-items-center rounded-lg"
           style={{
-            backgroundColor: `${selected.cor ?? "#34d399"}22`,
+            backgroundColor: `color-mix(in srgb, ${selected.cor ?? "hsl(var(--emerald))"} 14%, transparent)`,
             color: selected.cor ?? undefined,
           }}
           aria-hidden="true"
@@ -218,7 +218,7 @@ export function SourceSelect({
           {selected?.nome ?? placeholder}
         </span>
         {selected && (
-          <span className="block truncate text-[11px] text-muted-foreground">
+          <span className="block truncate text-xs text-muted-foreground">
             {selected.detalhe}
           </span>
         )}

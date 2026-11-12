@@ -19,8 +19,14 @@ import {
   formatMonthTitle,
 } from "@/lib/format";
 
-const FALLBACK = ["#34d399", "#60a5fa", "#f472b6", "#fbbf24", "#a78bfa"];
-const OTHERS_COLOR = "#64748b";
+const FALLBACK = [
+  "hsl(var(--emerald))",
+  "hsl(var(--primary))",
+  "hsl(var(--amber))",
+  "hsl(var(--info))",
+  "hsl(var(--clay))",
+];
+const OTHERS_COLOR = "hsl(var(--outline))";
 
 export function CategoryBars({ items }: { items: ReportCategory[] }) {
   if (items.length === 0) {
@@ -103,7 +109,7 @@ export function MonthlyCategoryChart({
             <XAxis
               dataKey="mes"
               tickFormatter={(value) => formatMonthShort(String(value))}
-              tick={{ fill: "#94a3b8", fontSize: 11 }}
+              tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
               axisLine={{ stroke: "hsl(var(--border))" }}
               tickLine={false}
             />
@@ -111,7 +117,7 @@ export function MonthlyCategoryChart({
               tickFormatter={(value) =>
                 formatCurrencyCompact(Number(value)).replace("R$", "")
               }
-              tick={{ fill: "#94a3b8", fontSize: 10 }}
+              tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
               axisLine={false}
               tickLine={false}
               width={42}
@@ -120,14 +126,14 @@ export function MonthlyCategoryChart({
               formatter={(value) => formatCurrency(Number(value))}
               labelFormatter={(value) => formatMonthTitle(String(value))}
               contentStyle={{
-                background: "#111814",
-                border: "1px solid #26332b",
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--grout))",
                 borderRadius: 8,
-                color: "#e7efe9",
+                color: "hsl(var(--foreground))",
               }}
             />
             <Legend
-              wrapperStyle={{ color: "#94a3b8", fontSize: 11 }}
+              wrapperStyle={{ color: "hsl(var(--outline))", fontSize: 12 }}
               formatter={(value) =>
                 value === "outras"
                   ? "Outras"

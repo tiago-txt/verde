@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CalendarDays } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -41,12 +42,13 @@ export function MonthPicker({
       type="button"
       onClick={() => setOpen(true)}
       className={cn(
-        "inline-flex min-h-11 items-center gap-1 whitespace-nowrap rounded-md px-2 text-base font-semibold capitalize transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "inline-flex min-h-11 items-center gap-2 whitespace-nowrap rounded-lg px-2 font-display text-base font-semibold capitalize transition-colors hover:bg-forest-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         empty && "normal-case",
         className,
       )}
       aria-label="Escolher mês e ano"
     >
+      {!empty && <CalendarDays className="h-4 w-4 text-amber" aria-hidden="true" />}
       {empty ? (
         <span className="text-muted-foreground">{placeholder}</span>
       ) : (

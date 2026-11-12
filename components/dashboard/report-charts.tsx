@@ -21,14 +21,13 @@ import { formatCurrency, formatCurrencyCompact, formatMonthShort } from "@/lib/f
 import type { MonthlyPoint, TopCategory } from "@/lib/finance/reports";
 
 const PALETTE = [
-  "#34d399",
-  "#60a5fa",
-  "#f472b6",
-  "#fbbf24",
-  "#a78bfa",
-  "#fb7185",
-  "#38bdf8",
-  "#94a3b8",
+  "hsl(var(--emerald))",
+  "hsl(var(--primary))",
+  "hsl(var(--amber))",
+  "hsl(var(--info))",
+  "hsl(var(--clay))",
+  "hsl(var(--terracotta))",
+  "hsl(var(--outline))",
 ];
 
 export function CategoryDonut({
@@ -55,7 +54,7 @@ export function CategoryDonut({
   return (
     <div className="space-y-3">
       <div
-        className="h-56 w-full"
+        className="relative h-56 w-full"
         role="img"
         aria-label={`Despesas por categoria: ${data
           .map((item) => `${item.nome}, ${formatCurrency(item.total)}`)
@@ -93,14 +92,24 @@ export function CategoryDonut({
             <Tooltip
               formatter={(value) => formatCurrency(Number(value))}
               contentStyle={{
-                background: "#111814",
-                border: "1px solid #26332b",
+                background: "hsl(var(--card))",
+                border: "1px solid hsl(var(--grout))",
                 borderRadius: 8,
-                color: "#e7efe9",
+                color: "hsl(var(--foreground))",
               }}
             />
           </PieChart>
         </ResponsiveContainer>
+        <div className="pointer-events-none absolute inset-0 grid place-items-center">
+          <div className="text-center">
+            <p className="font-mono text-xs uppercase tracking-[0.08em] text-outline">
+              Total
+            </p>
+            <p className="tabular text-lg font-semibold text-on-surface">
+              {formatCurrencyCompact(total)}
+            </p>
+          </div>
+        </div>
       </div>
 
       <ul className="space-y-1.5">
@@ -112,7 +121,7 @@ export function CategoryDonut({
                 className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-accent"
               >
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
                   style={{ backgroundColor: item.color }}
                   aria-hidden="true"
                 />
@@ -127,7 +136,7 @@ export function CategoryDonut({
             ) : (
               <span className="flex items-center gap-2 px-1.5 py-1 text-xs">
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
                   style={{ backgroundColor: item.color }}
                   aria-hidden="true"
                 />
@@ -217,7 +226,7 @@ export function EvolutionChart({
               <XAxis
                 dataKey="mes"
                 tickFormatter={(value) => formatMonthShort(String(value))}
-                tick={{ fill: "#94a3b8", fontSize: 11 }}
+                tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
                 axisLine={{ stroke: "hsl(var(--border))" }}
                 tickLine={false}
               />
@@ -225,7 +234,7 @@ export function EvolutionChart({
                 tickFormatter={(value) =>
                   formatCurrencyCompact(Number(value)).replace("R$", "")
                 }
-                tick={{ fill: "#94a3b8", fontSize: 10 }}
+                tick={{ fill: "hsl(var(--outline))", fontSize: 12 }}
                 axisLine={false}
                 tickLine={false}
                 width={42}
@@ -234,14 +243,14 @@ export function EvolutionChart({
                 formatter={(value) => formatCurrency(Number(value))}
                 labelFormatter={(value) => formatMonthShort(String(value))}
                 contentStyle={{
-                  background: "#111814",
-                  border: "1px solid #26332b",
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--grout))",
                   borderRadius: 8,
-                  color: "#e7efe9",
+                  color: "hsl(var(--foreground))",
                 }}
               />
               <Legend
-                wrapperStyle={{ color: "#94a3b8", fontSize: 11 }}
+                wrapperStyle={{ color: "hsl(var(--outline))", fontSize: 12 }}
                 formatter={(value) =>
                   value === "receitas"
                     ? "Receitas"
@@ -250,12 +259,12 @@ export function EvolutionChart({
                       : "Saldo"
                 }
               />
-              <Bar dataKey="receitas" fill="#34d399" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="despesas" fill="#e0765b" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="receitas" fill="hsl(var(--emerald))" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="despesas" fill="hsl(var(--clay))" radius={[3, 3, 0, 0]} />
               <Line
                 type="monotone"
                 dataKey="saldo"
-                stroke="#60a5fa"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 dot={false}
               />

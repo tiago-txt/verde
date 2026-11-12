@@ -15,7 +15,7 @@ export function PaymentProgress({
   const segments = 12;
   const filled = Math.round(ratio * segments);
   const tone =
-    ratio >= 1 ? "bg-success" : ratio > 0 ? "bg-primary" : "bg-muted";
+    ratio >= 1 ? "bg-emerald" : ratio > 0 ? "bg-primary" : "bg-forest-highest";
 
   return (
     <span
@@ -31,8 +31,8 @@ export function PaymentProgress({
           key={index}
           aria-hidden="true"
           className={cn(
-            "h-1.5 flex-1 rounded-[3px]",
-            index < filled ? tone : "bg-muted",
+            "h-2 w-4 flex-none rounded-[4px] border border-grout/50",
+            index < filled ? tone : "bg-forest-highest",
           )}
         />
       ))}

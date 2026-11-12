@@ -718,10 +718,10 @@ export function TransactionFormDialog({
   const hasAccounts = formData.accounts.length > 0;
   const headerTone =
     tipo === "receita"
-      ? "bg-primary text-white"
+      ? "bg-emerald text-white"
       : tipo === "transferencia"
         ? "bg-info text-white"
-        : "bg-destructive text-white";
+        : "bg-terracotta text-white";
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -760,7 +760,11 @@ export function TransactionFormDialog({
               </div>
 
               {canChangeType ? (
-                <div role="tablist" aria-label="Tipo de lançamento" className="mt-1 flex">
+                <div
+                  role="tablist"
+                  aria-label="Tipo de lançamento"
+                  className="mt-2 flex rounded-full bg-black/20 p-1"
+                >
                   {(["despesa", "receita", "transferencia"] as TransactionType[])
                     .filter((type) => !(isCard && type === "transferencia"))
                     .map((type) => (
@@ -771,10 +775,10 @@ export function TransactionFormDialog({
                         aria-selected={tipo === type}
                         onClick={() => handleTypeChange(type)}
                         className={cn(
-                          "h-11 flex-1 border-b-2 px-1 text-xs font-medium transition-colors",
+                          "h-11 flex-1 rounded-full px-1 text-xs font-semibold transition-colors",
                           tipo === type
-                            ? "border-gold"
-                            : "border-transparent opacity-65",
+                            ? "bg-card text-foreground shadow-sm"
+                            : "text-current opacity-75 hover:opacity-100",
                         )}
                       >
                         {isCard && type === "receita"
@@ -979,6 +983,7 @@ export function TransactionFormDialog({
                         onChange={field.onChange}
                         large
                         autoFocus
+                        className="border-2 border-primary-fill shadow-[0_0_12px_hsl(var(--primary)/.2)] focus-within:shadow-[0_0_18px_hsl(var(--primary)/.35)]"
                         aria-invalid={Boolean(formState.errors.valor)}
                       />
                     )}
@@ -1131,7 +1136,7 @@ export function TransactionFormDialog({
                     <FieldError message={formState.errors.cartaoId?.message} />
 
                     {selectedCard && cardInvoiceKey && cardInvoiceDates && (
-                      <p className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                      <p className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
                         <CreditCard
                           className="h-3.5 w-3.5 shrink-0"
                           style={{ color: selectedCard.cor }}
@@ -1142,7 +1147,7 @@ export function TransactionFormDialog({
                           {formatDate(cardInvoiceDates.vencimento).slice(0, 5)}
                         </span>
                         {tipo === "receita" && (
-                          <Badge variant="success" className="px-1.5 py-0 text-[10px]">
+                          <Badge variant="success" className="px-1.5 py-0 text-xs">
                             Estorno/crédito
                           </Badge>
                         )}
@@ -1171,7 +1176,7 @@ export function TransactionFormDialog({
                       message={formState.errors.categoriaId?.message}
                     />
                     {budgetHint && (
-                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-[11px] text-muted-foreground">
+                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
                         <Target
                           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
                           aria-hidden="true"
@@ -1203,7 +1208,7 @@ export function TransactionFormDialog({
                     {forecastHint?.temAlerta && forecastHint.periodo && (
                       <div
                         aria-live="polite"
-                        className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-muted-foreground"
+                        className="flex items-start gap-1.5 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-muted-foreground"
                       >
                         <AlertTriangle
                           className="mt-0.5 h-3.5 w-3.5 shrink-0 text-destructive"
@@ -1359,7 +1364,7 @@ export function TransactionFormDialog({
                         </button>
                       ))}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       {budgetHint
                         ? `Consome o ciclo de ${formatMonthTitle(budgetHint.ciclo)}.${
                             budgetHint.viaFatura
@@ -1636,7 +1641,7 @@ export function TransactionFormDialog({
               {keypadOpen && (
                 <>
                   <div className="mx-auto mb-1 flex max-w-sm items-center justify-between px-1">
-                    <span className="text-[11px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       Valor em reais
                     </span>
                     <button
@@ -1749,7 +1754,7 @@ export function TransactionFormDialog({
                     </Button>
                   )}
 
-                  <span className="hidden whitespace-nowrap text-[10px] text-muted-foreground sm:inline">
+                  <span className="hidden whitespace-nowrap text-xs text-muted-foreground sm:inline">
                     Enter salva · Ctrl/Cmd+Enter{" "}
                     {mode === "create" ? "cria outro" : "salva"}
                   </span>

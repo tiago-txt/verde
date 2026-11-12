@@ -74,12 +74,12 @@ export function ForecastView({ data }: { data: ForecastData }) {
           accountId={view === "conta" ? accountId : null}
         />
         {data.prefs.incluirEstimativas && certoNegativo !== comNegativo && (
-          <p className="mt-2 rounded-md border border-warning/40 bg-warning/5 px-2 py-1.5 text-[11px] text-muted-foreground">
+          <p className="mt-2 rounded-md border border-warning/40 bg-warning/5 px-2 py-1.5 text-xs text-muted-foreground">
             Com estimativas: {comNegativo ? "negativo" : "positivo"}; só com o
             certo: {certoNegativo ? "negativo" : "positivo"}.
           </p>
         )}
-        <p className="mt-2 text-[11px] text-muted-foreground">
+        <p className="mt-2 text-xs text-muted-foreground">
           Linha cheia: somente eventos certos. Linha tracejada: com estimativas.
           Área vermelha: abaixo da margem de segurança.
         </p>

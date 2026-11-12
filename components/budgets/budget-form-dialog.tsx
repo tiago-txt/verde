@@ -280,7 +280,7 @@ export function BudgetFormDialog({
                     </NativeSelect>
                   )}
                 />
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Usa o fechamento e o vencimento do cartão na reserva e na
                   fatura. Mudanças futuras no cartão não reescrevem ciclos
                   passados deste orçamento.
@@ -310,7 +310,7 @@ export function BudgetFormDialog({
                   </NativeSelect>
                 )}
               />
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Despesas em conta e cartão contam igualmente; use para separar
                 o dinheiro físico.
               </p>
@@ -386,11 +386,11 @@ export function BudgetFormDialog({
                           className="h-9 w-9"
                           iconClassName="h-4 w-4"
                         />
-                        <span className="line-clamp-2 text-[11px] leading-tight">
+                        <span className="line-clamp-2 text-xs leading-tight">
                           {category.nome}
                         </span>
                         {blocked && (
-                          <span className="text-[9px] text-muted-foreground">
+                          <span className="text-xs text-muted-foreground">
                             em {category.blockedBy}
                           </span>
                         )}
@@ -415,7 +415,7 @@ export function BudgetFormDialog({
                   category.blockedByBudgetId !== budget?.id &&
                   !categoriaIds.includes(category.id),
               ) && (
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Categorias acinzentadas já estão em outro orçamento ativo.
                   Edite esse orçamento para liberá-las.
                 </p>

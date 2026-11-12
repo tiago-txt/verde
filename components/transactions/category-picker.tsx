@@ -126,7 +126,7 @@ export function CategoryPicker({
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
               <CircleEllipsis className="h-4 w-4" />
             </span>
-            <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
+            <span className="line-clamp-2 w-full break-words text-xs leading-tight">
               Outros (padrão)
             </span>
             {value === null && (
@@ -156,7 +156,7 @@ export function CategoryPicker({
                 className="h-9 w-9"
                 iconClassName="h-4 w-4"
               />
-              <span className="line-clamp-2 w-full break-words text-[10px] leading-tight">
+              <span className="line-clamp-2 w-full break-words text-xs leading-tight">
                 {option.nome}
               </span>
               {selected && (

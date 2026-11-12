@@ -61,10 +61,15 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
 
   if (items.length === 0) {
     return (
-      <p className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-        <Check className="h-4 w-4 text-success" aria-hidden="true" />
-        Nada a vencer nos próximos 15 dias.
-      </p>
+      <div className="flex items-center gap-3 rounded-lg border border-grout bg-forest-container/50 p-3 text-sm text-muted-foreground">
+        <span className="tile grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-grout bg-forest-high text-primary">
+          <Check className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <span>
+          <span className="block font-medium text-on-surface">Tudo em dia</span>
+          Nada a vencer nos próximos 15 dias.
+        </span>
+      </div>
     );
   }
 
@@ -90,7 +95,7 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
                   ? `Fatura ${item.data.cartaoNome}`
                   : item.data.descricao}
               </span>
-              <span className="block text-[11px] text-muted-foreground">
+              <span className="block text-xs text-muted-foreground">
                 {formatDate(item.date)} ·{" "}
                 {item.dueInDays === 0
                   ? "vence hoje"

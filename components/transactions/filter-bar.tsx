@@ -113,7 +113,7 @@ function FilterButton({
           {Icon && <Icon className="h-4 w-4" aria-hidden="true" />}
           {label}
           {count > 0 && (
-            <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+            <Badge variant="default" className="px-1.5 py-0 text-xs">
               {count}
             </Badge>
           )}
@@ -338,7 +338,7 @@ function CategoryFilter({
           className="h-9 w-9"
           iconClassName="h-4 w-4"
         />
-        <span className="w-full truncate text-[10px] leading-tight">
+        <span className="w-full truncate text-xs leading-tight">
           {category.nome}
         </span>
         {hasChildren && (
@@ -392,7 +392,7 @@ function CategoryFilter({
                 {cell(category)}
                 {isOpen && (
                   <div className="col-span-full rounded-xl border border-border/70 bg-muted/20 p-2">
-                    <p className="mb-1.5 px-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                    <p className="mb-1.5 px-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       {category.nome}
                     </p>
                     <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6">
@@ -506,7 +506,7 @@ function CategoryFilterButton({
           <Shapes className="h-4 w-4" aria-hidden="true" />
           Categorias
           {selected.length > 0 && (
-            <Badge variant="default" className="px-1.5 py-0 text-[10px]">
+            <Badge variant="default" className="px-1.5 py-0 text-xs">
               {selected.length}
             </Badge>
           )}
@@ -566,7 +566,7 @@ export function FilterBar({
         >
           <div className="space-y-3">
             <div className="space-y-1">
-              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+              <p className="px-2 text-xs font-medium text-muted-foreground">
                 Contas
               </p>
               <AccountFilter
@@ -576,7 +576,7 @@ export function FilterBar({
               />
             </div>
             <div className="space-y-1">
-              <p className="px-2 text-[11px] font-medium text-muted-foreground">
+              <p className="px-2 text-xs font-medium text-muted-foreground">
                 Cartões
               </p>
               <CardFilter
@@ -679,7 +679,7 @@ export function FilterBar({
 
             <div className="space-y-2">
               <Label>Origem</Label>
-              <p className="text-[11px] font-medium text-muted-foreground">
+              <p className="text-xs font-medium text-muted-foreground">
                 Contas
               </p>
               <AccountFilter
@@ -687,7 +687,7 @@ export function FilterBar({
                 selected={filters.contas}
                 onChange={(contas) => onChange({ contas })}
               />
-              <p className="pt-1 text-[11px] font-medium text-muted-foreground">
+              <p className="pt-1 text-xs font-medium text-muted-foreground">
                 Cartões
               </p>
               <CardFilter
@@ -720,7 +720,7 @@ export function FilterBar({
               <div className="flex items-center justify-between">
                 <Label>Categorias</Label>
                 {filters.categorias.length > 0 && (
-                  <span className="text-[11px] text-muted-foreground">
+                  <span className="text-xs text-muted-foreground">
                     {filters.categorias.length} selecionada(s)
                   </span>
                 )}

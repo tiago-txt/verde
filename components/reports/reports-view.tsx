@@ -236,7 +236,7 @@ function CategoryTab({
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Categoria</th>
                 <th className="px-2 py-2 text-right font-medium">Total</th>
                 <th className="px-2 py-2 text-right font-medium">%</th>
@@ -433,7 +433,7 @@ function MonthTab({
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-4 py-2 font-medium">Mês</th>
                 <th className="px-2 py-2 text-right font-medium">Receitas</th>
                 <th className="px-2 py-2 text-right font-medium">Despesas</th>
@@ -508,7 +508,7 @@ function OriginTab({
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-left text-[11px] text-muted-foreground">
+              <tr className="border-b border-border text-left text-xs text-muted-foreground">
                 <th className="px-2 py-2 font-medium">Origem</th>
                 <th className="px-2 py-2 font-medium">Tipo</th>
                 <th className="px-2 py-2 text-right font-medium">Total</th>
@@ -533,7 +533,7 @@ function OriginTab({
                       <Link href={href} className="flex items-center gap-2 hover:underline">
                         <span
                           className="h-2.5 w-2.5 rounded-full"
-                          style={{ background: item.cor ?? "#94a3b8" }}
+                          style={{ background: item.cor ?? "hsl(var(--outline))" }}
                           aria-hidden="true"
                         />
                         <span className="truncate">{item.nome}</span>

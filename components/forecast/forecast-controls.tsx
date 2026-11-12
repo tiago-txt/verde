@@ -110,7 +110,7 @@ export function ForecastControls({
               }
             }}
           />
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             O saldo abaixo deste valor é tratado como negativo.
           </p>
         </div>
@@ -172,7 +172,7 @@ export function ForecastControls({
 
       <FormError message={error} />
       {pending && (
-        <p className="text-[11px] text-muted-foreground">Atualizando previsão…</p>
+        <p className="text-xs text-muted-foreground">Atualizando previsão…</p>
       )}
 
       <Dialog open={accountsOpen} onOpenChange={setAccountsOpen}>

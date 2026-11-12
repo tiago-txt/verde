@@ -247,7 +247,7 @@ export function CardFormDialog({
                 <option value="proxima_fatura">Na próxima fatura</option>
                 <option value="fatura_atual">Nesta fatura</option>
               </NativeSelect>
-              <p className="text-[11px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Muda a fatura (e o ciclo de orçamento) apenas das compras feitas
                 exatamente no dia do fechamento.
               </p>

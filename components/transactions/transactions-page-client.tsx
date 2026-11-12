@@ -854,12 +854,12 @@ export function TransactionsPageClient({
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 lg:flex-none lg:gap-1">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border border-grout bg-forest-container/90 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] lg:flex-none lg:gap-1 lg:p-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0 lg:h-11 lg:w-11"
+            className="h-11 w-11 shrink-0 rounded-lg"
             aria-label="Mês anterior"
             onClick={() => changeMonth(addMonths(filters.mes, -1))}
           >
@@ -874,7 +874,7 @@ export function TransactionsPageClient({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-9 w-9 shrink-0 lg:h-11 lg:w-11"
+            className="h-11 w-11 shrink-0 rounded-lg"
             aria-label="Próximo mês"
             onClick={() => changeMonth(addMonths(filters.mes, 1))}
           >
@@ -914,7 +914,7 @@ export function TransactionsPageClient({
           >
             <ListFilter className="h-5 w-5" />
             {countActiveFilters(filters) > 0 && (
-              <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
+              <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-primary px-1 text-xs font-semibold text-primary-foreground">
                 {countActiveFilters(filters)}
               </span>
             )}
@@ -1082,12 +1082,12 @@ export function TransactionsPageClient({
               <div
                 key={group.day}
                 id={`day-${group.day}`}
-                className="scroll-mt-4 overflow-hidden rounded-xl border border-border bg-card"
+                className="scroll-mt-4 overflow-hidden rounded-lg border border-grout bg-surface-low"
               >
                 <div
                   className={cn(
-                    "flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/20 px-3 py-2 sm:px-4",
-                    group.day === today && "bg-gold/10",
+                    "flex flex-wrap items-center justify-between gap-2 border-b border-grout bg-forest-container/70 px-3 py-2.5 sm:px-4",
+                    group.day === today && "bg-amber/10",
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -1106,10 +1106,10 @@ export function TransactionsPageClient({
                         aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
                       />
                     )}
-                    <span className="tabular text-xl font-bold leading-none">
+                    <span className="font-display tabular text-2xl font-bold leading-none">
                       {Number(group.day.slice(8, 10))}
                     </span>
-                    <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                    <span className="rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
                       {new Intl.DateTimeFormat("pt-BR", {
                         weekday: "short",
                         timeZone: "UTC",
@@ -1118,9 +1118,9 @@ export function TransactionsPageClient({
                         .replace(".", "")}
                     </span>
                     {group.day === today && (
-                      <Badge className="bg-gold/15 text-gold">Hoje</Badge>
+                      <Badge className="bg-amber/15 text-amber">Hoje</Badge>
                     )}
-                    <span className="hidden text-xs text-muted-foreground sm:inline">
+                    <span className="hidden text-xs text-outline sm:inline">
                       {formatDate(group.day)}
                     </span>
                   </div>
@@ -1138,18 +1138,19 @@ export function TransactionsPageClient({
                       <span
                         className={cn(
                           "tabular inline-flex items-center gap-1 font-semibold",
-                          balance < 0 ? "text-destructive" : "text-foreground",
+                          balance < 0 ? "text-clay" : "text-on-surface",
                         )}
                         title="Saldo previsto acumulado das contas até este dia"
                       >
-                        <Wallet className="h-3.5 w-3.5" aria-hidden="true" />
+                        <Wallet className="h-3.5 w-3.5 text-amber" aria-hidden="true" />
+                        <span className="hidden sm:inline text-outline">Saldo do dia</span>
                         {formatCurrency(balance)}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="divide-y divide-border">
+                <div className="space-y-2 p-2">
                   {group.items.map((transaction) => (
                     <TransactionRow
                       key={transaction.id}

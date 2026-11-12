@@ -2,6 +2,7 @@
 
 import { AlertTriangle, PiggyBank } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Tile } from "@/components/tile";
 import { BudgetProgress } from "@/components/budgets/budget-progress";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -49,18 +50,19 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
             : "border-l-success/50 bg-success/[0.05]",
       )}
     >
-      <span
-        className={cn(
-          "mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl",
+      <Tile
+        icon={Icon}
+        kind="orcamento"
+        size="sm"
+        dashed
+        color={
           isAlert
-            ? "bg-destructive/10 text-destructive"
+            ? "hsl(var(--destructive))"
             : isProvision
-              ? "bg-primary/10 text-primary"
-              : "bg-success/10 text-success",
-        )}
-      >
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </span>
+              ? "hsl(var(--amber))"
+              : "hsl(var(--primary))"
+        }
+      />
 
       <span className="min-w-0 flex-1">
         <span className="flex flex-wrap items-center gap-1.5">
@@ -89,7 +91,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           </Badge>
         </span>
 
-        <span className="mt-1 block text-[11px] text-muted-foreground">
+        <span className="mt-1 block text-xs text-muted-foreground">
           {isOverspent ? (
             <>
               Estourou {formatCurrency(summary.estouro)} (

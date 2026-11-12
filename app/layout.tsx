@@ -1,6 +1,28 @@
 import type { Metadata, Viewport } from "next";
+import { Hanken_Grotesk, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
+
+const display = Space_Grotesk({
+  subsets: ["latin"],
+  weight: ["500", "600", "700"],
+  variable: "--font-display",
+  display: "swap",
+});
+
+const body = Hanken_Grotesk({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["500", "600"],
+  variable: "--font-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: {
@@ -34,8 +56,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#080d0a" },
-    { media: "(prefers-color-scheme: light)", color: "#f7f6f2" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1510" },
+    { media: "(prefers-color-scheme: light)", color: "#f6f1e4" },
   ],
 };
 
@@ -44,11 +66,13 @@ const themeScript = `
   try {
     var stored = localStorage.getItem("verde-theme");
     var root = document.documentElement;
-    if (stored === "light") {
-      root.classList.remove("dark");
-    } else {
-      root.classList.add("dark");
+    var dark = stored !== "light";
+    if (stored === "system") {
+      dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
     }
+    root.classList.toggle("dark", dark);
+    var decorations = localStorage.getItem("verde-decorations");
+    root.dataset.decorations = decorations === "off" ? "off" : "on";
   } catch (e) {}
 })();
 `;
@@ -57,11 +81,15 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="pt-BR" className="dark" suppressHydrationWarning>
+    <html
+      lang="pt-BR"
+      className={`dark ${display.variable} ${body.variable} ${mono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="min-h-dvh bg-background font-sans antialiased">
+      <body className="min-h-dvh bg-background font-body antialiased">
         {children}
         <PwaRegister />
       </body>

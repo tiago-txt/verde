@@ -164,6 +164,23 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   parcelas, cartão/fatura e efeito no orçamento, e devolve antes/depois.
 - A previsão é determinística, em pt-BR, com alternativa textual no gráfico.
 
+### Linguagem visual (azulejos)
+
+- Os mockups de referência ficam em `docs/design-reference/` e são apenas
+  referência visual; o porte usa componentes, tokens e `lucide-react`.
+- Tokens consolidados em `app/globals.css`/`tailwind.config.ts`: verde-floresta,
+  esmaltes semânticos (esmeralda receita, terracota despesa, cobalto
+  transferência, âmbar orçamento/alerta) e tema claro marfim.
+- Tipografia self-host via `next/font`: Space Grotesk (títulos), Hanken Grotesk
+  (corpo) e JetBrains Mono (números/rótulos). Texto mínimo 12px.
+- Pastilhas `Tile` com 8 motivos derivados do hash da categoria e motivos fixos
+  para transferência, orçamento e fatura; linhas virtuais tracejadas.
+- Decorações (padrões, brilhos e glifos) podem ser desligadas em
+  Configurações > Aparência; pastilhas e emblemas continuam.
+- `lib/design-guard.test.ts` falha se voltarem dependências externas
+  (`fonts.googleapis`, `cdn.tailwindcss`, `googleusercontent`,
+  `material-symbols`) ou texto abaixo de 12px.
+
 ---
 
 ## Estrutura

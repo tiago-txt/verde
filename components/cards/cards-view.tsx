@@ -210,7 +210,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                         <Badge variant="secondary">Arquivado</Badge>
                       )}
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
+                    <p className="text-xs text-muted-foreground">
                       Fecha dia {card.diaFechamento} · vence dia{" "}
                       {card.diaVencimento}
                     </p>
@@ -272,7 +272,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
-                      <p className="text-[11px] text-muted-foreground">
+                      <p className="text-xs text-muted-foreground">
                         Fatura atual · {formatMonthTitle(invoice.chave)}
                       </p>
                       <p className="tabular text-base font-semibold">
@@ -293,7 +293,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                       >
                         {invoice.vencida ? "vencida" : STATUS_LABELS[invoice.status]}
                       </Badge>
-                      <p className="mt-1 text-[11px] text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground">
                         vence {formatDate(invoice.vencimento)}
                       </p>
                     </div>
@@ -301,7 +301,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                 </Link>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
                     <span>
                       Limite usado {formatCurrency(card.limiteUsado)} de{" "}
                       {formatCurrency(card.limite)}
@@ -327,7 +327,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                     label={`Limite usado do cartão ${card.nome}`}
                   />
                   {ratio >= 0.8 && (
-                    <p className={cn("text-[11px] font-medium", tone.text)}>
+                    <p className={cn("text-xs font-medium", tone.text)}>
                       {ratio >= 1
                         ? "Limite do cartão estourado"
                         : `Limite em ${Math.round(ratio * 100)}%`}
@@ -335,7 +335,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                   )}
                 </div>
 
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>
                     {card.contaPagamentoNome
                       ? `Paga pela ${card.contaPagamentoNome}`

@@ -166,7 +166,7 @@ export function CalendarPanel({
             {WEEKDAYS.map((weekday) => (
               <div
                 key={weekday}
-                className="grid h-8 place-items-center text-[11px] font-medium text-muted-foreground"
+                className="grid h-8 place-items-center text-xs font-medium text-muted-foreground"
               >
                 {confirmMode ? weekday.slice(0, 1) : weekday}
               </div>

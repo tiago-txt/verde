@@ -3,6 +3,7 @@
 import { AlertTriangle, Check, CreditCard } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tile } from "@/components/tile";
 import { PaymentProgress } from "@/components/cards/payment-progress";
 import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import { addDaysISO } from "@/lib/dates";
@@ -46,19 +47,14 @@ export function CardInvoiceRow({
         aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}`}
         className="flex min-w-0 flex-1 items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-4"
       >
-        <span
-          className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl"
-          style={{
-            backgroundColor: `${event.cartaoCor}22`,
-            color: event.cartaoCor,
-          }}
-        >
-          {isPaid ? (
-            <Check className="h-4 w-4" aria-hidden="true" />
-          ) : (
-            <CreditCard className="h-4 w-4" aria-hidden="true" />
-          )}
-        </span>
+        <Tile
+          icon={isPaid ? Check : CreditCard}
+          kind="fatura"
+          size="sm"
+          dashed={!isPaid}
+          color={event.cartaoCor}
+          className="mt-0.5"
+        />
 
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5">
@@ -81,19 +77,19 @@ export function CardInvoiceRow({
                 : STATUS_LABELS[event.status]}
             </Badge>
             {isPaid && (
-              <span className="inline-flex items-center gap-1 text-[10px] font-medium text-success">
+              <span className="inline-flex items-center gap-1 text-xs font-medium text-success">
                 <Check className="h-3 w-3" aria-hidden="true" />
                 quitada
               </span>
             )}
           </span>
 
-          <span className="mt-1 block text-[11px] text-muted-foreground">
+          <span className="mt-1 block text-xs text-muted-foreground">
             pago {formatCurrency(event.pago)} · restam{" "}
             {formatCurrency(event.restante)}
           </span>
 
-          <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-[11px] text-muted-foreground">
+          <span className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
             <span>vence {formatDate(event.vencimento)}</span>
             <span aria-hidden="true">·</span>
             <span>

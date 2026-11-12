@@ -151,19 +151,19 @@ export function BudgetDetailDialog({
 
             <div className="grid grid-cols-2 gap-3">
               <div className="rounded-lg border border-border p-3">
-                <p className="text-[11px] text-muted-foreground">Limite</p>
+                <p className="text-xs text-muted-foreground">Limite</p>
                 <p className="tabular text-sm font-semibold">
                   {formatCurrency(summary.limite)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
-                <p className="text-[11px] text-muted-foreground">Gasto</p>
+                <p className="text-xs text-muted-foreground">Gasto</p>
                 <p className="tabular text-sm font-semibold">
                   {formatCurrency(summary.gasto)}
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
-                <p className="text-[11px] text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   {summary.estouro > 0 ? "Estouro" : "Restante"}
                 </p>
                 <p
@@ -182,7 +182,7 @@ export function BudgetDetailDialog({
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3">
-                <p className="text-[11px] text-muted-foreground">Consumo</p>
+                <p className="text-xs text-muted-foreground">Consumo</p>
                 <p className="tabular text-sm font-semibold">{percent}%</p>
               </div>
             </div>
@@ -243,7 +243,7 @@ export function BudgetDetailDialog({
                         <span className="block truncate">
                           {transaction.descricao}
                         </span>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-xs text-muted-foreground">
                           {formatDate(transaction.data)}
                           {transaction.categoriaNome
                             ? ` · ${transaction.categoriaNome}`

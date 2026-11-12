@@ -52,7 +52,7 @@ function Value({
 }) {
   return (
     <div className={cn("min-w-0", align === "right" && "text-right")}>
-      <p className="text-[10px] text-muted-foreground sm:text-[11px]">
+      <p className="text-xs text-muted-foreground sm:text-xs">
         {label}
       </p>
       <p
@@ -81,7 +81,8 @@ function StatementRow({
 }) {
   return (
     <div className="flex items-baseline justify-between gap-6">
-      <dt className="text-xs text-muted-foreground">
+      <dt className="flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="h-1.5 w-1.5 rotate-45 bg-primary/70" aria-hidden="true" />
         {onOpen ? (
           <button
             type="button"
@@ -352,7 +353,7 @@ export function TransactionsSummaryFooter({
               {formatCurrency(breakdownTotal)}
             </span>
           </div>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             A soma dos componentes é {formatCurrency(breakdownTotal)} e o valor
             exibido no rodapé é {formatCurrency(shownTotal)}.
           </p>

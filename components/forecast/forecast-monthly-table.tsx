@@ -89,7 +89,7 @@ export function ForecastMonthlyTable({ months }: { months: ForecastMonth[] }) {
                 {formatCurrency(month.saldoFinal)}
               </span>
             </div>
-            <p className="mt-1 text-[11px] text-muted-foreground">
+            <p className="mt-1 text-xs text-muted-foreground">
               mínimo {formatCurrency(month.minimo)} · entradas{" "}
               {formatCurrency(month.entradas)} · saídas{" "}
               {formatCurrency(month.saidas)}

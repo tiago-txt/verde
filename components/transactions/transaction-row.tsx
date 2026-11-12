@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { CategoryIcon } from "@/components/category-icon";
+import { Tile } from "@/components/tile";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
@@ -107,8 +107,14 @@ export function TransactionRow({
   const valueColor = isTransfer
     ? "text-info"
     : transaction.tipo === "receita"
-      ? "text-success"
-      : "text-destructive";
+      ? "text-primary"
+      : "text-clay";
+  const CategoryGlyph = getIcon(transaction.categoriaIcone);
+  const barColor = isTransfer
+    ? "bg-info"
+    : transaction.tipo === "receita"
+      ? "bg-primary"
+      : "bg-clay";
 
   function handleMainClick() {
     if (longPressTriggered.current) {
@@ -166,7 +172,14 @@ export function TransactionRow({
   }
 
   return (
-    <div className="group relative overflow-hidden">
+    <div className="group relative overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)]">
+      <span
+        aria-hidden="true"
+        className={cn(
+          "absolute inset-y-0 left-0 z-10 w-[3px] transition-[width] duration-150 lg:group-hover:w-1",
+          barColor,
+        )}
+      />
       {/* Ações reveladas por deslize no mobile */}
       {reveal === "left" && (
         <div className="absolute inset-y-0 left-0 flex w-20 items-stretch bg-success/15 lg:hidden">
@@ -180,7 +193,7 @@ export function TransactionRow({
             className="flex w-full flex-col items-center justify-center gap-1 text-success"
           >
             {paid ? <ThumbsDown className="h-5 w-5" /> : <ThumbsUp className="h-5 w-5" />}
-            <span className="text-[10px]">{paid ? "Desfazer" : "Pagar"}</span>
+            <span className="text-xs">{paid ? "Desfazer" : "Pagar"}</span>
           </button>
         </div>
       )}
@@ -196,7 +209,7 @@ export function TransactionRow({
             className="flex w-1/2 flex-col items-center justify-center gap-1 bg-info/15 text-info"
           >
             <Pencil className="h-5 w-5" />
-            <span className="text-[10px]">Editar</span>
+            <span className="text-xs">Editar</span>
           </button>
           <button
             type="button"
@@ -208,7 +221,7 @@ export function TransactionRow({
             className="flex w-1/2 flex-col items-center justify-center gap-1 bg-destructive/15 text-destructive"
           >
             <Trash2 className="h-5 w-5" />
-            <span className="text-[10px]">Excluir</span>
+            <span className="text-xs">Excluir</span>
           </button>
         </div>
       )}
@@ -217,10 +230,10 @@ export function TransactionRow({
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         className={cn(
-          "relative flex min-h-16 items-center gap-2 bg-card px-3 py-3 transition-[transform,background-color] duration-150 sm:gap-3 sm:px-4",
-          !transaction.pago && !isCardPurchase && "bg-muted/10",
+          "relative flex min-h-[72px] items-center gap-2 bg-surface-low px-3 py-3 transition-[transform,background-color] duration-150 sm:gap-3 sm:px-4",
+          !transaction.pago && !isCardPurchase && "bg-forest-container/40",
           selected && "bg-primary/10",
-          !selectionMode && !selected && "lg:hover:bg-accent/60",
+          !selectionMode && !selected && "lg:hover:bg-forest-container",
           reveal === "left" && "translate-x-20",
           reveal === "right" && "-translate-x-36",
         )}
@@ -236,23 +249,20 @@ export function TransactionRow({
         )}
 
         {isTransfer ? (
-          <span className="tile grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-info/10 text-info">
-            {isInvoicePayment ? (
-              <CreditCard className="h-5 w-5" aria-hidden="true" />
-            ) : (
-              <ArrowLeftRight className="h-5 w-5" aria-hidden="true" />
-            )}
-          </span>
+          <Tile
+            icon={isInvoicePayment ? CreditCard : ArrowLeftRight}
+            kind={isInvoicePayment ? "fatura" : "transferencia"}
+            color="hsl(var(--info))"
+            seed={transaction.id}
+            className="h-10 w-10 sm:h-12 sm:w-12"
+          />
         ) : isCardPurchase ? (
-          <span
-            className="tile grid h-11 w-11 shrink-0 place-items-center rounded-xl"
-            style={{
-              backgroundColor: `${transaction.cartaoCor ?? "#818cf8"}22`,
-              color: transaction.cartaoCor ?? "#818cf8",
-            }}
-          >
-            <CreditCard className="h-5 w-5" aria-hidden="true" />
-          </span>
+          <Tile
+            icon={CreditCard}
+            seed={transaction.categoriaId ?? transaction.id}
+            color={transaction.cartaoCor}
+            className="h-10 w-10 sm:h-12 sm:w-12"
+          />
         ) : (
           <button
             type="button"
@@ -271,15 +281,16 @@ export function TransactionRow({
             onPointerDown={(event) => event.stopPropagation()}
             aria-label={`Trocar categoria de ${transaction.descricao}`}
             title="Trocar categoria"
-            className="hover-action group/cat relative shrink-0 rounded-xl outline-none transition-shadow hover:ring-2 hover:ring-primary/60 focus-visible:ring-2 focus-visible:ring-ring"
+            className="hover-action group/cat relative shrink-0 rounded-[12px] outline-none transition-shadow hover:ring-2 hover:ring-primary/60 focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <CategoryIcon
-              icon={transaction.categoriaIcone}
+            <Tile
+              icon={CategoryGlyph}
+              seed={transaction.categoriaId ?? transaction.id}
               color={transaction.categoriaCor}
-              className="h-11 w-11 rounded-xl transition-transform group-hover/cat:scale-105"
+              className="h-10 w-10 transition-transform group-hover/cat:scale-105 sm:h-12 sm:w-12"
             />
             <span
-              className="pointer-events-none absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-primary/40 bg-primary text-primary-foreground opacity-0 shadow-sm transition-opacity group-hover/cat:opacity-100 group-focus-visible/cat:opacity-100"
+              className="pointer-events-none absolute -bottom-1 -right-1 grid h-6 w-6 place-items-center rounded-full border border-primary/40 bg-primary-fill text-primary-fill-foreground opacity-0 shadow-sm transition-opacity group-hover/cat:opacity-100 group-focus-visible/cat:opacity-100"
               aria-hidden="true"
             >
               <Pencil className="h-3.5 w-3.5" />
@@ -344,19 +355,19 @@ export function TransactionRow({
               />
             )}
             {transaction.parcelaGrupoId && (
-              <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="secondary" className="px-1.5 py-0 text-xs">
                 {transaction.parcelaAtual}/{transaction.parcelaTotal}
               </Badge>
             )}
             {isCardPurchase && cardInvoiceKey && (
-              <Badge variant="outline" className="px-1.5 py-0 text-[10px]">
+              <Badge variant="outline" className="px-1.5 py-0 text-xs">
                 Fatura {formatMonthShort(cardInvoiceKey)}
               </Badge>
             )}
             {transaction.orcamentoCiclo && (
               <Badge
                 variant="outline"
-                className="px-1.5 py-0 text-[10px]"
+                className="px-1.5 py-0 text-xs"
                 title={
                   transaction.orcamentoNome
                     ? `Orçamento ${transaction.orcamentoNome}`
@@ -374,7 +385,7 @@ export function TransactionRow({
             )}
             {transaction.tags.length > 0 && (
               <span
-                className="inline-flex items-center gap-0.5 text-[10px] text-gold"
+                className="inline-flex items-center gap-0.5 text-xs text-gold"
                 title={transaction.tags.map((tag) => `#${tag.nome}`).join(" ")}
               >
                 <Tag className="h-3 w-3" aria-hidden="true" />
@@ -438,7 +449,7 @@ export function TransactionRow({
         </div>
 
         <div className="flex shrink-0 items-center gap-1">
-          <span className={cn("tabular text-base font-bold sm:text-lg", valueColor)}>
+          <span className={cn("tabular text-[18px] font-semibold sm:text-xl", valueColor)}>
             {sign}
             {formatCurrency(transaction.valor)}
           </span>
@@ -452,10 +463,10 @@ export function TransactionRow({
               aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
               title={paid ? "Pago — clique para desfazer" : "Não pago — clique para pagar"}
               className={cn(
-                "grid h-12 w-12 shrink-0 place-items-center rounded-xl transition-colors",
+                "grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-grout bg-forest-container transition-colors",
                 paid
-                  ? "text-success hover:bg-success/10"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                  ? "text-primary hover:bg-primary/10"
+                  : "text-muted-foreground hover:bg-forest-high hover:text-foreground",
                 selectionMode && "opacity-80 hover:bg-transparent",
               )}
             >

@@ -40,8 +40,7 @@ export function BudgetProgress({
 
   return (
     <div
-      role="progressbar"
-      aria-label={label ?? "Progresso do orçamento"}
+      role="progressbar"      aria-label={label ?? "Progresso do orçamento"}
       aria-valuemin={0}
       aria-valuemax={limite}
       aria-valuenow={Math.min(gasto, limite)}
@@ -53,9 +52,9 @@ export function BudgetProgress({
           key={index}
           aria-hidden="true"
           className={cn(
-            "flex-1 rounded-[3px] transition-colors",
-            size === "sm" ? "h-1.5" : "h-2",
-            index < filled ? tone.bar : "bg-muted",
+            "flex-none rounded-[4px] border border-grout/50 transition-colors",
+            size === "sm" ? "h-1.5 w-3" : "h-2 w-4",
+            index < filled ? tone.bar : "bg-forest-highest",
           )}
         />
       ))}

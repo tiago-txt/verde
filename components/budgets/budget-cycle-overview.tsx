@@ -31,7 +31,7 @@ export function BudgetCycleOverview({
       <div className="flex items-center justify-between gap-2">
         <div>
           <p className="text-sm font-semibold">{title}</p>
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             {formatMonthTitle(ciclo)}
           </p>
         </div>
@@ -66,7 +66,7 @@ export function BudgetCycleOverview({
                   </span>
                   <span
                     className={cn(
-                      "tabular shrink-0 text-[11px]",
+                      "tabular shrink-0 text-xs",
                       budget.estouro > 0
                         ? "text-destructive"
                         : "text-muted-foreground",
