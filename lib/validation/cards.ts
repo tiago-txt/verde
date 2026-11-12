@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { CARD_BRANDS } from "@/lib/db/schema";
+import { CARD_BRANDS, CARD_CLOSING_BEHAVIORS } from "@/lib/db/schema";
 import {
   hexColorSchema,
   iconNameSchema,
@@ -29,6 +29,7 @@ const cardFields = z.object({
     .int("Dia inválido")
     .min(1, "O dia de vencimento deve estar entre 1 e 31")
     .max(31, "O dia de vencimento deve estar entre 1 e 31"),
+  fechamentoCompra: z.enum(CARD_CLOSING_BEHAVIORS).optional(),
   contaPagamentoId: idSchema.nullable(),
   cor: hexColorSchema,
   icone: iconNameSchema,

@@ -8,7 +8,7 @@ import {
   type TestDatabase,
   type TestUser,
 } from "./testing";
-import { users, type User } from "./schema";
+import { users, transactions, type User } from "./schema";
 import { createAccountAction } from "@/lib/actions/accounts";
 import { createCardAction, payInvoiceAction } from "@/lib/actions/cards";
 import { createTransactionAction } from "@/lib/actions/transactions";
@@ -293,6 +293,74 @@ describe("fatura como evento único", () => {
       todayISO().slice(0, 7),
     );
     expect(balances.byDay[todayISO()]).toBe(95_000);
+  });
+
+  it("pagamento sem fatura_chave entra no FIFO e não duplica os 523", async () => {
+    const fixture = await setupInvoice();
+    const now = new Date();
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "transferencia",
+        descricao: "Pagamento Santander → Nu",
+        valor: 523,
+        data: todayISO(),
+        pago: true,
+        contaId: fixture.accountId,
+        cartaoDestinoId: fixture.cardId,
+        faturaChave: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    const [event] = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    );
+    expect(event).toMatchObject({
+      total: 20_000,
+      pago: 523,
+      restante: 19_477,
+    });
+    expect(
+      getCardInvoiceAccountDeltas(user.workspaceId).get(fixture.accountId),
+    ).toBe(-19_477);
+  });
+
+  it("pagamento sem chave maior que a fatura zera o restante sem negativar", async () => {
+    const fixture = await setupInvoice();
+    const now = new Date();
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "transferencia",
+        descricao: "Pagamento a mais",
+        valor: 25_000,
+        data: todayISO(),
+        pago: true,
+        contaId: fixture.accountId,
+        cartaoDestinoId: fixture.cardId,
+        faturaChave: null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    const [event] = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    );
+    expect(event).toMatchObject({ pago: 20_000, restante: 0, status: "paga" });
+    expect(
+      getCardInvoiceAccountDeltas(user.workspaceId).get(fixture.accountId) ?? 0,
+    ).toBe(0);
   });
 
   it("pagamento em data diferente do vencimento afeta o saldo na data do pagamento", async () => {

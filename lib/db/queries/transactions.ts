@@ -27,8 +27,18 @@ import {
   type RecurrenceTemplate,
   type TransactionType,
 } from "@/lib/db/schema";
-import { eachDayOfMonth, monthRange, todayISO } from "@/lib/dates";
+import { eachDayOfMonth, addMonths, monthRange, todayISO } from "@/lib/dates";
 import { resolveCategoryId } from "@/lib/finance/categories";
+import {
+  cicloCompetencia,
+  faturaDaTransacao,
+  resolveCompetenceCard,
+} from "@/lib/finance/competence";
+import {
+  expandirCategorias,
+  resolverCiclo,
+  transacaoConsomeOrcamento,
+} from "@/lib/finance/budgets";
 import { computeDayBalancesFromDeltas } from "@/lib/finance/day-balance";
 import type { TransactionFilters } from "@/lib/finance/filters";
 import {
@@ -36,6 +46,7 @@ import {
   recurrenceHorizon,
 } from "@/lib/finance/recurrence";
 import { listAllAccounts } from "./accounts";
+import { loadBudgetSeries } from "./budgets";
 import { listCardsForFilter, type CardOption } from "./cards";
 import {
   getSystemCategoryIds,
@@ -71,6 +82,16 @@ export type TransactionListItem = {
   faturaChave: string | null;
   cartaoDiaFechamento: number | null;
   cartaoDiaVencimento: number | null;
+  cartaoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
+  cartaoFechamento: number | null;
+  cartaoVencimento: number | null;
+  cartaoFechamentoCompraSnapshot: "proxima_fatura" | "fatura_atual" | null;
+  orcamentoDeslocamento: number;
+  /** Nome e ciclo do orçamento realmente consumido (competência). */
+  orcamentoNome: string | null;
+  orcamentoCiclo: string | null;
+  /** Vencimento da fatura que define a competência, quando é cartão. */
+  orcamentoViaFatura: string | null;
   /** Transferência real de pagamento de fatura (oculta na lista padrão). */
   vinculadaFatura: boolean;
   categoriaId: string | null;
@@ -145,6 +166,11 @@ function selectTransactionFields() {
     faturaChave: transactions.faturaChave,
     cartaoDiaFechamento: cartao.diaFechamento,
     cartaoDiaVencimento: cartao.diaVencimento,
+    cartaoFechamentoCompra: cartao.fechamentoCompra,
+    cartaoFechamento: transactions.cartaoFechamento,
+    cartaoVencimento: transactions.cartaoVencimento,
+    cartaoFechamentoCompraSnapshot: transactions.cartaoFechamentoCompra,
+    orcamentoDeslocamento: transactions.orcamentoDeslocamento,
     categoriaId: transactions.categoriaId,
     categoriaNome: categories.nome,
     categoriaCor: categories.cor,
@@ -196,6 +222,109 @@ export function getTagsForTransactions(
  * Lista do mês com todos os filtros aplicados no SQL.
  * O resumo é calculado no cliente a partir deste resultado (reflete filtros).
  */
+type BudgetChipInfo = {
+  orcamentoNome: string | null;
+  orcamentoCiclo: string | null;
+  orcamentoViaFatura: string | null;
+};
+
+type BudgetChipRow = {
+  id: string;
+  tipo: TransactionType;
+  data: string;
+  categoriaId: string | null;
+  cartaoId: string | null;
+  cartaoDiaFechamento: number | null;
+  cartaoDiaVencimento: number | null;
+  cartaoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
+  cartaoFechamento: number | null;
+  cartaoVencimento: number | null;
+  cartaoFechamentoCompraSnapshot: "proxima_fatura" | "fatura_atual" | null;
+  orcamentoDeslocamento: number;
+};
+
+/**
+ * Descobre, para cada lançamento, qual orçamento consome o gasto e em qual
+ * ciclo de competência. É o mesmo cálculo usado pelos avisos e pelo painel.
+ */
+function resolveBudgetChips(
+  workspaceId: string,
+  rows: BudgetChipRow[],
+): Map<string, BudgetChipInfo> {
+  const chips = new Map<string, BudgetChipInfo>();
+  const series = loadBudgetSeries(workspaceId);
+  if (series.length === 0) return chips;
+  const categories = listAllCategories(workspaceId);
+
+  for (const row of rows) {
+    if (row.tipo === "transferencia" || !row.categoriaId) continue;
+    const card = row.cartaoId
+      ? resolveCompetenceCard(
+          {
+            cartaoFechamento: row.cartaoFechamento,
+            cartaoVencimento: row.cartaoVencimento,
+            cartaoFechamentoCompra: row.cartaoFechamentoCompraSnapshot,
+          },
+          row.cartaoDiaFechamento && row.cartaoDiaVencimento
+            ? {
+                diaFechamento: row.cartaoDiaFechamento,
+                diaVencimento: row.cartaoDiaVencimento,
+                fechamentoCompra:
+                  row.cartaoFechamentoCompra ?? "proxima_fatura",
+              }
+            : null,
+        )
+      : null;
+    const transaction = {
+      tipo: row.tipo,
+      data: row.data,
+      cartaoId: row.cartaoId,
+      orcamentoDeslocamento: row.orcamentoDeslocamento,
+    };
+    const monthKey = row.data.slice(0, 7);
+
+    for (const item of series) {
+      if (item.arquivado) continue;
+      let found = false;
+      for (let delta = -6; delta <= 6 && !found; delta += 1) {
+        const ciclo = addMonths(monthKey, delta);
+        const resolved = resolverCiclo(item, ciclo);
+        if (!resolved) continue;
+        if (cicloCompetencia(transaction, resolved.diaFechamento, card) !== ciclo) {
+          continue;
+        }
+        const expanded = expandirCategorias(categories, resolved.categoriaIds);
+        if (!expanded.has(row.categoriaId)) continue;
+        if (!transacaoConsomeOrcamento(resolved.origens, row.cartaoId)) continue;
+
+        chips.set(row.id, {
+          orcamentoNome: resolved.nome,
+          orcamentoCiclo: ciclo,
+          orcamentoViaFatura:
+            faturaDaTransacao(transaction, card)?.vencimento ?? null,
+        });
+        found = true;
+      }
+      if (found) break;
+    }
+  }
+
+  return chips;
+}
+
+function withBudgetChip<T extends BudgetChipRow>(
+  workspaceId: string,
+  row: T,
+): T & BudgetChipInfo {
+  const chip = resolveBudgetChips(workspaceId, [row]).get(row.id);
+  return {
+    ...row,
+    orcamentoNome: chip?.orcamentoNome ?? null,
+    orcamentoCiclo: chip?.orcamentoCiclo ?? null,
+    orcamentoViaFatura: chip?.orcamentoViaFatura ?? null,
+  };
+}
+
 export function listMonthTransactions(
   workspaceId: string,
   filters: TransactionFilters,
@@ -297,12 +426,19 @@ export function listMonthTransactions(
     .all();
 
   const tagMap = getTagsForTransactions(workspaceId, rows.map((row) => row.id));
+  const chipMap = resolveBudgetChips(workspaceId, rows);
 
-  return rows.map((row) => ({
-    ...row,
-    vinculadaFatura: Boolean(row.faturaChave),
-    tags: tagMap.get(row.id) ?? [],
-  }));
+  return rows.map((row) => {
+    const chip = chipMap.get(row.id);
+    return {
+      ...row,
+      orcamentoNome: chip?.orcamentoNome ?? null,
+      orcamentoCiclo: chip?.orcamentoCiclo ?? null,
+      orcamentoViaFatura: chip?.orcamentoViaFatura ?? null,
+      vinculadaFatura: Boolean(row.faturaChave),
+      tags: tagMap.get(row.id) ?? [],
+    };
+  });
 }
 
 export function getTransactionById(
@@ -334,7 +470,7 @@ export function getTransactionById(
 
   const tagMap = getTagsForTransactions(workspaceId, [id]);
   return {
-    ...row,
+    ...withBudgetChip(workspaceId, row),
     vinculadaFatura: Boolean(row.faturaChave),
     tags: tagMap.get(id) ?? [],
   };
@@ -661,6 +797,10 @@ export function ensureRecurrencesForMonth(
             categoriaId: resolvedCategoryId,
             observacao: template.observacao,
             recorrenciaId: recurrence.id,
+            orcamentoDeslocamento: template.orcamentoDeslocamento ?? 0,
+            cartaoFechamento: template.cartaoFechamento ?? null,
+            cartaoVencimento: template.cartaoVencimento ?? null,
+            cartaoFechamentoCompra: template.cartaoFechamentoCompra ?? null,
           })
           .onConflictDoNothing()
           .run();

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aplicarEventosAoResumo } from "./budgets";
 import { aplicarFaturasAoResumo } from "./cards";
-import { buildFooterSummary } from "./summary-display";
+import { buildFooterBreakdown, buildFooterSummary } from "./summary-display";
 import type { MonthSummary } from "./summary";
 
 const base: MonthSummary = {
@@ -20,7 +20,7 @@ describe("rodapé de resumo", () => {
       { tipo: "sobra", data: "2026-12-10", valor: 5_000, ciclo: "2026-11" },
     ]);
     const withInvoices = aplicarFaturasAoResumo(withBudget, [
-      { restante: 10_000 },
+      { restante: 10_000, pago: 0 },
     ]);
     const footer = buildFooterSummary(withInvoices);
 
@@ -66,5 +66,42 @@ describe("rodapé de resumo", () => {
     expect(footer.totalPrevisto).toBe(base.saldoPrevisto);
     expect(footer.entradasPrevistas).toBe(base.entradasPrevistas);
     expect(footer.saidasPrevistas).toBe(base.saidasPrevistas);
+  });
+
+  it("a composição da despesa prevista soma exatamente o valor exibido", () => {
+    const withBudget = aplicarEventosAoResumo(base, [
+      { tipo: "provisao", data: "2026-11-10", valor: 20_000, ciclo: "2026-11" },
+      { tipo: "sobra", data: "2026-12-10", valor: 5_000, ciclo: "2026-11" },
+    ]);
+    const withInvoices = aplicarFaturasAoResumo(withBudget, [
+      { restante: 10_000, pago: 4_000 },
+    ]);
+    const footer = buildFooterSummary(withInvoices);
+    const breakdown = buildFooterBreakdown(withInvoices);
+    const total = breakdown.despesa.reduce((sum, item) => sum + item.value, 0);
+
+    expect(total).toBe(footer.saidasPrevistas);
+    expect(breakdown.despesa.map((item) => item.id)).toEqual([
+      "despesas-pagas",
+      "despesas-a-pagar",
+      "pagamentos-fatura",
+      "faturas-restantes",
+      "reservas",
+      "liberacoes",
+    ]);
+  });
+
+  it("a composição da receita prevista soma exatamente o valor exibido", () => {
+    const withBudget = aplicarEventosAoResumo(base, [
+      { tipo: "sobra", data: "2026-12-10", valor: 7_000, ciclo: "2026-11" },
+    ]);
+    const footer = buildFooterSummary(withBudget);
+    const breakdown = buildFooterBreakdown(withBudget);
+    const total = breakdown.receita.reduce((sum, item) => sum + item.value, 0);
+
+    expect(total).toBe(footer.entradasPrevistas);
+    expect(breakdown.receita.find((item) => item.id === "liberacoes")?.value).toBe(
+      -7_000,
+    );
   });
 });

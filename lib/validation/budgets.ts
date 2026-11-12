@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BUDGET_ORIGINS, BUDGET_RESERVE_DATES } from "@/lib/db/schema";
+import { BUDGET_ORIGINS } from "@/lib/db/schema";
 import {
   hexColorSchema,
   iconNameSchema,
@@ -25,13 +25,6 @@ const budgetFields = z.object({
   antecedenciaCiclos: z.union([z.literal(0), z.literal(1)], {
     error: "A antecedência deve ser 0 ou 1 ciclo",
   }),
-  dataDaReserva: z.enum(BUDGET_RESERVE_DATES).default("inicio_do_ciclo"),
-  diaVencimento: z
-    .number()
-    .int("Dia inválido")
-    .min(1, "O dia de vencimento deve estar entre 1 e 31")
-    .max(31, "O dia de vencimento deve estar entre 1 e 31")
-    .default(1),
   origens: z.enum(BUDGET_ORIGINS).default("todas"),
   categoriaIds: z
     .array(idSchema)

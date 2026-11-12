@@ -128,6 +128,7 @@ export function listReportRows(
       cartaoIcone: card.icone,
       cartaoDiaFechamento: card.diaFechamento,
       cartaoDiaVencimento: card.diaVencimento,
+      cartaoFechamentoCompra: card.fechamentoCompra,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
@@ -146,6 +147,8 @@ export function listReportRows(
         ? faturaDaCompra(row.data, {
             diaFechamento: row.cartaoDiaFechamento,
             diaVencimento: row.cartaoDiaVencimento,
+            fechamentoCompra:
+              row.cartaoFechamentoCompra ?? "proxima_fatura",
           })
         : null;
     const cardPaid =

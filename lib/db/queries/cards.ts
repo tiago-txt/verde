@@ -46,6 +46,7 @@ export type CardOption = {
   arquivado: boolean;
   diaFechamento: number;
   diaVencimento: number;
+  fechamentoCompra: "proxima_fatura" | "fatura_atual";
 };
 
 export type CardPurchaseItem = {
@@ -124,6 +125,7 @@ function cardConfig(card: CreditCard): CardCycleConfig {
   return {
     diaFechamento: card.diaFechamento,
     diaVencimento: card.diaVencimento,
+    fechamentoCompra: card.fechamentoCompra,
   };
 }
 
@@ -198,6 +200,30 @@ function invoicesForCard(
     if (payment.cartaoId !== card.id || !payment.faturaChave) continue;
     if (payment.pago) bucket(payment.faturaChave).pago += payment.valor;
     else bucket(payment.faturaChave);
+  }
+
+  // Pagamentos antigos/sem `fatura_chave` são transferências reais: aloca no
+  // FIFO das faturas ainda em aberto para não contar o valor duas vezes (uma
+  // como transferência e outra como restante virtual da fatura).
+  const unlinked = payments.filter(
+    (payment) =>
+      payment.cartaoId === card.id && !payment.faturaChave && payment.pago,
+  );
+  if (unlinked.length > 0) {
+    const ordered = [...buckets.entries()].sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+    for (const payment of unlinked) {
+      let remaining = payment.valor;
+      for (const [, totals] of ordered) {
+        if (remaining <= 0) break;
+        const open = Math.max(0, totals.total - totals.pago);
+        if (open <= 0) continue;
+        const applied = Math.min(open, remaining);
+        totals.pago += applied;
+        remaining -= applied;
+      }
+    }
   }
 
   return [...buckets.entries()]
@@ -578,6 +604,7 @@ export function listCardsForFilter(workspaceId: string): CardOption[] {
       arquivado: creditCards.arquivado,
       diaFechamento: creditCards.diaFechamento,
       diaVencimento: creditCards.diaVencimento,
+      fechamentoCompra: creditCards.fechamentoCompra,
     })
     .from(creditCards)
     .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))

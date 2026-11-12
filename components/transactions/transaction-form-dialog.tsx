@@ -128,6 +128,7 @@ function buildDefaults(
       dataFim: null,
       parcelas: 2,
       baseValor: "total",
+      orcamentoDeslocamento: transaction.orcamentoDeslocamento ?? 0,
     };
   }
 
@@ -163,6 +164,7 @@ function buildDefaults(
     dataFim: null,
     parcelas: 2,
     baseValor: "total",
+    orcamentoDeslocamento: 0,
   };
 }
 
@@ -278,7 +280,7 @@ export function TransactionFormDialog({
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [accountTouched, setAccountTouched] = useState(false);
   const [activeChip, setActiveChip] = useState<
-    "repetir" | "obs" | "tags" | null
+    "repetir" | "obs" | "tags" | "orcamento" | null
   >(null);
   const [budgetHint, setBudgetHint] = useState<BudgetHint | null>(null);
   const [extraTags, setExtraTags] = useState<{ id: string; nome: string }[]>([]);
@@ -313,6 +315,7 @@ export function TransactionFormDialog({
   const observacao = watch("observacao");
   const descricao = watch("descricao");
   const pago = watch("pago");
+  const orcamentoDeslocamento = watch("orcamentoDeslocamento") ?? 0;
   // Lido no render para o react-hook-form assinar as mudanças de estado sujo.
   const isDirty = formState.isDirty;
   const selectedCard =
@@ -405,6 +408,7 @@ export function TransactionFormDialog({
         categoriaId: effectiveCategoryId,
         data,
         cartaoId: cartaoId ?? null,
+        orcamentoDeslocamento,
         excludeTransactionId: transaction?.id ?? null,
       })
         .then((hint) => {
@@ -419,7 +423,7 @@ export function TransactionFormDialog({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId]);
+  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId, orcamentoDeslocamento]);
 
   const repetitionChipLabel =
     mode === "edit"
@@ -477,7 +481,7 @@ export function TransactionFormDialog({
     void form.trigger(["contaId", "cartaoId"]);
   }
 
-  function toggleChip(chip: "repetir" | "obs" | "tags") {
+  function toggleChip(chip: "repetir" | "obs" | "tags" | "orcamento") {
     setActiveChip((current) => (current === chip ? null : chip));
   }
 
@@ -1109,7 +1113,15 @@ export function TransactionFormDialog({
                           <span className="font-medium text-foreground">
                             {budgetHint.nome}
                           </span>{" "}
-                          · restam {formatCurrency(budgetHint.restante)}
+                          · {formatMonthTitle(budgetHint.ciclo)} · restam{" "}
+                          {formatCurrency(budgetHint.restante)}
+                          {budgetHint.viaFatura && (
+                            <>
+                              {" "}
+                              · via fatura de{" "}
+                              {formatDate(budgetHint.viaFatura).slice(0, 5)}
+                            </>
+                          )}
                           {valor > budgetHint.restante && (
                             <span className="font-medium text-destructive">
                               {" "}
@@ -1143,6 +1155,19 @@ export function TransactionFormDialog({
                   />
                 )}
                 <AdvancedChip
+                  icon={Target}
+                  label={
+                    orcamentoDeslocamento !== 0 && budgetHint
+                      ? `Orçamento de ${formatMonthTitle(budgetHint.ciclo)}`
+                      : "Orçamento"
+                  }
+                  active={orcamentoDeslocamento !== 0}
+                  open={activeChip === "orcamento"}
+                  onClick={() => toggleChip("orcamento")}
+                  dot={orcamentoDeslocamento !== 0}
+                  title="Em qual ciclo este lançamento consome o orçamento"
+                />
+                <AdvancedChip
                   icon={StickyNote}
                   label="Obs."
                   active={obsHasValue}
@@ -1165,6 +1190,51 @@ export function TransactionFormDialog({
                   disabled
                   title="Anexo (em breve)"
                 />
+              </div>
+
+              <div className="col-span-2 sm:col-span-6">
+                <Accordion open={activeChip === "orcamento"}>
+                  <div className="space-y-2">
+                    <FieldLabel>Orçamento de</FieldLabel>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {(
+                        [
+                          { value: -1, label: "Ciclo anterior" },
+                          { value: 0, label: "Neste ciclo" },
+                          { value: 1, label: "Próximo ciclo" },
+                        ] as const
+                      ).map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setValue("orcamentoDeslocamento", option.value, {
+                              shouldValidate: true,
+                              shouldDirty: true,
+                            })
+                          }
+                          className={cn(
+                            "min-h-11 rounded-md border px-2 text-xs font-medium transition-colors",
+                            orcamentoDeslocamento === option.value
+                              ? "border-primary/50 bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-accent",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground">
+                      {budgetHint
+                        ? `Consome o ciclo de ${formatMonthTitle(budgetHint.ciclo)}.${
+                            budgetHint.viaFatura
+                              ? ` Compra no cartão entra na fatura que vence em ${formatDate(budgetHint.viaFatura).slice(0, 5)}.`
+                              : ""
+                          }`
+                        : "Nenhum orçamento cobre esta categoria e data."}
+                    </p>
+                  </div>
+                </Accordion>
               </div>
 
               <div className="col-span-2 sm:col-span-6">

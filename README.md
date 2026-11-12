@@ -110,12 +110,37 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   `YYYY-MM` do **vencimento**.
 - O ciclo começa no `dia_fechamento` e termina no dia anterior ao fechamento do
   mês seguinte.
-- **Compra feita no dia do fechamento entra na fatura seguinte.**
+- **Compra feita no dia do fechamento entra na fatura seguinte** por padrão. Cada
+  cartão pode escolher **Nesta fatura** (`fechamento_compra = 'fatura_atual'`) ou
+  **Na próxima fatura** (`'proxima_fatura'`, padrão). A opção muda a fatura, o
+  vencimento e o ciclo de orçamento apenas das compras feitas exatamente no dia
+  do fechamento.
 - O vencimento é o primeiro `dia_vencimento` posterior ao fechamento; se
   `dia_vencimento <= dia_fechamento`, ele cai no mês seguinte ao fechamento.
 - Compras no cartão não movimentam a conta. O pagamento é uma transferência da
   conta para o cartão, com vínculo à fatura (`fatura_chave`). O valor pago reduz
   a conta e a fatura; o restante aparece como linha virtual de fatura no previsto.
+  Pagamentos antigos sem `fatura_chave` são alocados no FIFO das faturas em
+  aberto, para nunca contar o mesmo valor como transferência e como restante.
+
+### Competência do orçamento
+
+- O orçamento consome o ciclo da **data de saída do dinheiro**, não da compra:
+  despesa em conta/Pix/débito usa a própria data; compra no cartão usa o
+  **vencimento da fatura** (cada parcela na fatura dela; estorno idem).
+- `transactions.orcamento_deslocamento` (-2..+2, padrão 0) move o consumo em
+  ciclos relativos ao padrão. No modal e na edição em lote: **Neste ciclo**,
+  **Ciclo anterior** ou **Próximo ciclo**.
+- O ciclo é resolvido por `cicloDaData`/`resolverCiclo`, respeitando vigências,
+  exceções e ciclos excluídos. Fora da janela ativa, o gasto não consome e não
+  gera aviso.
+- Cada lançamento no cartão guarda um snapshot de fechamento/vencimento. Mudar o
+  cartão recalcula os ciclos ainda abertos; ciclos já encerrados permanecem com
+  o snapshot antigo.
+- Relatórios e dashboard continuam pela data da compra; só o consumo do
+  orçamento usa a competência.
+- O chip do lançamento e o painel do orçamento mostram o ciclo real consumido e,
+  no cartão, "via fatura de DD/MM".
 
 Ainda são placeholders: previsão de saldo (etapa 6).
 
@@ -460,8 +485,13 @@ inativo sem sessão; último admin protegido; `ALLOW_SIGNUP=false`; migration 00
 validada contra um banco da etapa anterior e idempotente; e uma varredura que
 falha se houver query de domínio fora de `scopedDb`.
 
-Ajustes de orçamentos/faturas cobertos por testes: linha de orçamento mantida
-com reserva zero no estouro e no limite exato; ciclo passado visível; séries com
+Ajustes de orçamentos/faturas cobertos por testes: competência de compras no
+cartão (12/11 vence em dezembro, 15/12 na fatura seguinte e opção "nesta
+fatura"), parcelas por fatura, despesa em conta pela data, deslocamento ±1,
+ciclo excluído/fora da vigência, avisos e recálculo, fatura sem dupla contagem
+(inclusive pagamento sem `fatura_chave` no FIFO), composição do rodapé somando
+exatamente o previsto e linha de orçamento mantida com reserva zero no estouro e
+no limite exato; ciclo passado visível; séries com
 exceção “só este ciclo”, edição “este e os próximos”, exclusão da série e
 restauração; conflito de categoria por ciclo; gasto em ciclo excluído não
 consome; migration 0008 de `budget_versions`/`budget_cycle_exceptions` e

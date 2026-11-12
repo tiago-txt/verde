@@ -19,6 +19,7 @@ import {
   budgetOverrides,
   budgets,
   CARD_BRANDS,
+  CARD_CLOSING_BEHAVIORS,
   categories,
   CATEGORY_TYPES,
   creditCards,
@@ -38,6 +39,7 @@ import {
   type CsvMapping,
   type NormalizedImportRow,
 } from "@/lib/finance/csv-import";
+import { clampBudgetOffset } from "@/lib/finance/competence";
 import {
   importRequestSchema,
   type ImportRequestInput,
@@ -705,6 +707,11 @@ export async function importJsonAction(input: {
               31,
               Math.max(1, numberValue(row.diaVencimento, 1)),
             ),
+            fechamentoCompra: pick(
+              CARD_CLOSING_BEHAVIORS,
+              row.fechamentoCompra,
+              "proxima_fatura",
+            ),
             contaPagamentoId: accountMap.get(text(row.contaPagamentoId)) ?? null,
             cor: text(row.cor, "#818cf8"),
             icone: text(row.icone, "CreditCard"),
@@ -825,6 +832,22 @@ export async function importJsonAction(input: {
                 .filter((tagId): tagId is string => Boolean(tagId))
             : [],
           pago: booleanValue(rawTemplate.pago),
+          orcamentoDeslocamento: clampBudgetOffset(
+            numberValue(rawTemplate.orcamentoDeslocamento),
+          ),
+          cartaoFechamento:
+            typeof rawTemplate.cartaoFechamento === "number"
+              ? rawTemplate.cartaoFechamento
+              : null,
+          cartaoVencimento:
+            typeof rawTemplate.cartaoVencimento === "number"
+              ? rawTemplate.cartaoVencimento
+              : null,
+          cartaoFechamentoCompra: pick(
+            CARD_CLOSING_BEHAVIORS,
+            rawTemplate.cartaoFechamentoCompra,
+            "proxima_fatura",
+          ),
         };
 
         const id = crypto.randomUUID();
@@ -873,6 +896,22 @@ export async function importJsonAction(input: {
             parcelaTotal:
               typeof row.parcelaTotal === "number" ? row.parcelaTotal : null,
             parcelaGrupoId: text(row.parcelaGrupoId) || null,
+            orcamentoDeslocamento: clampBudgetOffset(
+              numberValue(row.orcamentoDeslocamento),
+            ),
+            cartaoFechamento:
+              typeof row.cartaoFechamento === "number"
+                ? row.cartaoFechamento
+                : null,
+            cartaoVencimento:
+              typeof row.cartaoVencimento === "number"
+                ? row.cartaoVencimento
+                : null,
+            cartaoFechamentoCompra: pick(
+              CARD_CLOSING_BEHAVIORS,
+              row.cartaoFechamentoCompra,
+              "proxima_fatura",
+            ),
             importBatchId: null,
             deletedAt: dateOrNull(row.deletedAt),
           })
@@ -909,15 +948,6 @@ export async function importJsonAction(input: {
               Math.max(1, numberValue(row.diaFechamento, 1)),
             ),
             antecedenciaCiclos: numberValue(row.antecedenciaCiclos) === 1 ? 1 : 0,
-            dataDaReserva: pick(
-              ["inicio_do_ciclo", "vencimento_da_fatura"] as const,
-              row.dataDaReserva,
-              "inicio_do_ciclo",
-            ),
-            diaVencimento: Math.min(
-              31,
-              Math.max(1, numberValue(row.diaVencimento, 1)),
-            ),
             origens: pick(
               ["todas", "cartao", "contas"] as const,
               row.origens,

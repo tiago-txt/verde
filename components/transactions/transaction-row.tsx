@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { CategoryIcon } from "@/components/category-icon";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
-import { formatCurrency, formatMonthShort } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
@@ -94,6 +94,8 @@ export function TransactionRow({
       ? faturaDaCompra(transaction.data, {
           diaFechamento: transaction.cartaoDiaFechamento,
           diaVencimento: transaction.cartaoDiaVencimento,
+          fechamentoCompra:
+            transaction.cartaoFechamentoCompra ?? "proxima_fatura",
         })
       : null;
   const sign =
@@ -351,6 +353,19 @@ export function TransactionRow({
                 Fatura {formatMonthShort(cardInvoiceKey)}
               </Badge>
             )}
+            {transaction.orcamentoCiclo && (
+              <Badge
+                variant="outline"
+                className="px-1.5 py-0 text-[10px]"
+                title={
+                  transaction.orcamentoNome
+                    ? `Orçamento ${transaction.orcamentoNome}`
+                    : "Orçamento consumido"
+                }
+              >
+                Orçamento {formatMonthShort(transaction.orcamentoCiclo)}
+              </Badge>
+            )}
             {transaction.observacao && (
               <StickyNote
                 className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
@@ -399,6 +414,12 @@ export function TransactionRow({
                 />
                 {transaction.categoriaNome && (
                   <span className="truncate">· {transaction.categoriaNome}</span>
+                )}
+                {transaction.orcamentoViaFatura && (
+                  <span className="truncate">
+                    · via fatura de{" "}
+                    {formatDate(transaction.orcamentoViaFatura).slice(0, 5)}
+                  </span>
                 )}
               </>
             ) : (

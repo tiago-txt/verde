@@ -248,6 +248,9 @@ export function BudgetDetailDialog({
                           {transaction.categoriaNome
                             ? ` · ${transaction.categoriaNome}`
                             : ""}
+                          {transaction.viaFatura
+                            ? ` · via fatura de ${formatDate(transaction.viaFatura).slice(0, 5)}`
+                            : ""}
                           {transaction.pago ? " · pago" : ""}
                         </span>
                       </span>

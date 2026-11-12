@@ -19,13 +19,11 @@ import {
   creditCards,
   transactions,
   type BudgetOrigin,
-  type BudgetReserveDate,
   type BudgetVersionData,
 } from "@/lib/db/schema";
-import { addMonths, currentMonth, todayISO } from "@/lib/dates";
+import { addMonths, currentMonth, monthRange, todayISO } from "@/lib/dates";
 import {
   calcularCiclo,
-  calcularGastoDoCiclo,
   categoriasBloqueadas,
   cicloDaData,
   ciclosEntre,
@@ -44,6 +42,12 @@ import {
   type BudgetVersionInput,
 } from "@/lib/finance/budgets";
 import type { TransactionFilters } from "@/lib/finance/filters";
+import {
+  cicloCompetencia,
+  dataCompetencia,
+  faturaDaTransacao,
+  resolveCompetenceCard,
+} from "@/lib/finance/competence";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { listAllCategories } from "./categories";
 
@@ -66,8 +70,6 @@ export type BudgetWithCategories = {
   valorPadrao: number;
   diaFechamento: number;
   antecedenciaCiclos: number;
-  dataDaReserva: BudgetReserveDate;
-  diaVencimento: number;
   origens: BudgetOrigin;
   contaId: string | null;
   cartaoId: string | null;
@@ -97,6 +99,10 @@ export type BudgetSpendingItem = {
   categoriaNome: string | null;
   categoriaCor: string | null;
   categoriaIcone: string | null;
+  /** Data de competência usada no orçamento (vencimento da fatura no cartão). */
+  competenciaData: string;
+  /** Vencimento da fatura, quando o gasto veio do cartão. */
+  viaFatura: string | null;
 };
 
 export type BudgetCycleSummary = BudgetWithCategories &
@@ -197,11 +203,7 @@ function cycleConfigFromBudget(budget: BudgetWithCategories) {
     dataInicio: budget.dataInicio,
     dataFim: budget.dataFim,
     arquivado: budget.arquivado,
-    dataDaReserva: budget.dataDaReserva,
-    diaVencimento: budget.diaVencimento,
     origens: budget.origens,
-    cartaoFechamento: budget.cartaoFechamento,
-    cartaoVencimento: budget.cartaoVencimento,
   };
 }
 
@@ -303,8 +305,6 @@ export function loadBudgetSeries(
       valorPadrao: version.valorPadrao,
       diaFechamento: version.diaFechamento,
       antecedenciaCiclos: version.antecedenciaCiclos,
-      dataDaReserva: version.dataDaReserva,
-      diaVencimento: version.diaVencimento,
       origens: version.origens,
       contaId: version.contaId,
       cartaoId: version.cartaoId,
@@ -340,8 +340,6 @@ export function loadBudgetSeries(
         valorPadrao: budget.valorPadrao,
         diaFechamento: budget.diaFechamento,
         antecedenciaCiclos: budget.antecedenciaCiclos,
-        dataDaReserva: budget.dataDaReserva,
-        diaVencimento: budget.diaVencimento,
         origens: budget.origens,
         contaId: budget.contaId,
         cartaoId: budget.cartaoId,
@@ -496,6 +494,23 @@ function loadSpending(
 
   if (!minStart || !maxEnd) return result;
 
+  const windowStart = monthRange(
+    addMonths(minStart.slice(0, 7), -6),
+  ).start;
+  const windowEnd = monthRange(addMonths(maxEnd.slice(0, 7), 6)).end;
+
+  const cardRows = db
+    .select({
+      id: creditCards.id,
+      diaFechamento: creditCards.diaFechamento,
+      diaVencimento: creditCards.diaVencimento,
+      fechamentoCompra: creditCards.fechamentoCompra,
+    })
+    .from(creditCards)
+    .where(ws(creditCards.workspaceId))
+    .all();
+  const cardById = new Map(cardRows.map((card) => [card.id, card]));
+
   const rows =
     allCategoryIds.size > 0
       ? db
@@ -511,6 +526,10 @@ function loadSpending(
             categoriaIcone: categories.icone,
             tipo: transactions.tipo,
             cartaoId: transactions.cartaoId,
+            orcamentoDeslocamento: transactions.orcamentoDeslocamento,
+            cartaoFechamento: transactions.cartaoFechamento,
+            cartaoVencimento: transactions.cartaoVencimento,
+            cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
             deletedAt: transactions.deletedAt,
           })
           .from(transactions)
@@ -519,9 +538,9 @@ function loadSpending(
             and(
               ws(transactions.workspaceId),
               isNull(transactions.deletedAt),
-              eq(transactions.tipo, "despesa"),
-              gte(transactions.data, minStart),
-              lte(transactions.data, maxEnd),
+              inArray(transactions.tipo, ["despesa", "receita"]),
+              gte(transactions.data, windowStart),
+              lte(transactions.data, windowEnd),
               inArray(transactions.categoriaId, [...allCategoryIds]),
             ),
           )
@@ -541,28 +560,65 @@ function loadSpending(
       {},
     );
 
-    const matching = rows.filter(
-      (row) =>
-        row.categoriaId &&
-        expanded.has(row.categoriaId) &&
-        transacaoConsomeOrcamento(budget.origens, row.cartaoId) &&
-        row.data >= info.inicio &&
-        row.data <= info.fim,
-    );
+    const matching = rows.flatMap((row) => {
+      if (!row.categoriaId || !expanded.has(row.categoriaId)) return [];
+      if (!transacaoConsomeOrcamento(budget.origens, row.cartaoId)) return [];
+      // Receita só reduz orçamento quando é estorno no cartão.
+      if (row.tipo === "receita" && !row.cartaoId) return [];
 
-    const gasto = calcularGastoDoCiclo(
-      matching.map((row) => ({
-        tipo: row.tipo,
-        valor: row.valor,
-        data: row.data,
-        categoriaId: row.categoriaId,
-        cartaoId: row.cartaoId,
-        deletedAt: row.deletedAt,
-      })),
-      expanded,
-      info.inicio,
-      info.fim,
-      budget.origens,
+      const card = row.cartaoId
+        ? resolveCompetenceCard(
+            {
+              cartaoFechamento: row.cartaoFechamento,
+              cartaoVencimento: row.cartaoVencimento,
+              cartaoFechamentoCompra: row.cartaoFechamentoCompra,
+            },
+            cardById.get(row.cartaoId) ?? null,
+          )
+        : null;
+      const competencia = dataCompetencia(
+        {
+          tipo: row.tipo,
+          data: row.data,
+          cartaoId: row.cartaoId,
+          orcamentoDeslocamento: row.orcamentoDeslocamento,
+        },
+        card,
+      );
+      const consumed = cicloCompetencia(
+        {
+          tipo: row.tipo,
+          data: row.data,
+          cartaoId: row.cartaoId,
+          orcamentoDeslocamento: row.orcamentoDeslocamento,
+        },
+        budget.diaFechamento,
+        card,
+      );
+      if (consumed !== ciclo) return [];
+
+      const fatura = faturaDaTransacao(
+        {
+          tipo: row.tipo,
+          data: row.data,
+          cartaoId: row.cartaoId,
+        },
+        card,
+      );
+
+      return [
+        {
+          row,
+          competencia,
+          viaFatura: fatura?.vencimento ?? null,
+        },
+      ];
+    });
+
+    const gasto = matching.reduce(
+      (sum, item) =>
+        sum + (item.row.tipo === "despesa" ? item.row.valor : -item.row.valor),
+      0,
     );
 
     result.set(key, {
@@ -580,7 +636,7 @@ function loadSpending(
               : 0,
       },
       categoriaIds: expanded,
-      transactions: matching.map((row) => ({
+      transactions: matching.map(({ row, competencia, viaFatura }) => ({
         id: row.id,
         descricao: row.descricao,
         valor: row.valor,
@@ -590,6 +646,8 @@ function loadSpending(
         categoriaNome: row.categoriaNome,
         categoriaCor: row.categoriaCor,
         categoriaIcone: row.categoriaIcone,
+        competenciaData: competencia,
+        viaFatura,
       })),
     });
   }
@@ -990,6 +1048,10 @@ export function getBudgetNoticeForTransactions(
     categoriaId: string | null;
     data: string;
     cartaoId?: string | null;
+    orcamentoDeslocamento?: number | null;
+    cartaoFechamento?: number | null;
+    cartaoVencimento?: number | null;
+    cartaoFechamentoCompra?: "proxima_fatura" | "fatura_atual" | null;
   }[],
 ): BudgetNotice | null {
   const relevant = items.filter((item) => item.categoriaId);
@@ -997,6 +1059,19 @@ export function getBudgetNoticeForTransactions(
 
   const series = loadBudgetSeries(workspaceId);
   if (series.length === 0) return null;
+
+  const { db, ws } = scopedDb(workspaceId);
+  const cardRows = db
+    .select({
+      id: creditCards.id,
+      diaFechamento: creditCards.diaFechamento,
+      diaVencimento: creditCards.diaVencimento,
+      fechamentoCompra: creditCards.fechamentoCompra,
+    })
+    .from(creditCards)
+    .where(ws(creditCards.workspaceId))
+    .all();
+  const cardById = new Map(cardRows.map((card) => [card.id, card]));
 
   const categories = listAllCategories(workspaceId);
   const categoryById = categoryInfoMap(workspaceId);
@@ -1013,8 +1088,21 @@ export function getBudgetNoticeForTransactions(
 
   for (const item of relevant) {
     const monthKey = item.data.slice(0, 7);
-    const candidateCycles = new Set(ciclosRelevantesParaMes(monthKey));
-    candidateCycles.add(cicloDaData(item.data, 1));
+    const candidateCycles = new Set<string>();
+    for (let delta = -6; delta <= 6; delta += 1) {
+      candidateCycles.add(addMonths(monthKey, delta));
+    }
+
+    const card = item.cartaoId
+      ? resolveCompetenceCard(
+          {
+            cartaoFechamento: item.cartaoFechamento,
+            cartaoVencimento: item.cartaoVencimento,
+            cartaoFechamentoCompra: item.cartaoFechamentoCompra,
+          },
+          cardById.get(item.cartaoId) ?? null,
+        )
+      : null;
 
     for (const row of series) {
       if (row.arquivado) continue;
@@ -1022,13 +1110,17 @@ export function getBudgetNoticeForTransactions(
         const budget = toResolvedBudget(row, ciclo, categoryById);
         if (!budget) continue;
 
-        const info0 = calcularCiclo(
-          cycleConfigFromBudget(budget),
-          ciclo,
-          0,
-          {},
+        const consumed = cicloCompetencia(
+          {
+            tipo: "despesa",
+            data: item.data,
+            cartaoId: item.cartaoId ?? null,
+            orcamentoDeslocamento: item.orcamentoDeslocamento,
+          },
+          budget.diaFechamento,
+          card,
         );
-        if (item.data < info0.inicio || item.data > info0.fim) continue;
+        if (consumed !== ciclo) continue;
 
         const expanded = expandirCategorias(
           categories,

@@ -18,6 +18,7 @@ import {
 } from "@/lib/db/schema";
 import { getCategoryById } from "@/lib/db/queries/categories";
 import { getSystemCategoryIds } from "@/lib/db/queries/categories";
+import { getCardById } from "@/lib/db/queries/cards";
 import { getBudgetNoticeForTransactions } from "@/lib/db/queries/budgets";
 import { ensureRecurrencesForMonth } from "@/lib/db/queries/transactions";
 import { idsForCategoryChange } from "@/lib/finance/batch";
@@ -270,6 +271,13 @@ export async function createTransactionAction(
   const pago = isCard ? false : data.pago;
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
+  const orcamentoDeslocamento = data.orcamentoDeslocamento ?? 0;
+  const card = isCard && cartaoId ? getCardById(workspaceId, cartaoId) : null;
+  const cardSnapshot = {
+    cartaoFechamento: card?.diaFechamento ?? null,
+    cartaoVencimento: card?.diaVencimento ?? null,
+    cartaoFechamentoCompra: card?.fechamentoCompra ?? null,
+  };
 
   try {
     db.transaction((tx) => {
@@ -286,6 +294,8 @@ export async function createTransactionAction(
           observacao,
           tagIds: data.tagIds,
           pago: false,
+          orcamentoDeslocamento,
+          ...cardSnapshot,
         };
 
         tx.insert(recurrences)
@@ -315,6 +325,8 @@ export async function createTransactionAction(
             categoriaId,
             observacao,
             recorrenciaId: recurrenceId,
+            orcamentoDeslocamento,
+            ...cardSnapshot,
           })
           .run();
 
@@ -347,6 +359,8 @@ export async function createTransactionAction(
               parcelaGrupoId: groupId,
               parcelaAtual: item.numero,
               parcelaTotal: plan.length,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
             })
             .run();
 
@@ -367,6 +381,8 @@ export async function createTransactionAction(
             contaDestinoId,
             categoriaId,
             observacao,
+            orcamentoDeslocamento,
+            ...cardSnapshot,
           })
           .run();
 
@@ -399,7 +415,13 @@ export async function createTransactionAction(
     budgetNotice:
       data.tipo === "despesa"
         ? (getBudgetNoticeForTransactions(workspaceId, [
-            { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
+            {
+              categoriaId,
+              data: data.data,
+              cartaoId: data.cartaoId ?? null,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
+            },
           ]) ?? undefined)
         : undefined,
   };
@@ -487,6 +509,13 @@ export async function updateTransactionAction(
   const pago = isCard ? false : data.pago;
   const contaDestinoId =
     data.tipo === "transferencia" ? data.contaDestinoId : null;
+  const orcamentoDeslocamento = data.orcamentoDeslocamento ?? 0;
+  const card = isCard && cartaoId ? getCardById(workspaceId, cartaoId) : null;
+  const cardSnapshot = {
+    cartaoFechamento: card?.diaFechamento ?? null,
+    cartaoVencimento: card?.diaVencimento ?? null,
+    cartaoFechamentoCompra: card?.fechamentoCompra ?? null,
+  };
 
   const updateValues = {
     tipo: data.tipo,
@@ -497,6 +526,8 @@ export async function updateTransactionAction(
     contaDestinoId,
     categoriaId,
     observacao,
+    orcamentoDeslocamento,
+    ...cardSnapshot,
     updatedAt: new Date(),
   };
   // Em lançamentos agrupados a data é bloqueada; não a regravamos para não
@@ -594,6 +625,8 @@ export async function updateTransactionAction(
               observacao,
               tagIds: data.tagIds,
               pago: false,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
             };
 
             tx.update(recurrences)
@@ -676,7 +709,13 @@ export async function updateTransactionAction(
     budgetNotice:
       data.tipo === "despesa"
         ? (getBudgetNoticeForTransactions(workspaceId, [
-            { categoriaId, data: data.data, cartaoId: data.cartaoId ?? null },
+            {
+              categoriaId,
+              data: data.data,
+              cartaoId: data.cartaoId ?? null,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
+            },
           ]) ?? undefined)
         : undefined,
   };
@@ -902,6 +941,10 @@ export async function duplicateTransactionAction(
         parcelaGrupoId: null,
         parcelaAtual: null,
         parcelaTotal: null,
+        orcamentoDeslocamento: existing.orcamentoDeslocamento,
+        cartaoFechamento: existing.cartaoFechamento,
+        cartaoVencimento: existing.cartaoVencimento,
+        cartaoFechamentoCompra: existing.cartaoFechamentoCompra,
       })
       .run();
 
@@ -924,6 +967,10 @@ export async function duplicateTransactionAction(
               categoriaId: duplicatedCategoryId,
               data: existing.data,
               cartaoId: existing.cartaoId ?? null,
+              orcamentoDeslocamento: existing.orcamentoDeslocamento,
+              cartaoFechamento: existing.cartaoFechamento,
+              cartaoVencimento: existing.cartaoVencimento,
+              cartaoFechamentoCompra: existing.cartaoFechamentoCompra,
             },
           ]) ?? undefined)
         : undefined,
@@ -1037,6 +1084,10 @@ export async function bulkChangeCategoryAction(input: {
       categoriaId: transactions.categoriaId,
       cartaoId: transactions.cartaoId,
       data: transactions.data,
+      orcamentoDeslocamento: transactions.orcamentoDeslocamento,
+      cartaoFechamento: transactions.cartaoFechamento,
+      cartaoVencimento: transactions.cartaoVencimento,
+      cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
     })
     .from(transactions)
     .where(
@@ -1087,9 +1138,92 @@ export async function bulkChangeCategoryAction(input: {
                 categoriaId: category.id,
                 data: row.data,
                 cartaoId: row.cartaoId,
+                orcamentoDeslocamento: row.orcamentoDeslocamento,
+                cartaoFechamento: row.cartaoFechamento,
+                cartaoVencimento: row.cartaoVencimento,
+                cartaoFechamentoCompra: row.cartaoFechamentoCompra,
               })),
           ) ?? undefined)
         : undefined,
+  };
+}
+
+export async function bulkSetBudgetOffsetAction(input: {
+  ids: string[];
+  deslocamento: number;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+
+  const parsed = z
+    .object({
+      ids: batchIdsSchema,
+      deslocamento: z.number().int().min(-2).max(2),
+    })
+    .safeParse(input);
+  if (!parsed.success) return fail("Seleção inválida.");
+
+  const rows = db
+    .select({
+      id: transactions.id,
+      tipo: transactions.tipo,
+      categoriaId: transactions.categoriaId,
+      cartaoId: transactions.cartaoId,
+      data: transactions.data,
+      cartaoFechamento: transactions.cartaoFechamento,
+      cartaoVencimento: transactions.cartaoVencimento,
+      cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
+    })
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+
+  if (rows.length === 0) return fail("Nenhum lançamento encontrado.");
+
+  db.transaction((tx) => {
+    tx.update(transactions)
+      .set({
+        orcamentoDeslocamento: parsed.data.deslocamento,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(
+            transactions.id,
+            rows.map((row) => row.id),
+          ),
+          eq(transactions.workspaceId, workspaceId),
+        ),
+      )
+      .run();
+  });
+
+  revalidateTransactions();
+  return {
+    ok: true,
+    count: rows.length,
+    budgetNotice:
+      (getBudgetNoticeForTransactions(
+        workspaceId,
+        rows
+          .filter((row) => row.tipo === "despesa")
+          .map((row) => ({
+            categoriaId: row.categoriaId,
+            data: row.data,
+            cartaoId: row.cartaoId,
+            orcamentoDeslocamento: parsed.data.deslocamento,
+            cartaoFechamento: row.cartaoFechamento,
+            cartaoVencimento: row.cartaoVencimento,
+            cartaoFechamentoCompra: row.cartaoFechamentoCompra,
+          })),
+      ) ?? undefined),
   };
 }
 

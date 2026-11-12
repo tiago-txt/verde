@@ -4,20 +4,25 @@ import {
   dataDeFechamento,
   intervaloDoCiclo,
   type BudgetEvent,
-} from "@/lib/finance/budgets";import type { MonthSummary } from "@/lib/finance/summary";
+} from "@/lib/finance/budgets";
+import type { CardClosingBehavior } from "@/lib/db/schema";
+import type { MonthSummary } from "@/lib/finance/summary";
 
 /**
  * Regras puras de cartões de crédito e faturas.
  *
  * A fatura é identificada por `YYYY-MM` do vencimento. O ciclo de compras
  * começa no dia de fechamento do mês e termina no dia anterior ao fechamento
- * seguinte (mesma convenção dos orçamentos). Compra feita NO dia do
- * fechamento entra na fatura seguinte.
+ * seguinte (mesma convenção dos orçamentos). Por padrão, compra feita NO dia
+ * do fechamento entra na fatura seguinte; o cartão pode optar por entrar na
+ * fatura atual.
  */
 
 export type CardCycleConfig = {
   diaFechamento: number;
   diaVencimento: number;
+  /** `proxima_fatura` (padrão) ou `fatura_atual` para compra no fechamento. */
+  fechamentoCompra?: CardClosingBehavior;
 };
 
 export type CardInvoiceStatus = "aberta" | "fechada" | "parcial" | "paga";
@@ -64,8 +69,20 @@ const normalizarDia = (dia: number): number =>
   Math.min(31, Math.max(1, Math.trunc(Number.isFinite(dia) ? dia : 1)));
 
 /** Mês de vencimento da fatura que recebe uma compra. */
-export function faturaDaCompra(data: string, card: CardCycleConfig): string {
-  const ciclo = cicloDaData(data, card.diaFechamento);
+export function faturaDaCompra(
+  data: string,
+  card: CardCycleConfig,
+  fechamentoCompra: CardClosingBehavior = card.fechamentoCompra ??
+    "proxima_fatura",
+): string {
+  let ciclo = cicloDaData(data, card.diaFechamento);
+  const fechamentoDoMes = dateInMonth(
+    data.slice(0, 7),
+    normalizarDia(card.diaFechamento),
+  );
+  if (fechamentoCompra === "fatura_atual" && data === fechamentoDoMes) {
+    ciclo = addMonths(ciclo, -1);
+  }
   const mesFechamento = addMonths(ciclo, 1);
   return normalizarDia(card.diaVencimento) >
     normalizarDia(card.diaFechamento)
@@ -227,6 +244,7 @@ export function eventoDaFatura(
 export type MonthSummaryWithCardInvoices = MonthSummary & {
   faturasCartao: number;
   faturasCartaoCount: number;
+  pagamentosFatura: number;
 };
 
 /**
@@ -235,12 +253,17 @@ export type MonthSummaryWithCardInvoices = MonthSummary & {
  */
 export function aplicarFaturasAoResumo<T extends MonthSummary>(
   summary: T,
-  faturas: Pick<CardInvoiceSummary, "restante">[],
-): T & { faturasCartao: number; faturasCartaoCount: number } {
+  faturas: Pick<CardInvoiceSummary, "restante" | "pago">[],
+): T & {
+  faturasCartao: number;
+  faturasCartaoCount: number;
+  pagamentosFatura: number;
+} {
   const total = faturas.reduce(
     (sum, fatura) => sum + Math.max(0, fatura.restante),
     0,
   );
+  const pagamentos = faturas.reduce((sum, fatura) => sum + fatura.pago, 0);
 
   return {
     ...summary,
@@ -248,6 +271,7 @@ export function aplicarFaturasAoResumo<T extends MonthSummary>(
     saldoPrevisto: summary.saldoPrevisto - total,
     faturasCartao: total,
     faturasCartaoCount: faturas.filter((fatura) => fatura.restante > 0).length,
+    pagamentosFatura: pagamentos,
   };
 }
 

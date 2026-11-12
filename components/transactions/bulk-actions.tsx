@@ -6,6 +6,7 @@ import {
   CheckCheck,
   Loader2,
   Tags,
+  Target,
   Trash2,
   X,
   XCircle,
@@ -33,6 +34,7 @@ export function BulkActionsBar({
   onMarkUnpaid,
   onCategory,
   onTag,
+  onBudgetOffset,
   onDelete,
   onExit,
 }: {
@@ -43,6 +45,7 @@ export function BulkActionsBar({
   onMarkUnpaid: () => void;
   onCategory: () => void;
   onTag: () => void;
+  onBudgetOffset: () => void;
   onDelete: () => void;
   onExit: () => void;
 }) {
@@ -77,6 +80,10 @@ export function BulkActionsBar({
       <Button type="button" variant="outline" onClick={onTag}>
         <Tags className="h-4 w-4" />
         Tag
+      </Button>
+      <Button type="button" variant="outline" onClick={onBudgetOffset}>
+        <Target className="h-4 w-4" />
+        Orçamento
       </Button>
       <Button
         type="button"
@@ -183,6 +190,83 @@ export function BulkCategoryDialog({
           >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Aplicar categoria
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function BulkBudgetOffsetDialog({
+  open,
+  onOpenChange,
+  onConfirm,
+  pending,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onConfirm: (deslocamento: number) => void;
+  pending: boolean;
+  error: string | null;
+}) {
+  const [deslocamento, setDeslocamento] = useState(0);
+  useEffect(() => {
+    if (!open) setDeslocamento(0);
+  }, [open]);
+
+  const options = [
+    { value: -1, label: "Ciclo anterior" },
+    { value: 0, label: "Neste ciclo" },
+    { value: 1, label: "Próximo ciclo" },
+  ] as const;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Orçamento de</DialogTitle>
+          <DialogDescription>
+            Move em quantos ciclos estes lançamentos consomem o orçamento. Não
+            altera a data nem a fatura.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="grid gap-2">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setDeslocamento(option.value)}
+              className={`min-h-12 rounded-lg border px-3 text-left text-sm font-medium transition-colors ${
+                deslocamento === option.value
+                  ? "border-primary/50 bg-primary/10 text-primary"
+                  : "border-border text-muted-foreground hover:bg-accent"
+              }`}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+
+        <FormError message={error} />
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onConfirm(deslocamento)}
+            disabled={pending}
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Aplicar orçamento
           </Button>
         </DialogFooter>
       </DialogContent>

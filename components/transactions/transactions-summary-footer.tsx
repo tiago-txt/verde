@@ -1,15 +1,29 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { ChevronDown, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { MonthSummaryWithBudgets } from "@/lib/finance/budgets";
-import { buildFooterSummary } from "@/lib/finance/summary-display";
+import {
+  buildFooterBreakdown,
+  buildFooterSummary,
+} from "@/lib/finance/summary-display";
 import { formatCurrency } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type TransactionsSummaryFooterProps = {
-  summary: MonthSummaryWithBudgets & { faturasCartao?: number };
+  summary: MonthSummaryWithBudgets & {
+    faturasCartao?: number;
+    pagamentosFatura?: number;
+  };
   openingBalance?: number;
 };
 
@@ -58,14 +72,29 @@ function StatementRow({
   label,
   value,
   tone,
+  onOpen,
 }: {
   label: string;
   value: number;
   tone?: string;
+  onOpen?: () => void;
 }) {
   return (
     <div className="flex items-baseline justify-between gap-6">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dt className="text-xs text-muted-foreground">
+        {onOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="inline-flex min-h-6 items-center gap-1 rounded-md text-left underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {label}
+            <Info className="h-3 w-3" aria-hidden="true" />
+          </button>
+        ) : (
+          label
+        )}
+      </dt>
       <dd className={cn("tabular text-sm font-semibold", tone)}>
         {plainNumber.format(value / 100)}
       </dd>
@@ -75,8 +104,10 @@ function StatementRow({
 
 function Statement({
   values,
+  onOpen,
 }: {
   values: ReturnType<typeof buildFooterSummary>;
+  onOpen: (kind: "despesa" | "receita") => void;
 }) {
   return (
     <dl className="space-y-1">
@@ -87,13 +118,21 @@ function Statement({
         value={values.entradas}
         tone="text-success"
       />
-      <StatementRow label="receita prevista" value={values.entradasPrevistas} />
+      <StatementRow
+        label="receita prevista"
+        value={values.entradasPrevistas}
+        onOpen={() => onOpen("receita")}
+      />
       <StatementRow
         label="despesa realizada"
         value={-values.saidas}
         tone="text-destructive"
       />
-      <StatementRow label="despesa prevista" value={-values.saidasPrevistas} />
+      <StatementRow
+        label="despesa prevista"
+        value={-values.saidasPrevistas}
+        onOpen={() => onOpen("despesa")}
+      />
       <div className="border-t border-border/70" />
       <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 pt-0.5">
         <span className="flex items-baseline gap-2">
@@ -128,8 +167,18 @@ export function TransactionsSummaryFooter({
   openingBalance = 0,
 }: TransactionsSummaryFooterProps) {
   const [expanded, setExpanded] = useState(false);
+  const [breakdownKind, setBreakdownKind] = useState<
+    "despesa" | "receita" | null
+  >(null);
   const mobileRef = useRef<HTMLDivElement>(null);
   const values = buildFooterSummary(summary, openingBalance);
+  const breakdown = buildFooterBreakdown(summary);
+  const items = breakdownKind ? breakdown[breakdownKind] : [];
+  const breakdownTotal = items.reduce((sum, item) => sum + item.value, 0);
+  const shownTotal =
+    breakdownKind === "despesa"
+      ? values.saidasPrevistas
+      : values.entradasPrevistas;
 
   // O FAB usa a altura real do resumo para ficar sempre logo acima dele.
   useEffect(() => {
@@ -182,7 +231,7 @@ export function TransactionsSummaryFooter({
         {expanded && (
           <div className="mx-auto max-w-7xl px-8 pt-3">
             <div className="ml-auto w-full max-w-sm border-b border-border pb-3">
-              <Statement values={values} />
+              <Statement values={values} onOpen={setBreakdownKind} />
             </div>
           </div>
         )}
@@ -254,11 +303,61 @@ export function TransactionsSummaryFooter({
 
           {expanded && (
             <div className="mt-2 border-t border-border pt-2">
-              <Statement values={values} />
+              <Statement values={values} onOpen={setBreakdownKind} />
             </div>
           )}
         </div>
       </div>
+
+      <Dialog
+        open={breakdownKind !== null}
+        onOpenChange={(open) => {
+          if (!open) setBreakdownKind(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>De onde vem este número</DialogTitle>
+            <DialogDescription>
+              {breakdownKind === "despesa"
+                ? "Composição da despesa prevista do mês."
+                : "Composição da receita prevista do mês."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-1">
+            {items.map((item) => (
+              <Link
+                key={item.id}
+                href={item.href}
+                onClick={() => setBreakdownKind(null)}
+                className="flex min-h-12 items-center justify-between gap-4 rounded-lg px-2 text-sm transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <span className="text-muted-foreground">{item.label}</span>
+                <span
+                  className={cn(
+                    "tabular font-semibold",
+                    item.value < 0 && "text-success",
+                  )}
+                >
+                  {formatCurrency(item.value)}
+                </span>
+              </Link>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border-t border-border pt-3">
+            <span className="text-sm font-medium">Total</span>
+            <span className="tabular text-base font-bold">
+              {formatCurrency(breakdownTotal)}
+            </span>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            A soma dos componentes é {formatCurrency(breakdownTotal)} e o valor
+            exibido no rodapé é {formatCurrency(shownTotal)}.
+          </p>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -29,9 +29,7 @@ import {
   createBudgetSchema,
   type BudgetFormValues,
 } from "@/lib/validation/budgets";
-import { addDaysISO } from "@/lib/dates";
-import { datasDaFaturaDoCiclo } from "@/lib/finance/budgets";
-import { formatDate, formatMonthTitle } from "@/lib/format";
+import { formatMonthTitle } from "@/lib/format";
 import { getIcon } from "@/lib/icons";
 import { cn } from "@/lib/utils";
 
@@ -58,8 +56,6 @@ function defaultValues(
       valorPadrao: budget.valorPadrao,
       diaFechamento: budget.diaFechamento,
       antecedenciaCiclos: budget.antecedenciaCiclos === 1 ? 1 : 0,
-      dataDaReserva: budget.dataDaReserva,
-      diaVencimento: budget.diaVencimento,
       origens: budget.origens,
       cartaoId: budget.cartaoId,
       categoriaIds: budget.categories.map((category) => category.id),
@@ -76,8 +72,6 @@ function defaultValues(
     valorPadrao: 50000,
     diaFechamento: 1,
     antecedenciaCiclos: 0,
-    dataDaReserva: "inicio_do_ciclo",
-    diaVencimento: 1,
     origens: "todas",
     cartaoId: null,
     categoriaIds: [],
@@ -97,8 +91,6 @@ function relevantChange(
   if (budget.diaFechamento !== values.diaFechamento) return true;
   if (budget.dataInicio !== values.dataInicio) return true;
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
-  if (budget.dataDaReserva !== values.dataDaReserva) return true;
-  if (budget.diaVencimento !== values.diaVencimento) return true;
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
   if (budget.origens !== values.origens) return true;
 
@@ -130,12 +122,7 @@ export function BudgetFormDialog({
   const cor = watch("cor");
   const icone = watch("icone");
   const antecedencia = watch("antecedenciaCiclos");
-  const dataDaReserva = watch("dataDaReserva");
   const diaFechamento = watch("diaFechamento");
-  const diaVencimento = watch("diaVencimento");
-  const cartaoId = watch("cartaoId");
-  const selectedCard =
-    formData.cards.find((card) => card.id === cartaoId) ?? null;
 
   useEffect(() => {
     if (!open) return;
@@ -143,21 +130,6 @@ export function BudgetFormDialog({
     setSearch("");
     reset(defaultValues(budget, formData, ciclo));
   }, [open, budget, formData, ciclo, reset]);
-
-  const preview = useMemo(() => {
-    if (dataDaReserva !== "vencimento_da_fatura") return null;
-    const config = {
-      diaFechamento: Number.isFinite(diaFechamento) ? diaFechamento : 1,
-      diaVencimento: Number.isFinite(diaVencimento) ? diaVencimento : 1,
-      cartaoFechamento: selectedCard?.diaFechamento ?? null,
-      cartaoVencimento: selectedCard?.diaVencimento ?? null,
-    };
-    const datas = datasDaFaturaDoCiclo(ciclo, config);
-    return {
-      ...datas,
-      fim: addDaysISO(datas.fechamento, -1),
-    };
-  }, [dataDaReserva, diaFechamento, diaVencimento, selectedCard, ciclo]);
 
   const categories = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -201,11 +173,9 @@ export function BudgetFormDialog({
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
               Ciclo de {formatMonthTitle(ciclo)} ·{" "}
-              {dataDaReserva === "vencimento_da_fatura" && preview
-                ? `reserva em ${formatDate(preview.vencimento).slice(0, 5)}`
-                : `fecha dia ${
-                    Number.isFinite(diaFechamento) ? diaFechamento : "—"
-                  }`}
+              {`fecha dia ${
+                Number.isFinite(diaFechamento) ? diaFechamento : "—"
+              }`}
             </p>
           </DialogHeader>
 
@@ -295,10 +265,6 @@ export function BudgetFormDialog({
                             shouldValidate: true,
                             shouldDirty: true,
                           });
-                          form.setValue("diaVencimento", card.diaVencimento, {
-                            shouldValidate: true,
-                            shouldDirty: true,
-                          });
                         }
                       }}
                     >
@@ -322,98 +288,32 @@ export function BudgetFormDialog({
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label
-                  htmlFor="budget-vencimento"
-                  className="text-xs text-muted-foreground"
-                >
-                  Dia de vencimento
-                </Label>
-                <Input
-                  id="budget-vencimento"
-                  type="number"
-                  min={1}
-                  max={31}
-                  inputMode="numeric"
-                  aria-invalid={Boolean(formState.errors.diaVencimento)}
-                  {...register("diaVencimento", { valueAsNumber: true })}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  {selectedCard
-                    ? `O cartão vinculado tem prioridade (vence dia ${selectedCard.diaVencimento}).`
-                    : "Usado quando não há cartão vinculado."}
-                </p>
-                <FieldError message={formState.errors.diaVencimento?.message} />
-              </div>
-
-              <div className="space-y-1">
-                <Label
-                  htmlFor="budget-origens"
-                  className="text-xs text-muted-foreground"
-                >
-                  Origens que consomem
-                </Label>
-                <Controller
-                  control={control}
-                  name="origens"
-                  render={({ field }) => (
-                    <NativeSelect
-                      id="budget-origens"
-                      value={field.value}
-                      onChange={(event) => field.onChange(event.target.value)}
-                    >
-                      <option value="todas">Todas</option>
-                      <option value="cartao">Somente cartão</option>
-                      <option value="contas">Somente contas</option>
-                    </NativeSelect>
-                  )}
-                />
-                <p className="text-[11px] text-muted-foreground">
-                  Despesas em conta e cartão contam igualmente; use para separar
-                  o dinheiro físico.
-                </p>
-              </div>
-            </div>
-
             <div className="space-y-1">
               <Label
-                htmlFor="budget-data-reserva"
+                htmlFor="budget-origens"
                 className="text-xs text-muted-foreground"
               >
-                Quando o dinheiro sai da conta
+                Origens que consomem
               </Label>
               <Controller
                 control={control}
-                name="dataDaReserva"
+                name="origens"
                 render={({ field }) => (
                   <NativeSelect
-                    id="budget-data-reserva"
+                    id="budget-origens"
                     value={field.value}
                     onChange={(event) => field.onChange(event.target.value)}
                   >
-                    <option value="inicio_do_ciclo">Início do ciclo</option>
-                    <option value="vencimento_da_fatura">
-                      Vencimento da fatura
-                    </option>
+                    <option value="todas">Todas</option>
+                    <option value="cartao">Somente cartão</option>
+                    <option value="contas">Somente contas</option>
                   </NativeSelect>
                 )}
               />
               <p className="text-[11px] text-muted-foreground">
-                No início do ciclo a reserva entra na abertura do envelope. No
-                vencimento, ela cobre apenas o restante no dia da fatura e não
-                gera liberação.
+                Despesas em conta e cartão contam igualmente; use para separar
+                o dinheiro físico.
               </p>
-              {preview && (
-                <p className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-[11px] text-muted-foreground">
-                  Reserva em{" "}
-                  <span className="font-medium text-foreground">
-                    {formatDate(preview.vencimento).slice(0, 5)}
-                  </span>
-                  , fatura de {formatDate(preview.inicio).slice(0, 5)} a{" "}
-                  {formatDate(preview.fim).slice(0, 5)}
-                </p>
-              )}
             </div>
 
             <div className="space-y-1">
@@ -523,14 +423,7 @@ export function BudgetFormDialog({
               <FieldError message={formState.errors.categoriaIds?.message} />
             </div>
 
-            <div
-              className={cn(
-                "grid gap-3",
-                dataDaReserva === "inicio_do_ciclo"
-                  ? "grid-cols-2"
-                  : "grid-cols-1",
-              )}
-            >
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label
                   htmlFor="budget-conta"
@@ -567,29 +460,27 @@ export function BudgetFormDialog({
                 />
               </div>
 
-              {dataDaReserva === "inicio_do_ciclo" && (
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">
-                    Antecedência
-                  </Label>
-                  <div className="flex min-h-11 items-center justify-between gap-2 rounded-md border border-border px-3">
-                    <span className="text-xs">1 ciclo antes</span>
-                    <Controller
-                      control={control}
-                      name="antecedenciaCiclos"
-                      render={({ field }) => (
-                        <Switch
-                          checked={antecedencia === 1}
-                          onCheckedChange={(checked) =>
-                            field.onChange(checked ? 1 : 0)
-                          }
-                          aria-label="Provisionar com 1 ciclo de antecedência"
-                        />
-                      )}
-                    />
-                  </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">
+                  Antecedência
+                </Label>
+                <div className="flex min-h-11 items-center justify-between gap-2 rounded-md border border-border px-3">
+                  <span className="text-xs">1 ciclo antes</span>
+                  <Controller
+                    control={control}
+                    name="antecedenciaCiclos"
+                    render={({ field }) => (
+                      <Switch
+                        checked={antecedencia === 1}
+                        onCheckedChange={(checked) =>
+                          field.onChange(checked ? 1 : 0)
+                        }
+                        aria-label="Provisionar com 1 ciclo de antecedência"
+                      />
+                    )}
+                  />
                 </div>
-              )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

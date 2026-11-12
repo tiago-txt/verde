@@ -4,11 +4,17 @@ import { and, eq, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
+import { todayISO } from "@/lib/dates";
 import { scopedDb } from "@/lib/db/scoped";
 import { accounts, creditCards, transactions } from "@/lib/db/schema";
 import { getCardInvoiceDetail } from "@/lib/db/queries/cards";
 import { countCardTransactions } from "@/lib/db/queries/cards";
 import { listAllAccounts } from "@/lib/db/queries/accounts";
+import {
+  datasDaFatura,
+  faturaDaCompra,
+  type CardCycleConfig,
+} from "@/lib/finance/cards";
 import { formatCurrency } from "@/lib/format";
 import { idSchema, monthKeySchema } from "@/lib/validation/common";
 import {
@@ -116,6 +122,7 @@ export async function createCardAction(
         limite: data.limite,
         diaFechamento: data.diaFechamento,
         diaVencimento: data.diaVencimento,
+        fechamentoCompra: data.fechamentoCompra ?? "proxima_fatura",
         contaPagamentoId: data.contaPagamentoId,
         cor: data.cor,
         icone: data.icone,
@@ -139,6 +146,75 @@ export async function createCardAction(
   return { ok: true, id };
 }
 
+function refreshOpenCardSnapshots(
+  workspaceId: string,
+  cardId: string,
+  oldConfig: CardCycleConfig,
+  newConfig: CardCycleConfig,
+): void {
+  const { db, ws } = scopedDb(workspaceId);
+  const hoje = todayISO();
+  const rows = db
+    .select({
+      id: transactions.id,
+      data: transactions.data,
+      cartaoFechamento: transactions.cartaoFechamento,
+      cartaoVencimento: transactions.cartaoVencimento,
+      cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
+    })
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        eq(transactions.cartaoId, cardId),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+
+  const updates = new Map<string, CardCycleConfig>();
+  for (const row of rows) {
+    const snapshot: CardCycleConfig =
+      row.cartaoFechamento && row.cartaoVencimento
+        ? {
+            diaFechamento: row.cartaoFechamento,
+            diaVencimento: row.cartaoVencimento,
+            fechamentoCompra:
+              row.cartaoFechamentoCompra ?? oldConfig.fechamentoCompra,
+          }
+        : oldConfig;
+    const chave = faturaDaCompra(row.data, snapshot);
+    const fechamento = datasDaFatura(chave, snapshot).fechamento;
+
+    if (fechamento >= hoje) {
+      // Ciclo ainda aberto: passa a usar a nova regra do cartão.
+      updates.set(row.id, newConfig);
+    } else if (!row.cartaoFechamento || !row.cartaoVencimento) {
+      // Ciclo encerrado sem snapshot: congela a regra antiga.
+      updates.set(row.id, snapshot);
+    }
+  }
+
+  if (updates.size === 0) return;
+  db.transaction((tx) => {
+    for (const [id, config] of updates) {
+      tx.update(transactions)
+        .set({
+          cartaoFechamento: config.diaFechamento,
+          cartaoVencimento: config.diaVencimento,
+          cartaoFechamentoCompra: config.fechamentoCompra ?? "proxima_fatura",
+        })
+        .where(
+          and(
+            eq(transactions.id, id),
+            eq(transactions.workspaceId, workspaceId),
+          ),
+        )
+        .run();
+    }
+  });
+}
+
 export async function updateCardAction(
   input: CardFormValues & { id: string },
 ): Promise<ActionResult> {
@@ -157,7 +233,7 @@ export async function updateCardAction(
   }
 
   const existing = db
-    .select({ id: creditCards.id })
+    .select()
     .from(creditCards)
     .where(
       and(
@@ -177,6 +253,7 @@ export async function updateCardAction(
         limite: data.limite,
         diaFechamento: data.diaFechamento,
         diaVencimento: data.diaVencimento,
+        fechamentoCompra: data.fechamentoCompra ?? "proxima_fatura",
         contaPagamentoId: data.contaPagamentoId,
         cor: data.cor,
         icone: data.icone,
@@ -194,6 +271,28 @@ export async function updateCardAction(
         : error instanceof Error
           ? error.message
           : "Não foi possível salvar o cartão.",
+    );
+  }
+
+  const newClosing = data.fechamentoCompra ?? "proxima_fatura";
+  if (
+    existing.diaFechamento !== data.diaFechamento ||
+    existing.diaVencimento !== data.diaVencimento ||
+    existing.fechamentoCompra !== newClosing
+  ) {
+    refreshOpenCardSnapshots(
+      user.workspaceId,
+      data.id,
+      {
+        diaFechamento: existing.diaFechamento,
+        diaVencimento: existing.diaVencimento,
+        fechamentoCompra: existing.fechamentoCompra,
+      },
+      {
+        diaFechamento: data.diaFechamento,
+        diaVencimento: data.diaVencimento,
+        fechamentoCompra: newClosing,
+      },
     );
   }
 

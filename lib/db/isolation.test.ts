@@ -162,8 +162,6 @@ function budgetInput(overrides: Record<string, unknown> = {}) {
     valorPadrao: 50_000,
     diaFechamento: 1,
     antecedenciaCiclos: 0 as const,
-    dataDaReserva: "inicio_do_ciclo" as const,
-    diaVencimento: 1,
     origens: "todas" as const,
     categoriaIds: [] as string[],
     contaId: null,

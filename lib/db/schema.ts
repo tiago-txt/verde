@@ -50,12 +50,19 @@ export const CARD_BRANDS = [
 ] as const;
 export type CardBrand = (typeof CARD_BRANDS)[number];
 
-/** Quando a reserva do envelope sai da conta. */
+/** Quando a reserva do envelope sai da conta. @deprecated sempre início do ciclo. */
 export const BUDGET_RESERVE_DATES = [
   "inicio_do_ciclo",
   "vencimento_da_fatura",
 ] as const;
 export type BudgetReserveDate = (typeof BUDGET_RESERVE_DATES)[number];
+
+/** Compra feita no dia do fechamento entra nesta fatura ou na próxima. */
+export const CARD_CLOSING_BEHAVIORS = [
+  "proxima_fatura",
+  "fatura_atual",
+] as const;
+export type CardClosingBehavior = (typeof CARD_CLOSING_BEHAVIORS)[number];
 
 /** Origens de gasto que consomem o envelope. */
 export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
@@ -70,8 +77,6 @@ export type BudgetVersionData = {
   valorPadrao: number;
   diaFechamento: number;
   antecedenciaCiclos: number;
-  dataDaReserva: BudgetReserveDate;
-  diaVencimento: number;
   origens: BudgetOrigin;
   contaId: string | null;
   cartaoId: string | null;
@@ -103,6 +108,11 @@ export type RecurrenceTemplate = {
   observacao: string | null;
   tagIds: string[];
   pago: boolean;
+  /** Deslocamento manual do ciclo de orçamento (-2..+2). */
+  orcamentoDeslocamento?: number;
+  cartaoFechamento?: number | null;
+  cartaoVencimento?: number | null;
+  cartaoFechamentoCompra?: CardClosingBehavior | null;
 };
 
 export const users = sqliteTable(
@@ -169,6 +179,12 @@ export const creditCards = sqliteTable(
     limite: integer("limite").notNull().default(0),
     diaFechamento: integer("dia_fechamento").notNull(),
     diaVencimento: integer("dia_vencimento").notNull(),
+    /** Compra no dia do fechamento entra nesta fatura ou na próxima. */
+    fechamentoCompra: text("fechamento_compra", {
+      enum: CARD_CLOSING_BEHAVIORS,
+    })
+      .notNull()
+      .default("proxima_fatura"),
     contaPagamentoId: text("conta_pagamento_id").references(() => accounts.id, {
       onDelete: "set null",
     }),
@@ -284,6 +300,16 @@ export const transactions = sqliteTable(
     parcelaGrupoId: text("parcela_grupo_id"),
     /** Identifica o lote de uma importação de CSV (permite desfazer). */
     importBatchId: text("import_batch_id"),
+    /** Snapshot da regra do cartão no momento do lançamento. */
+    cartaoFechamento: integer("cartao_fechamento"),
+    cartaoVencimento: integer("cartao_vencimento"),
+    cartaoFechamentoCompra: text("cartao_fechamento_compra", {
+      enum: CARD_CLOSING_BEHAVIORS,
+    }),
+    /** Deslocamento manual do ciclo de orçamento (-2..+2). */
+    orcamentoDeslocamento: integer("orcamento_deslocamento")
+      .notNull()
+      .default(0),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },
@@ -331,6 +357,10 @@ export const transactions = sqliteTable(
       table.data,
     ),
     check("transactions_valor_check", sql`${table.valor} >= 0`),
+    check(
+      "transactions_orcamento_deslocamento_check",
+      sql`${table.orcamentoDeslocamento} between -2 and 2`,
+    ),
   ],
 );
 
@@ -387,11 +417,11 @@ export const budgets = sqliteTable(
     valorPadrao: integer("valor_padrao_centavos").notNull().default(0),
     diaFechamento: integer("dia_fechamento").notNull().default(1),
     antecedenciaCiclos: integer("antecedencia_ciclos").notNull().default(0),
-    /** `inicio_do_ciclo` (padrão) ou `vencimento_da_fatura`. */
+    /** @deprecated mantido no banco; a reserva é sempre no início do ciclo. */
     dataDaReserva: text("data_da_reserva", { enum: BUDGET_RESERVE_DATES })
       .notNull()
       .default("inicio_do_ciclo"),
-    /** Vencimento próprio quando não há cartão vinculado. */
+    /** @deprecated mantido no banco; não é mais usado pelo domínio. */
     diaVencimento: integer("dia_vencimento").notNull().default(1),
     /** Origens que consomem: todas, somente cartão ou somente contas. */
     origens: text("origens", { enum: BUDGET_ORIGINS })

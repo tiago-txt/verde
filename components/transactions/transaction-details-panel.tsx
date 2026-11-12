@@ -117,6 +117,8 @@ export function TransactionDetailsPanel({
       ? faturaDaCompra(detail.data, {
           diaFechamento: detail.cartaoDiaFechamento,
           diaVencimento: detail.cartaoDiaVencimento,
+          fechamentoCompra:
+            detail.cartaoFechamentoCompra ?? "proxima_fatura",
         })
       : null;
   const sign =
@@ -265,6 +267,24 @@ export function TransactionDetailsPanel({
                 </div>
               )}
 
+              {!isTransfer && detail.orcamentoCiclo && (
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-muted-foreground">Orçamento</dt>
+                  <dd className="min-w-0 text-right">
+                    <span className="block truncate">
+                      {detail.orcamentoNome ?? "Orçamento"} ·{" "}
+                      {formatMonthShort(detail.orcamentoCiclo)}
+                    </span>
+                    {detail.orcamentoViaFatura && (
+                      <span className="block text-xs text-muted-foreground">
+                        via fatura de{" "}
+                        {formatDate(detail.orcamentoViaFatura).slice(0, 5)}
+                      </span>
+                    )}
+                  </dd>
+                </div>
+              )}
+
               <div className="flex items-center justify-between gap-4">
                 <dt className="text-muted-foreground">
                   {isTransfer ? "Contas" : isCardPurchase ? "Cartão" : "Conta"}
@@ -279,7 +299,9 @@ export function TransactionDetailsPanel({
                       />
                       {cardInvoiceKey && (
                         <span className="text-xs text-muted-foreground">
-                          · fatura {formatMonthShort(cardInvoiceKey)}
+                          {detail.orcamentoViaFatura
+                            ? `· via fatura de ${formatDate(detail.orcamentoViaFatura).slice(0, 5)}`
+                            : `· fatura ${formatMonthShort(cardInvoiceKey)}`}
                         </span>
                       )}
                     </>

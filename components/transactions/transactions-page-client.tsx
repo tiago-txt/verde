@@ -46,6 +46,7 @@ import { FormError } from "@/components/form-feedback";
 import { MonthPicker } from "@/components/calendar/month-picker";
 import {
   BulkActionsBar,
+  BulkBudgetOffsetDialog,
   BulkCategoryDialog,
   BulkDeleteDialog,
   BulkTagDialog,
@@ -67,6 +68,7 @@ import {
   bulkAddTagAction,
   bulkChangeCategoryAction,
   bulkDeleteTransactionsAction,
+  bulkSetBudgetOffsetAction,
   bulkSetPaidAction,
   deleteTransactionAction,
   duplicateTransactionAction,
@@ -215,6 +217,7 @@ export function TransactionsPageClient({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkBudgetOpen, setBulkBudgetOpen] = useState(false);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -699,6 +702,31 @@ export function TransactionsPageClient({
     });
   }
 
+  function bulkChangeBudgetOffset(deslocamento: number) {
+    const ids = [...selectedIds];
+    setBulkError(null);
+
+    startBulkTransition(async () => {
+      const result = await bulkSetBudgetOffsetAction({ ids, deslocamento });
+      if (!result.ok) {
+        setBulkError(result.error);
+        router.refresh();
+        return;
+      }
+
+      setBulkBudgetOpen(false);
+      setSelectedIds(new Set());
+      setFlash(`${result.count} lançamento(s) atualizado(s).`);
+      if (result.budgetNotice) {
+        toast({
+          description: result.budgetNotice.message,
+          tone: result.budgetNotice.tone,
+        });
+      }
+      router.refresh();
+    });
+  }
+
   function changeCategoryOf(target: TransactionListItem, categoryId: string) {
     const category = formData.categories.find(
       (item) => item.id === categoryId,
@@ -980,6 +1008,10 @@ export function TransactionsPageClient({
           onTag={() => {
             setBulkError(null);
             setBulkTagOpen(true);
+          }}
+          onBudgetOffset={() => {
+            setBulkError(null);
+            setBulkBudgetOpen(true);
           }}
           onDelete={() => {
             setBulkError(null);
@@ -1351,6 +1383,17 @@ export function TransactionsPageClient({
         }}
         categories={formData.categories}
         onConfirm={bulkChangeCategory}
+        pending={isBulkPending}
+        error={bulkError}
+      />
+
+      <BulkBudgetOffsetDialog
+        open={bulkBudgetOpen}
+        onOpenChange={(open) => {
+          setBulkBudgetOpen(open);
+          if (!open) setBulkError(null);
+        }}
+        onConfirm={bulkChangeBudgetOffset}
         pending={isBulkPending}
         error={bulkError}
       />

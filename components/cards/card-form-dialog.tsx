@@ -59,6 +59,7 @@ function defaults(
       limite: card.limite,
       diaFechamento: card.diaFechamento,
       diaVencimento: card.diaVencimento,
+      fechamentoCompra: card.fechamentoCompra,
       contaPagamentoId: card.contaPagamentoId,
       cor: card.cor,
       icone: card.icone as CardFormValues["icone"],
@@ -74,6 +75,7 @@ function defaults(
     limite: 100000,
     diaFechamento: 1,
     diaVencimento: 10,
+    fechamentoCompra: "proxima_fatura",
     contaPagamentoId: account?.id ?? null,
     cor: "#818cf8",
     icone: "CreditCard",
@@ -129,7 +131,8 @@ export function CardFormDialog({
               {card ? "Editar cartão" : "Novo cartão"}
             </DialogTitle>
             <p className="text-xs text-muted-foreground">
-              Compra no dia do fechamento entra na fatura seguinte.
+              Defina fechamento, vencimento e a regra para compras no dia do
+              fechamento.
             </p>
           </DialogHeader>
 
@@ -228,6 +231,26 @@ export function CardFormDialog({
                 />
                 <FieldError message={formState.errors.diaVencimento?.message} />
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label
+                htmlFor="card-fechamento-compra"
+                className="text-xs text-muted-foreground"
+              >
+                Compra no dia do fechamento entra
+              </Label>
+              <NativeSelect
+                id="card-fechamento-compra"
+                {...register("fechamentoCompra")}
+              >
+                <option value="proxima_fatura">Na próxima fatura</option>
+                <option value="fatura_atual">Nesta fatura</option>
+              </NativeSelect>
+              <p className="text-[11px] text-muted-foreground">
+                Muda a fatura (e o ciclo de orçamento) apenas das compras feitas
+                exatamente no dia do fechamento.
+              </p>
             </div>
 
             <div className="space-y-1">

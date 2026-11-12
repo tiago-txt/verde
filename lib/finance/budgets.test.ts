@@ -9,7 +9,6 @@ import {
   cicloDaData,
   ciclosRelevantesParaMes,
   dataDeFechamento,
-  datasDaFaturaDoCiclo,
   encontrarConflitoDeCategorias,
   eventosDoCiclo,
   eventoPassaFiltros,
@@ -19,7 +18,6 @@ import {
   orcamentoVigenteNoCiclo,
   resumirEventos,
   transacaoConsomeOrcamento,
-  vencimentoDaReserva,
   type BudgetCycleConfig,
   type BudgetSpendingTransaction,
 } from "./budgets";
@@ -550,143 +548,6 @@ describe("filtros da tela de lançamentos", () => {
   });
 });
 
-const reservaNoVencimento: BudgetCycleConfig = {
-  ...budget,
-  dataDaReserva: "vencimento_da_fatura",
-  diaVencimento: 20,
-};
-
-describe("reserva no vencimento da fatura", () => {
-  it("data a reserva no vencimento e mostra a janela da fatura", () => {
-    const datas = datasDaFaturaDoCiclo("2026-11", reservaNoVencimento);
-    expect(datas).toEqual({
-      chave: "2026-12",
-      inicio: "2026-11-10",
-      fechamento: "2026-12-10",
-      vencimento: "2026-12-20",
-    });
-    expect(vencimentoDaReserva("2026-11", reservaNoVencimento)).toBe(
-      "2026-12-20",
-    );
-  });
-
-  it("vencimento no mês seguinte quando o dia é menor que o fechamento", () => {
-    const config = { ...reservaNoVencimento, diaVencimento: 5 };
-    const datas = datasDaFaturaDoCiclo("2026-11", config);
-    expect(datas.vencimento).toBe("2027-01-05");
-    expect(datas.inicio).toBe("2026-11-10");
-    expect(datas.fechamento).toBe("2026-12-10");
-  });
-
-  it("usa o cartão vinculado quando existir", () => {
-    const config = {
-      ...reservaNoVencimento,
-      diaVencimento: 1,
-      cartaoFechamento: 15,
-      cartaoVencimento: 22,
-    };
-    const datas = datasDaFaturaDoCiclo("2026-11", config);
-    expect(datas).toMatchObject({
-      inicio: "2026-11-15",
-      fechamento: "2026-12-15",
-      vencimento: "2026-12-22",
-    });
-  });
-
-  it("segue a mesma regra de lib/finance/cards.ts", () => {
-    const card = { diaFechamento: 10, diaVencimento: 20 };
-    const fim = intervaloDoCiclo("2026-11", 10).fim;
-    const chave = faturaDaCompra(fim, card);
-    expect(vencimentoDaReserva("2026-11", reservaNoVencimento)).toBe(
-      datasDaFatura(chave, card).vencimento,
-    );
-  });
-
-  it("lida com meses curtos e ano bissexto", () => {
-    const config = {
-      ...reservaNoVencimento,
-      diaFechamento: 1,
-      diaVencimento: 31,
-    };
-    expect(vencimentoDaReserva("2027-01", config)).toBe("2027-02-28");
-    expect(vencimentoDaReserva("2028-01", config)).toBe("2028-02-29");
-  });
-
-  it("gera só a reserva, sem liberação", () => {
-    const events = eventosDoCiclo(reservaNoVencimento, "2026-11", 30000);
-    expect(events).toEqual([
-      {
-        tipo: "provisao",
-        data: "2026-12-20",
-        valor: 40000,
-        ciclo: "2026-11",
-      },
-    ]);
-    expect(events.some((event) => event.tipo === "sobra")).toBe(false);
-  });
-
-  it("ignora a antecedência neste modo", () => {
-    const events = eventosDoCiclo(
-      { ...reservaNoVencimento, antecedenciaCiclos: 1 },
-      "2026-11",
-      30000,
-    );
-    expect(events[0]?.data).toBe("2026-12-20");
-  });
-
-  it("não reserva nada no limite exato nem no estouro, mas a linha existe", () => {
-    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 70000)).toEqual([
-      {
-        tipo: "provisao",
-        data: "2026-12-20",
-        valor: 0,
-        ciclo: "2026-11",
-      },
-    ]);
-    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", 82000)).toEqual([
-      {
-        tipo: "provisao",
-        data: "2026-12-20",
-        valor: 0,
-        ciclo: "2026-11",
-      },
-    ]);
-  });
-
-  it("mantém o indicador (gasto/limite) igual ao modo atual", () => {
-    const atual = calcularCiclo(budget, "2026-11", 30000);
-    const novo = calcularCiclo(reservaNoVencimento, "2026-11", 30000);
-    expect(novo.gasto).toBe(atual.gasto);
-    expect(novo.limite).toBe(atual.limite);
-    expect(novo.restante).toBe(atual.restante);
-    expect(novo.estouro).toBe(atual.estouro);
-    expect(novo.percentual).toBe(atual.percentual);
-    expect(atual.reservaEm).toBe("2026-11-10");
-    expect(novo.reservaEm).toBe("2026-12-20");
-  });
-
-  it("desloca a reserva a cada ciclo (periodicidade)", () => {
-    expect(datasDaFaturaDoCiclo("2026-11", reservaNoVencimento).vencimento).toBe(
-      "2026-12-20",
-    );
-    expect(datasDaFaturaDoCiclo("2026-12", reservaNoVencimento).vencimento).toBe(
-      "2027-01-20",
-    );
-  });
-
-  it("regressão: modo atual continua com provisão e sobra", () => {
-    const events = eventosDoCiclo(
-      { ...budget, dataDaReserva: "inicio_do_ciclo" },
-      "2026-11",
-      30000,
-    );
-    expect(events).toEqual([
-      { tipo: "provisao", data: "2026-11-10", valor: 40000, ciclo: "2026-11" },
-      { tipo: "sobra", data: "2026-12-10", valor: 40000, ciclo: "2026-11" },
-    ]);
-  });
-});
-
 describe("origens e invariante do envelope", () => {
   const inicio = "2026-11-10";
   const fim = "2026-12-09";
@@ -719,7 +580,7 @@ describe("origens e invariante do envelope", () => {
       fim,
       "todas",
     );
-    const events = eventosDoCiclo(reservaNoVencimento, "2026-11", gasto);
+    const events = eventosDoCiclo(budget, "2026-11", gasto);
     const reserva = events[0]?.valor ?? 0;
 
     expect(20000 + 30000 + reserva).toBe(70000);
@@ -734,7 +595,7 @@ describe("origens e invariante do envelope", () => {
       fim,
       "cartao",
     );
-    const config = { ...reservaNoVencimento, origens: "cartao" as const };
+    const config = { ...budget, origens: "cartao" as const };
     const events = eventosDoCiclo(config, "2026-11", gastoCartao);
     expect(gastoCartao + (events[0]?.valor ?? 0)).toBe(70000);
   });
@@ -752,10 +613,10 @@ describe("origens e invariante do envelope", () => {
       "todas",
     );
     expect(gasto).toBe(85000);
-    expect(eventosDoCiclo(reservaNoVencimento, "2026-11", gasto)).toEqual([
+    expect(eventosDoCiclo(budget, "2026-11", gasto)).toEqual([
       {
         tipo: "provisao",
-        data: "2026-12-20",
+        data: "2026-11-10",
         valor: 0,
         ciclo: "2026-11",
       },

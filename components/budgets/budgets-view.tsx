@@ -53,8 +53,6 @@ function relevantChange(
   if (budget.diaFechamento !== values.diaFechamento) return true;
   if (budget.dataInicio !== values.dataInicio) return true;
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
-  if (budget.dataDaReserva !== values.dataDaReserva) return true;
-  if (budget.diaVencimento !== values.diaVencimento) return true;
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
   if (budget.origens !== values.origens) return true;
   const before = budget.categories.map((category) => category.id).sort();
@@ -62,25 +60,6 @@ function relevantChange(
   return (
     before.length !== after.length ||
     before.some((id, index) => id !== after[index])
-  );
-}
-
-function onlyValueChange(
-  budget: BudgetWithCategories,
-  values: BudgetFormValues,
-): boolean {
-  return (
-    budget.diaFechamento === values.diaFechamento &&
-    budget.dataInicio === values.dataInicio &&
-    (budget.dataFim ?? null) === (values.dataFim ?? null) &&
-    budget.dataDaReserva === values.dataDaReserva &&
-    budget.diaVencimento === values.diaVencimento &&
-    (budget.cartaoId ?? null) === (values.cartaoId ?? null) &&
-    budget.origens === values.origens &&
-    budget.categories.length === values.categoriaIds.length &&
-    budget.categories.every((category) =>
-      values.categoriaIds.includes(category.id),
-    )
   );
 }
 
@@ -414,9 +393,7 @@ export function BudgetsView({
                     <p className="text-[11px] text-muted-foreground">
                       {formatDate(summary.inicio).slice(0, 5)} a{" "}
                       {formatDate(summary.fim).slice(0, 5)} ·{" "}
-                      {summary.dataDaReserva === "vencimento_da_fatura"
-                        ? `reserva em ${formatDate(summary.reservaEm).slice(0, 5)}`
-                        : `fecha ${formatDate(summary.fechamento).slice(0, 5)}`}
+                      fecha {formatDate(summary.fechamento).slice(0, 5)}
                     </p>
                   </div>
                 </div>
@@ -494,11 +471,6 @@ export function BudgetsView({
         }}
         budgetNome={editing?.nome ?? "orçamento"}
         ciclo={ciclo}
-        onlyValueChanged={
-          editing && pendingValues
-            ? onlyValueChange(editing, pendingValues)
-            : false
-        }
         pending={isPending}
         error={scopeError}
         onSelect={applyScope}

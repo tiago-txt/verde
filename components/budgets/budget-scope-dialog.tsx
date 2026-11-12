@@ -19,7 +19,6 @@ type BudgetScopeDialogProps = {
   onOpenChange: (open: boolean) => void;
   budgetNome: string;
   ciclo: string;
-  onlyValueChanged: boolean;
   pending: boolean;
   error: string | null;
   onSelect: (scope: Scope) => void;
@@ -57,7 +56,6 @@ export function BudgetScopeDialog({
   onOpenChange,
   budgetNome,
   ciclo,
-  onlyValueChanged,
   pending,
   error,
   onSelect,
@@ -76,18 +74,14 @@ export function BudgetScopeDialog({
 
         <div className="space-y-2">
           {OPTIONS.map((option) => {
-            const disabled = false;
             const Icon = option.icon;
             return (
               <button
                 key={option.scope}
                 type="button"
                 onClick={() => onSelect(option.scope)}
-                disabled={pending || disabled}
-                className={cn(
-                  "flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                  disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
-                )}
+                disabled={pending}
+                className="flex w-full items-start gap-3 rounded-lg border border-border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <Icon
                   className="mt-0.5 h-4 w-4 shrink-0 text-primary"
@@ -96,9 +90,7 @@ export function BudgetScopeDialog({
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-medium">{option.title}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {disabled
-                      ? "Disponível apenas quando só o valor muda."
-                      : option.description}
+                    {option.description}
                   </span>
                 </span>
                 {pending && <Loader2 className="h-4 w-4 animate-spin" />}

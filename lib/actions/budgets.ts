@@ -33,6 +33,7 @@ import {
   resolverCiclo,
   transacaoConsomeOrcamento,
 } from "@/lib/finance/budgets";
+import { cicloCompetencia, faturaDaTransacao } from "@/lib/finance/competence";
 import { idSchema, isoDateSchema } from "@/lib/validation/common";
 import {
   budgetOverrideSchema,
@@ -191,8 +192,6 @@ function versionDataFromForm(
     valorPadrao: data.valorPadrao,
     diaFechamento: data.diaFechamento,
     antecedenciaCiclos: data.antecedenciaCiclos,
-    dataDaReserva: data.dataDaReserva,
-    diaVencimento: data.diaVencimento,
     origens: data.origens,
     contaId,
     cartaoId: data.cartaoId ?? null,
@@ -216,6 +215,9 @@ function insertVersion(
       budgetId,
       vigenteApartir,
       ...data,
+      // Colunas deprecated mantidas no banco apenas por compatibilidade.
+      dataDaReserva: "inicio_do_ciclo",
+      diaVencimento: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
     })
@@ -330,8 +332,6 @@ export async function createBudgetAction(
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
           antecedenciaCiclos: data.antecedenciaCiclos,
-          dataDaReserva: data.dataDaReserva,
-          diaVencimento: data.diaVencimento,
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
           contaId,
@@ -535,8 +535,6 @@ export async function updateBudgetAction(
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
           antecedenciaCiclos: data.antecedenciaCiclos,
-          dataDaReserva: data.dataDaReserva,
-          diaVencimento: data.diaVencimento,
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
           contaId,
@@ -808,6 +806,7 @@ export type BudgetHint = {
   restante: number;
   estouro: number;
   fechamento: string;
+  viaFatura: string | null;
 };
 
 /**
@@ -818,6 +817,7 @@ export async function getBudgetHintAction(input: {
   categoriaId: string;
   data: string;
   cartaoId?: string | null;
+  orcamentoDeslocamento?: number | null;
   excludeTransactionId?: string | null;
 }): Promise<BudgetHint | null> {
   const user = await requireUser();
@@ -828,41 +828,57 @@ export async function getBudgetHintAction(input: {
       categoriaId: idSchema,
       data: isoDateSchema,
       cartaoId: idSchema.nullable().optional(),
+      orcamentoDeslocamento: z.number().int().min(-2).max(2).optional(),
       excludeTransactionId: idSchema.nullable().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return null;
 
-  const { categoriaId, data, cartaoId, excludeTransactionId } = parsed.data;
+  const {
+    categoriaId,
+    data,
+    cartaoId,
+    orcamentoDeslocamento,
+    excludeTransactionId,
+  } = parsed.data;
   const series = loadBudgetSeries(workspaceId);
   const categories = listAllCategories(workspaceId);
-  const candidateCycles = new Set(ciclosRelevantesParaMes(data.slice(0, 7)));
-  candidateCycles.add(cicloDaData(data, 1));
+  const { db, ws } = scopedDb(workspaceId);
+  const cardRows = db
+    .select({
+      id: creditCards.id,
+      diaFechamento: creditCards.diaFechamento,
+      diaVencimento: creditCards.diaVencimento,
+      fechamentoCompra: creditCards.fechamentoCompra,
+    })
+    .from(creditCards)
+    .where(ws(creditCards.workspaceId))
+    .all();
+  const cardById = new Map(cardRows.map((card) => [card.id, card]));
+  const card = cartaoId ? cardById.get(cartaoId) : null;
+  const monthKey = data.slice(0, 7);
+  const candidateCycles = new Set<string>();
+  for (let delta = -6; delta <= 6; delta += 1) {
+    candidateCycles.add(addMonths(monthKey, delta));
+  }
 
   for (const row of series) {
     if (row.arquivado) continue;
     for (const ciclo of candidateCycles) {
       const resolved = resolverCiclo(row, ciclo);
       if (!resolved) continue;
-      const config = {
-        valorPadrao: resolved.valorPadrao,
-        diaFechamento: resolved.diaFechamento,
-        antecedenciaCiclos: resolved.antecedenciaCiclos,
-        dataInicio: resolved.dataInicio,
-        dataFim: resolved.dataFim,
-        arquivado: resolved.arquivado,
-        dataDaReserva: resolved.dataDaReserva,
-        diaVencimento: resolved.diaVencimento,
-        origens: resolved.origens,
-        cartaoFechamento: resolved.cartaoId
-          ? (row.cardsById.get(resolved.cartaoId)?.diaFechamento ?? null)
-          : null,
-        cartaoVencimento: resolved.cartaoId
-          ? (row.cardsById.get(resolved.cartaoId)?.diaVencimento ?? null)
-          : null,
-      };
-      const info0 = calcularCiclo(config, ciclo, 0, {});
-      if (data < info0.inicio || data > info0.fim) continue;
+
+      const consumed = cicloCompetencia(
+        {
+          tipo: "despesa",
+          data,
+          cartaoId: cartaoId ?? null,
+          orcamentoDeslocamento,
+        },
+        resolved.diaFechamento,
+        card,
+      );
+      if (consumed !== ciclo) continue;
 
       const expanded = expandirCategorias(categories, resolved.categoriaIds);
       if (!expanded.has(categoriaId)) continue;
@@ -874,16 +890,31 @@ export async function getBudgetHintAction(input: {
       let gasto = detail.resumo.gasto;
       if (excludeTransactionId) {
         const transaction = getTransactionRaw(workspaceId, excludeTransactionId);
+        const transactionCard = transaction?.cartaoId
+          ? cardById.get(transaction.cartaoId)
+          : null;
         if (
           transaction &&
-          transaction.tipo === "despesa" &&
+          transaction.tipo !== "transferencia" &&
           transaction.categoriaId &&
           expanded.has(transaction.categoriaId) &&
           transacaoConsomeOrcamento(resolved.origens, transaction.cartaoId) &&
-          transaction.data >= detail.resumo.inicio &&
-          transaction.data <= detail.resumo.fim
+          cicloCompetencia(
+            {
+              tipo: transaction.tipo,
+              data: transaction.data,
+              cartaoId: transaction.cartaoId,
+              orcamentoDeslocamento: transaction.orcamentoDeslocamento,
+            },
+            resolved.diaFechamento,
+            transactionCard,
+          ) === ciclo
         ) {
-          gasto = Math.max(0, gasto - transaction.valor);
+          const signed =
+            transaction.tipo === "despesa"
+              ? transaction.valor
+              : -transaction.valor;
+          gasto = Math.max(0, gasto - signed);
         }
       }
 
@@ -896,6 +927,10 @@ export async function getBudgetHintAction(input: {
         restante: Math.max(0, detail.resumo.limite - gasto),
         estouro: Math.max(0, gasto - detail.resumo.limite),
         fechamento: detail.resumo.fechamento,
+        viaFatura: faturaDaTransacao(
+          { tipo: "despesa", data, cartaoId: cartaoId ?? null },
+          card,
+        )?.vencimento ?? null,
       };
     }
   }

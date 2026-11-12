@@ -45,6 +45,70 @@ function seedStage7(db: TestDatabase): void {
     .run(NOW, NOW);
 }
 
+describe("migration 0009 (competência e fechamento do cartão)", () => {
+  it("converte o modo removido e adiciona as colunas novas com padrão", () => {
+    testDb = createPreviousStageDatabase(8);
+    testDb.sqlite
+      .prepare(
+        "insert into workspaces (id, nome, created_at) values ('ws-1', 'Workspace', ?)",
+      )
+      .run(NOW);
+    testDb.sqlite
+      .prepare(
+        `insert into categories (id, workspace_id, nome, tipo, icone, cor, categoria_pai_id, is_system, created_at, updated_at)
+         values ('cat-1', 'ws-1', 'Mercado', 'despesa', 'ShoppingCart', '#84cc16', null, 0, ?, ?)`,
+      )
+      .run(NOW, NOW);
+    testDb.sqlite
+      .prepare(
+        `insert into budgets (id, workspace_id, nome, valor_padrao_centavos, dia_fechamento, antecedencia_ciclos, data_da_reserva, dia_vencimento, origens, conta_id, cartao_id, data_inicio, data_fim, cor, icone, arquivado, created_at, updated_at, categoria_id, mes, valor_limite)
+         values ('budget-1', 'ws-1', 'Alimentação', 50000, 10, 1, 'vencimento_da_fatura', 20, 'cartao', null, null, '2026-01', null, '#34d399', 'Target', 0, ?, ?, 'cat-1', '2026-01', 50000)`,
+      )
+      .run(NOW, NOW);
+
+    migrateRemaining(testDb);
+
+    const budget = testDb.sqlite
+      .prepare("select data_da_reserva from budgets where id = 'budget-1'")
+      .get() as { data_da_reserva: string };
+    expect(budget.data_da_reserva).toBe("inicio_do_ciclo");
+
+    const transactionColumns = testDb.sqlite
+      .prepare("pragma table_info(transactions)")
+      .all() as { name: string; dflt_value: string | null }[];
+    expect(
+      transactionColumns.find((column) => column.name === "orcamento_deslocamento")
+        ?.dflt_value,
+    ).toBe("0");
+    expect(
+      transactionColumns.some((column) => column.name === "cartao_fechamento"),
+    ).toBe(true);
+    expect(
+      transactionColumns.some(
+        (column) => column.name === "cartao_fechamento_compra",
+      ),
+    ).toBe(true);
+
+    const cardColumns = testDb.sqlite
+      .prepare("pragma table_info(credit_cards)")
+      .all() as { name: string; dflt_value: string | null }[];
+    expect(
+      cardColumns.find((column) => column.name === "fechamento_compra")
+        ?.dflt_value,
+    ).toBe("'proxima_fatura'");
+
+    // Idempotente: reaplicar não muda o valor convertido.
+    migrateRemaining(testDb);
+    expect(
+      (
+        testDb.sqlite
+          .prepare("select data_da_reserva from budgets where id = 'budget-1'")
+          .get() as { data_da_reserva: string }
+      ).data_da_reserva,
+    ).toBe("inicio_do_ciclo");
+  });
+});
+
 describe("migration 0008 (versões e exceções de orçamento)", () => {
   it("cria a versão inicial e migra overrides para exceções ajustadas", () => {
     testDb = createPreviousStageDatabase(7);
@@ -74,7 +138,7 @@ describe("migration 0008 (versões e exceções de orçamento)", () => {
       valor_padrao_centavos: 50000,
       dia_fechamento: 10,
       antecedencia_ciclos: 1,
-      data_da_reserva: "vencimento_da_fatura",
+      data_da_reserva: "inicio_do_ciclo",
       dia_vencimento: 20,
       origens: "cartao",
     });

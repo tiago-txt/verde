@@ -27,6 +27,13 @@ const transactionFields = z.object({
     .max(20, "Máximo de 20 tags")
     .refine((ids) => new Set(ids).size === ids.length, "Tags duplicadas"),
   observacao: z.string().trim().max(1000, "Máximo de 1000 caracteres").nullable(),
+  /** Deslocamento manual do ciclo de orçamento (-2..+2). */
+  orcamentoDeslocamento: z
+    .number()
+    .int("Deslocamento inválido")
+    .min(-2, "O deslocamento vai de -2 a +2 ciclos")
+    .max(2, "O deslocamento vai de -2 a +2 ciclos")
+    .optional(),
   repeticao: z.enum(["nenhuma", "fixa", "parcelada"]),
   frequencia: z.enum(RECURRENCE_FREQUENCIES),
   dataFim: isoDateSchema.nullable(),
