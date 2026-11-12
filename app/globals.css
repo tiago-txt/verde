@@ -252,6 +252,33 @@
       line-height: 28px;
     }
   }
+  .row-slot {
+    display: flex;
+    margin-left: auto;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+  }
+  .row-amount {
+    min-width: 0;
+    flex: 0 0 auto;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .light .tile-entity,
+  [data-theme="light"] .tile-entity {
+    background-color: color-mix(
+      in srgb,
+      currentColor 14%,
+      hsl(var(--surface-lowest))
+    );
+    border-color: color-mix(in srgb, currentColor 26%, hsl(var(--grout)));
+  }
+  .light .tile-entity .tile-icon,
+  [data-theme="light"] .tile-entity .tile-icon {
+    filter: brightness(0.62) saturate(1.05);
+  }
   .azulejo-mask {
     mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 78%);
     -webkit-mask-image: radial-gradient(ellipse at 50% 20%, black 0%, transparent 78%);

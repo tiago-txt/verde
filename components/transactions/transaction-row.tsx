@@ -480,13 +480,13 @@ export function TransactionRow({
           </span>
         </div>
 
-        <div className="flex shrink-0 items-center gap-1">
-          <span className={cn("row-value", valueColor)}>
+        <div className="row-slot">
+          <span className={cn("row-value row-amount", valueColor)}>
             {sign}
             {formatCurrency(transaction.valor)}
           </span>
 
-          {!isCardPurchase && (
+          {!isCardPurchase ? (
             <button
               type="button"
               onClick={() => onTogglePaid(transaction, !paid)}
@@ -508,6 +508,8 @@ export function TransactionRow({
                 <ThumbsDown className="h-6 w-6" />
               )}
             </button>
+          ) : (
+            <span className="h-12 w-12 shrink-0" aria-hidden="true" />
           )}
         </div>
       </div>

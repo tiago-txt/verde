@@ -115,7 +115,7 @@ export function Tile({
       >
         {MOTIFS[motif % MOTIFS.length]}
       </svg>
-      <Icon className={cn("relative z-10", dimension.icon, iconClassName)} />
+      <Icon className={cn("tile-icon relative z-10", dimension.icon, iconClassName)} />
     </span>
   );
 }

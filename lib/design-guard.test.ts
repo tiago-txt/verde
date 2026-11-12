@@ -96,6 +96,7 @@ describe("guarda de design", () => {
     }
     expect(css).toContain(".light");
     expect(css).toContain(".dark");
+    expect(css).toContain(".light .tile-entity");
     expect(css).toContain('[data-decorations="normais"]');
     expect(css).toContain('[data-decorations="off"]');
   });
@@ -112,6 +113,16 @@ describe("guarda de design", () => {
       expect(content).toContain("EntityTile");
       expect(content).toContain("row-value");
       expect(content).toContain("row-title");
+      expect(content).toContain("row-slot");
     }
+    const invoice = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "components/transactions/card-invoice-row.tsx",
+      ),
+      "utf8",
+    );
+    expect(invoice).toContain("Banknote");
+    expect(invoice).toContain('variant="outline"');
   });
 });
