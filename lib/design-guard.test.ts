@@ -39,6 +39,16 @@ describe("guarda de design", () => {
     }
   });
 
+  it("não depende de fontes externas no build", () => {
+    for (const file of sourceFiles) {
+      const content = fs.readFileSync(file, "utf8");
+      expect(
+        content.includes("next/font/google"),
+        `${path.relative(process.cwd(), file)} importa fontes do Google`,
+      ).toBe(false);
+    }
+  });
+
   it("não usa texto abaixo de 12px nem fora da escala", () => {
     const allowed = new Set(["12", "13", "15", "18", "20", "24", "28", "32", "34", "48"]);
     for (const file of sourceFiles.filter((item) => item.endsWith(".tsx"))) {

@@ -1,27 +1,34 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, JetBrains_Mono, Space_Grotesk } from "next/font/google";
+import localFont from "next/font/local";
 import { PwaRegister } from "@/components/pwa-register";
 import "./globals.css";
 
-const display = Space_Grotesk({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
+// Fontes self-hosted: o build não depende da rede (Google Fonts).
+const display = localFont({
+  src: "./fonts/space-grotesk-latin.woff2",
+  weight: "500 700",
+  style: "normal",
   variable: "--font-display",
   display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
-const body = Hanken_Grotesk({
-  subsets: ["latin"],
-  weight: ["400", "500", "600"],
+const body = localFont({
+  src: "./fonts/hanken-grotesk-latin.woff2",
+  weight: "400 600",
+  style: "normal",
   variable: "--font-body",
   display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
-const mono = JetBrains_Mono({
-  subsets: ["latin"],
-  weight: ["500", "600"],
+const mono = localFont({
+  src: "./fonts/jetbrains-mono-latin.woff2",
+  weight: "500 600",
+  style: "normal",
   variable: "--font-mono",
   display: "swap",
+  fallback: ["ui-monospace", "monospace"],
 });
 
 export const metadata: Metadata = {
