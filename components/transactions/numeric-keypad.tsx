@@ -17,7 +17,7 @@ export function NumericKeypad({
 }) {
   return (
     <div
-      className={cn("grid grid-cols-3 gap-1.5", className)}
+      className={cn("grid grid-cols-3 gap-0.5", className)}
       role="group"
       aria-label="Teclado numérico"
     >

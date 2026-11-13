@@ -111,7 +111,7 @@ export function CategoryPicker({
         </div>
       )}
 
-      <div className="grid max-h-72 grid-cols-4 gap-2 overflow-y-auto overflow-x-hidden p-0.5 sm:grid-cols-5">
+      <div className="grid max-h-72 grid-cols-3 gap-2 overflow-y-auto overflow-x-hidden p-0.5 sm:grid-cols-5">
         {!parent && !query && (
           <button
             type="button"

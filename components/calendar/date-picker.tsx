@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CalendarDays, X } from "lucide-react";
+import { CalendarDays, ChevronRight, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,6 +35,8 @@ type DatePickerProps = {
   disabled?: boolean;
   autoFocus?: boolean;
   className?: string;
+  /** Linha compacta de 56px no mobile (abre o calendário, sem teclado). */
+  rowMode?: boolean;
   "aria-invalid"?: boolean;
   "aria-describedby"?: string;
 };
@@ -50,6 +52,7 @@ export function DatePicker({
   disabled,
   autoFocus,
   className,
+  rowMode = false,
   "aria-invalid": ariaInvalid,
   "aria-describedby": ariaDescribedBy,
 }: DatePickerProps) {
@@ -123,6 +126,34 @@ export function DatePicker({
     </div>
   );
 
+  const rowTrigger = (
+    <button
+      type="button"
+      id={id}
+      onClick={() => setOpen(true)}
+      disabled={disabled}
+      aria-haspopup="dialog"
+      aria-invalid={ariaInvalid}
+      aria-describedby={ariaDescribedBy}
+      className="flex min-h-14 w-full items-center gap-3 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+    >
+      <CalendarDays
+        className="h-5 w-5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-muted-foreground">Data</span>
+        <span className="block truncate text-base font-medium">
+          {value ? formatDate(value) : "Selecionar data"}
+        </span>
+      </span>
+      <ChevronRight
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+    </button>
+  );
+
   if (isMobile) {
     const draftDate = new Date(`${selection.draft}T12:00:00Z`);
     const rawLongDate = new Intl.DateTimeFormat("pt-BR", {
@@ -135,13 +166,13 @@ export function DatePicker({
 
     return (
       <>
-        {field}
+        {rowMode ? rowTrigger : field}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
-            className="!inset-auto !left-1/2 !top-1/2 !m-0 !w-[min(92vw,360px)] !-translate-x-1/2 !-translate-y-1/2 !rounded-2xl !border-0 p-0"
+            className="flex max-h-[85dvh] flex-col overflow-hidden !inset-auto !left-1/2 !top-1/2 !m-0 !w-[min(92vw,360px)] !-translate-x-1/2 !-translate-y-1/2 !rounded-2xl !border-0 p-0"
             showClose={false}
           >
-            <div className="relative rounded-t-2xl bg-primary px-5 pb-5 pt-4 text-primary-foreground">
+            <div className="relative shrink-0 rounded-t-2xl bg-primary px-5 pb-5 pt-4 text-primary-foreground">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
@@ -153,15 +184,18 @@ export function DatePicker({
               <p className="text-xs font-medium opacity-80">Selecione a data</p>
               <p className="mt-1 text-2xl font-semibold">{longDate}</p>
             </div>
-            <CalendarPanel
-              value={selection.draft}
-              confirmMode
-              onSelect={(iso) =>
-                setSelection((current) => selectDate(current, iso))
-              }
-              onClose={() => setOpen(false)}
-            />
-            <div className="flex items-center justify-end gap-2 border-t border-border px-3 py-2">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <CalendarPanel
+                value={selection.draft}
+                confirmMode
+                compact
+                onSelect={(iso) =>
+                  setSelection((current) => selectDate(current, iso))
+                }
+                onClose={() => setOpen(false)}
+              />
+            </div>
+            <div className="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
               <Button
                 type="button"
                 variant="ghost"

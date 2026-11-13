@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, type LucideIcon } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -44,6 +44,8 @@ type SourceSelectProps = {
   emptyLabel?: string;
   "aria-invalid"?: boolean;
   className?: string;
+  /** Linha compacta de 56px no mobile. */
+  rowMode?: { icon: LucideIcon; label: string };
 };
 
 export function SourceSelect({
@@ -58,6 +60,7 @@ export function SourceSelect({
   title = "Conta ou cartão",
   emptyLabel = "Nenhuma conta ou cartão",
   className,
+  rowMode,
   ...rest
 }: SourceSelectProps) {
   const isMobile = useIsMobile();
@@ -224,19 +227,68 @@ export function SourceSelect({
     </button>
   );
 
+  const rowTrigger = rowMode ? (
+    <button
+      id={id}
+      type="button"
+      onClick={() => setOpen(true)}
+      aria-haspopup="dialog"
+      aria-invalid={rest["aria-invalid"]}
+      className="flex min-h-14 w-full items-center gap-3 py-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      <rowMode.icon
+        className="h-5 w-5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-muted-foreground">
+          {rowMode.label}
+        </span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-2">
+          {selected ? (
+            <EntityTile
+              kind={selected.icone}
+              entity={{
+                id: selected.id,
+                nome: selected.nome,
+                cor: selected.cor,
+                icone: selected.iconeNome,
+              }}
+              size="xs"
+            />
+          ) : (
+            <EntityTile kind="conta" size="xs" />
+          )}
+          <span
+            className={cn(
+              "truncate text-base font-medium",
+              !selected && "text-muted-foreground",
+            )}
+          >
+            {selected?.nome ?? placeholder}
+          </span>
+        </span>
+      </span>
+      <ChevronRight
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+    </button>
+  ) : null;
+
   if (isMobile) {
     return (
       <>
-        {trigger}
+        {rowMode ? rowTrigger : trigger}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
-            className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4"
+            className="max-h-[min(85dvh,var(--verde-sheet-max-h,85dvh))] overflow-hidden p-0"
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
-            <DialogHeader className="pr-10">
+            <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-10">
               <DialogTitle>{title}</DialogTitle>
             </DialogHeader>
-            {list}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">{list}</div>
           </DialogContent>
         </Dialog>
       </>

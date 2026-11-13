@@ -21,6 +21,8 @@ type CalendarPanelProps = {
   onClose: () => void;
   /** Mobile: a seleção vira rascunho até o usuário confirmar em OK. */
   confirmMode?: boolean;
+  /** Cabe em telas pequenas (360×640) sem cortar o rodapé. */
+  compact?: boolean;
 };
 
 export function CalendarPanel({
@@ -28,6 +30,7 @@ export function CalendarPanel({
   onSelect,
   onClose,
   confirmMode = false,
+  compact = false,
 }: CalendarPanelProps) {
   const today = todayISO();
   const [viewMonth, setViewMonth] = useState(
@@ -115,7 +118,7 @@ export function CalendarPanel({
   }
 
   return (
-    <div className="space-y-2 p-2" onKeyDown={handleKeyDown}>
+    <div className={cn("p-2", compact ? "space-y-1" : "space-y-2")} onKeyDown={handleKeyDown}>
       <div className="flex items-center justify-between gap-2">
         <Button
           type="button"
@@ -131,7 +134,7 @@ export function CalendarPanel({
         <button
           type="button"
           onClick={() => setMonthMode((current) => !current)}
-          className="inline-flex min-h-11 items-center gap-1 rounded-md px-3 text-sm font-semibold capitalize hover:bg-accent"
+          className={cn("inline-flex items-center gap-1 rounded-md px-3 text-sm font-semibold capitalize hover:bg-accent", compact ? "min-h-10" : "min-h-11")}
           aria-label="Escolher mês e ano"
         >
           {formatMonthTitle(viewMonth)}
@@ -166,7 +169,7 @@ export function CalendarPanel({
             {WEEKDAYS.map((weekday) => (
               <div
                 key={weekday}
-                className="grid h-8 place-items-center text-xs font-medium text-muted-foreground"
+                className={cn("grid place-items-center text-xs font-medium text-muted-foreground", compact ? "h-7" : "h-8")}
               >
                 {confirmMode ? weekday.slice(0, 1) : weekday}
               </div>
@@ -188,7 +191,7 @@ export function CalendarPanel({
                   aria-label={formatDate(cell.iso)}
                   aria-current={cell.isToday ? "date" : undefined}
                   className={cn(
-                    "grid h-11 w-11 place-items-center rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    "grid place-items-center rounded-full text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", compact ? "h-10 w-10" : "h-11 w-11",
                     !cell.inMonth && "text-muted-foreground/35",
                     cell.isToday &&
                       !selected &&
@@ -204,7 +207,7 @@ export function CalendarPanel({
             })}
           </div>
 
-          <div className="flex items-center justify-end border-t border-border px-1 pt-2">
+          <div className={cn("flex items-center justify-end border-t border-border px-1", compact ? "pt-1" : "pt-2")}>
             <Button
               type="button"
               variant="outline"

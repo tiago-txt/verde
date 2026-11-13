@@ -8,19 +8,22 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
+  CheckCircle2,
   ChevronDown,
+  Circle,
   CopyPlus,
   CreditCard,
   Loader2,
   Paperclip,
+  PencilLine,
   Plus,
   Repeat,
   StickyNote,
+  Tag,
   Tags as TagsIcon,
   Target,
-  ThumbsDown,
-  ThumbsUp,
   Trash2,
+  Wallet,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -218,7 +221,7 @@ function AdvancedChip({
       aria-label={title ?? label}
       title={title}
       className={cn(
-        "flex h-11 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8",
+        "flex h-12 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8",
         active
           ? "border-primary/40 bg-primary/10 text-primary"
           : "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -298,6 +301,24 @@ export function TransactionFormDialog({
   const isMobile = useIsMobile();
 
   useSheetViewport(open);
+
+  useEffect(() => {
+    if (!open || !isMobile || typeof window === "undefined") return;
+    const viewport = window.visualViewport;
+    if (!viewport) return;
+    const root = document.documentElement;
+    const update = () => {
+      root.style.setProperty("--verde-form-h", `${viewport.height}px`);
+    };
+    update();
+    viewport.addEventListener("resize", update);
+    viewport.addEventListener("scroll", update);
+    return () => {
+      viewport.removeEventListener("resize", update);
+      viewport.removeEventListener("scroll", update);
+      root.style.removeProperty("--verde-form-h");
+    };
+  }, [open, isMobile]);
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(createTransactionSchema),
@@ -723,12 +744,41 @@ export function TransactionFormDialog({
         ? "bg-info text-white"
         : "bg-terracotta text-white";
 
+  const suggestionList =
+    descriptionOpen && suggestions.length > 0 ? (
+      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+        {suggestions.map((suggestion) => (
+          <button
+            key={`${suggestion.descricao}-${suggestion.valor}`}
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => applySuggestion(suggestion)}
+            className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
+          >
+            <span className="min-w-0 flex-1 truncate">
+              {suggestion.descricao}
+              {suggestion.categoriaNome && (
+                <span className="ml-2 text-xs text-muted-foreground">
+                  {suggestion.categoriaNome}
+                </span>
+              )}
+            </span>
+            <span className="tabular text-xs text-muted-foreground">
+              {formatCurrency(suggestion.valor)}
+            </span>
+          </button>
+        ))}
+      </div>
+    ) : null;
+
+  const keypadText = keypadDisplay(valor);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className={cn(
           isMobile
-            ? "!inset-0 !h-dvh !max-h-dvh !w-full !max-w-none !translate-x-0 !translate-y-0 !rounded-none !border-0 p-0"
+            ? "!inset-0 !h-[var(--verde-form-h,100dvh)] !max-h-[var(--verde-form-h,100dvh)] !w-full !max-w-none !translate-x-0 !translate-y-0 !overflow-hidden !rounded-none !border-0 p-0"
             : "max-h-[var(--verde-sheet-max-h,92dvh)] overflow-hidden p-0 sm:max-h-[90dvh] sm:max-w-[700px]",
         )}
         showClose={false}
@@ -739,13 +789,13 @@ export function TransactionFormDialog({
           className={cn(
             "flex flex-col",
             isMobile
-              ? "h-dvh"
+              ? "h-full"
               : "max-h-[var(--verde-sheet-max-h,92dvh)] sm:max-h-[90dvh]",
           )}
         >
           {isMobile ? (
-            <div className={cn("shrink-0 px-4 pb-2 pt-3", headerTone)}>
-              <div className="flex items-center justify-between gap-2">
+            <div className={cn("shrink-0 px-4 pb-1 pt-1", headerTone)}>
+              <div className="flex h-12 items-center justify-between gap-2">
                 <p className="text-sm font-medium">
                   {mode === "edit" ? "Editar lançamento" : "Novo lançamento"}
                 </p>
@@ -753,7 +803,7 @@ export function TransactionFormDialog({
                   type="button"
                   onClick={() => handleOpenChange(false)}
                   aria-label="Fechar"
-                  className="grid h-12 w-12 place-items-center rounded-xl bg-black/10 hover:bg-black/20"
+                  className="grid h-12 w-12 place-items-center rounded-xl bg-black/10 transition-colors active:bg-black/20"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -763,7 +813,7 @@ export function TransactionFormDialog({
                 <div
                   role="tablist"
                   aria-label="Tipo de lançamento"
-                  className="mt-2 flex rounded-full bg-black/20 p-1"
+                  className="mt-1 flex h-10 rounded-full bg-black/20 p-0.5"
                 >
                   {(["despesa", "receita", "transferencia"] as TransactionType[])
                     .filter((type) => !(isCard && type === "transferencia"))
@@ -775,7 +825,7 @@ export function TransactionFormDialog({
                         aria-selected={tipo === type}
                         onClick={() => handleTypeChange(type)}
                         className={cn(
-                          "h-11 flex-1 rounded-full px-1 text-xs font-semibold transition-colors",
+                          "h-9 flex-1 rounded-full px-1 text-xs font-semibold transition-colors",
                           tipo === type
                             ? "bg-card text-foreground shadow-sm"
                             : "text-current opacity-75 hover:opacity-100",
@@ -788,38 +838,50 @@ export function TransactionFormDialog({
                     ))}
                 </div>
               ) : (
-                <p className="mt-1 text-xs opacity-80">{TYPE_LABELS[tipo]}</p>
+                <p className="mt-1 flex h-10 items-center justify-center text-xs opacity-80">
+                  {TYPE_LABELS[tipo]}
+                </p>
               )}
 
-              <div className="flex items-center justify-center gap-3 py-2">
+              <div className="mt-1 flex h-14 items-center justify-between gap-3">
                 <button
                   type="button"
-                  onClick={() => setKeypadOpen((current) => !current)}
-                  aria-label={
-                    keypadOpen
-                      ? "Concluir valor"
-                      : "Editar valor com o teclado"
-                  }
+                  onClick={() => setKeypadOpen(true)}
+                  aria-label="Editar valor"
                   aria-expanded={keypadOpen}
-                  className="tabular flex items-baseline gap-1.5 rounded-xl px-1 py-1 text-5xl font-bold transition-colors hover:bg-black/10"
+                  className="flex min-w-0 items-baseline gap-2 rounded-xl py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="text-xl font-medium opacity-80">R$</span>
-                  {keypadDisplay(valor)}
+                  <span
+                    className={cn(
+                      "font-display font-bold leading-none tracking-tight tabular-nums",
+                      keypadText.length > 9
+                        ? "text-3xl"
+                        : "text-[2.75rem]",
+                    )}
+                  >
+                    {keypadText}
+                  </span>
                 </button>
                 {!isCard && (
                   <button
                     type="button"
-                    onClick={() => setValue("pago", !pago, { shouldDirty: true })}
+                    onClick={() =>
+                      setValue("pago", !pago, { shouldDirty: true })
+                    }
                     disabled={paidLocked}
-                    aria-label={pago ? "Marcar como não pago" : "Marcar como pago"}
+                    aria-label={
+                      pago ? "Marcar como não pago" : "Marcar como pago"
+                    }
                     aria-pressed={pago}
-                    className="grid h-12 w-12 place-items-center rounded-xl bg-black/10 disabled:opacity-50"
+                    className="flex h-10 shrink-0 items-center gap-1.5 rounded-full bg-black/15 px-3 text-xs font-semibold disabled:opacity-50"
                   >
                     {pago ? (
-                      <ThumbsUp className="h-6 w-6" />
+                      <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
                     ) : (
-                      <ThumbsDown className="h-6 w-6 opacity-70" />
+                      <Circle className="h-4 w-4" aria-hidden="true" />
                     )}
+                    {pago ? "Pago" : "Não pago"}
                   </button>
                 )}
               </div>
@@ -903,70 +965,232 @@ export function TransactionFormDialog({
             )}
 
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-6">
-              <div className="col-span-2 space-y-1 sm:col-span-6">
-                <FieldLabel htmlFor="transaction-descricao">
-                  Descrição
-                </FieldLabel>
-                <div className="relative">
-                  <Input
-                    id="transaction-descricao"
-                    placeholder={
-                      tipo === "transferencia"
-                        ? "Transferência para poupança"
-                        : "Ex.: Mercado do mês"
-                    }
-                    autoComplete="off"
-                    aria-invalid={Boolean(formState.errors.descricao)}
-                    onFocus={() => setDescriptionOpen(true)}
-                    onKeyDown={(event) => {
-                      if (
-                        event.key === "Enter" &&
-                        !event.ctrlKey &&
-                        !event.metaKey &&
-                        descriptionOpen &&
-                        suggestions[0]
-                      ) {
-                        event.preventDefault();
-                        applySuggestion(suggestions[0]);
-                      }
-                    }}
-                    {...register("descricao", {
-                      onBlur: () =>
-                        window.setTimeout(
-                          () => setDescriptionOpen(false),
-                          150,
-                        ),
-                    })}
+              {isMobile && (
+                <div className="col-span-full divide-y divide-border">
+                  <div className="flex min-h-14 items-center gap-3 py-1">
+                    <PencilLine
+                      className="h-5 w-5 shrink-0 text-muted-foreground"
+                      aria-hidden="true"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <label
+                        htmlFor="transaction-descricao"
+                        className="block text-xs text-muted-foreground"
+                      >
+                        Descrição
+                      </label>
+                      <div className="relative mt-0.5">
+                        <Input
+                          id="transaction-descricao"
+                          placeholder={
+                            tipo === "transferencia"
+                              ? "Transferência para poupança"
+                              : "Ex.: Mercado do mês"
+                          }
+                          autoComplete="off"
+                          aria-invalid={Boolean(formState.errors.descricao)}
+                          onFocus={(event) => {
+                            setDescriptionOpen(true);
+                            const input = event.currentTarget;
+                            window.setTimeout(() => {
+                              input.scrollIntoView({
+                                block: "center",
+                                behavior: "smooth",
+                              });
+                            }, 250);
+                          }}
+                          onKeyDown={(event) => {
+                            if (
+                              event.key === "Enter" &&
+                              !event.ctrlKey &&
+                              !event.metaKey &&
+                              descriptionOpen &&
+                              suggestions[0]
+                            ) {
+                              event.preventDefault();
+                              applySuggestion(suggestions[0]);
+                            }
+                          }}
+                          className="h-7 border-0 bg-transparent p-0 text-base font-medium shadow-none focus-visible:ring-0"
+                          {...register("descricao", {
+                            onBlur: () =>
+                              window.setTimeout(
+                                () => setDescriptionOpen(false),
+                                150,
+                              ),
+                          })}
+                        />
+                        {suggestionList}
+                      </div>
+                    </div>
+                  </div>
+
+                  <Controller
+                    control={control}
+                    name="data"
+                    render={({ field }) => (
+                      <DatePicker
+                        id="transaction-data"
+                        rowMode
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={!canChangeDate}
+                        aria-invalid={Boolean(formState.errors.data)}
+                      />
+                    )}
                   />
 
-                  {descriptionOpen && suggestions.length > 0 && (
-                    <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-                      {suggestions.map((suggestion) => (
-                        <button
-                          key={`${suggestion.descricao}-${suggestion.valor}`}
-                          type="button"
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => applySuggestion(suggestion)}
-                          className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
-                        >
-                          <span className="min-w-0 flex-1 truncate">
-                            {suggestion.descricao}
-                            {suggestion.categoriaNome && (
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                {suggestion.categoriaNome}
-                              </span>
+                  {tipo === "transferencia" ? (
+                    <>
+                      <Controller
+                        control={control}
+                        name="contaId"
+                        render={({ field }) => (
+                          <SourceSelect
+                            id="transaction-conta"
+                            rowMode={{ icon: Wallet, label: "Origem" }}
+                            value={field.value ? `conta:${field.value}` : ""}
+                            onChange={(next) => {
+                              setAccountTouched(true);
+                              field.onChange(
+                                next.slice("conta:".length) || null,
+                              );
+                            }}
+                            accounts={formData.accounts}
+                            cards={[]}
+                            accountsOnly
+                            title="Conta de origem"
+                            aria-invalid={Boolean(formState.errors.contaId)}
+                          />
+                        )}
+                      />
+                      <div
+                        className="flex items-center justify-center py-0.5 text-muted-foreground"
+                        aria-hidden="true"
+                      >
+                        <ArrowRight className="h-4 w-4 rotate-90" />
+                      </div>
+                      <Controller
+                        control={control}
+                        name="contaDestinoId"
+                        render={({ field }) => (
+                          <SourceSelect
+                            id="transaction-destino"
+                            rowMode={{ icon: Wallet, label: "Destino" }}
+                            value={field.value ? `conta:${field.value}` : ""}
+                            onChange={(next) =>
+                              field.onChange(
+                                next.slice("conta:".length) || null,
+                              )
+                            }
+                            accounts={formData.accounts}
+                            cards={[]}
+                            accountsOnly
+                            excludeAccountId={contaId}
+                            title="Conta de destino"
+                            placeholder="Selecione"
+                            aria-invalid={Boolean(
+                              formState.errors.contaDestinoId,
                             )}
-                          </span>
-                          <span className="tabular text-xs text-muted-foreground">
-                            {formatCurrency(suggestion.valor)}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
+                          />
+                        )}
+                      />
+                    </>
+                  ) : (
+                    <SourceSelect
+                      id="transaction-conta"
+                      rowMode={{ icon: Wallet, label: "Conta/Cartão" }}
+                      value={
+                        cartaoId
+                          ? `cartao:${cartaoId}`
+                          : contaId
+                            ? `conta:${contaId}`
+                            : ""
+                      }
+                      aria-invalid={Boolean(
+                        formState.errors.contaId || formState.errors.cartaoId,
+                      )}
+                      onChange={handleSourceChange}
+                      accounts={formData.accounts}
+                      cards={formData.cards}
+                      emptyLabel="Nenhuma conta ou cartão"
+                    />
+                  )}
+
+                  {tipo !== "transferencia" && (
+                    <Controller
+                      control={control}
+                      name="categoriaId"
+                      render={({ field }) => (
+                        <CategorySelect
+                          id="transaction-categoria"
+                          rowMode={{ icon: Tag, label: "Categoria" }}
+                          options={categoryOptions}
+                          value={field.value}
+                          onChange={field.onChange}
+                          disabled={formState.isSubmitting}
+                        />
+                      )}
+                    />
                   )}
                 </div>
-                <FieldError message={formState.errors.descricao?.message} />
-              </div>
+              )}
+
+              {isMobile && (
+                <div className="col-span-full space-y-1 px-1">
+                  <FieldError message={formState.errors.descricao?.message} />
+                  <FieldError message={formState.errors.valor?.message} />
+                  <FieldError message={formState.errors.data?.message} />
+                  <FieldError message={formState.errors.contaId?.message} />
+                  <FieldError message={formState.errors.cartaoId?.message} />
+                  <FieldError
+                    message={formState.errors.categoriaId?.message}
+                  />
+                </div>
+              )}
+
+              {!isMobile && (
+                <div className="col-span-2 space-y-1 sm:col-span-6">
+                  <FieldLabel htmlFor="transaction-descricao">
+                    Descrição
+                  </FieldLabel>
+                  <div className="relative">
+                    <Input
+                      id="transaction-descricao"
+                      placeholder={
+                        tipo === "transferencia"
+                          ? "Transferência para poupança"
+                          : "Ex.: Mercado do mês"
+                      }
+                      autoComplete="off"
+                      aria-invalid={Boolean(formState.errors.descricao)}
+                      onFocus={() => setDescriptionOpen(true)}
+                      onKeyDown={(event) => {
+                        if (
+                          event.key === "Enter" &&
+                          !event.ctrlKey &&
+                          !event.metaKey &&
+                          descriptionOpen &&
+                          suggestions[0]
+                        ) {
+                          event.preventDefault();
+                          applySuggestion(suggestions[0]);
+                        }
+                      }}
+                      {...register("descricao", {
+                        onBlur: () =>
+                          window.setTimeout(
+                            () => setDescriptionOpen(false),
+                            150,
+                          ),
+                      })}
+                    />
+
+                    {suggestionList}
+                  </div>
+                  <FieldError message={formState.errors.descricao?.message} />
+                </div>
+              )}
 
               {!isMobile && (
                 <div className="col-span-1 space-y-1 sm:col-span-2">
@@ -992,28 +1216,25 @@ export function TransactionFormDialog({
                 </div>
               )}
 
-              <div
-                className={cn(
-                  "space-y-1",
-                  isMobile ? "col-span-2" : "col-span-1 sm:col-span-2",
-                )}
-              >
-                <FieldLabel htmlFor="transaction-data">Data</FieldLabel>
-                <Controller
-                  control={control}
-                  name="data"
-                  render={({ field }) => (
-                    <DatePicker
-                      id="transaction-data"
-                      value={field.value}
-                      onChange={field.onChange}
-                      disabled={!canChangeDate}
-                      aria-invalid={Boolean(formState.errors.data)}
-                    />
-                  )}
-                />
-                <FieldError message={formState.errors.data?.message} />
-              </div>
+              {!isMobile && (
+                <div className="col-span-1 space-y-1 sm:col-span-2">
+                  <FieldLabel htmlFor="transaction-data">Data</FieldLabel>
+                  <Controller
+                    control={control}
+                    name="data"
+                    render={({ field }) => (
+                      <DatePicker
+                        id="transaction-data"
+                        value={field.value}
+                        onChange={field.onChange}
+                        disabled={!canChangeDate}
+                        aria-invalid={Boolean(formState.errors.data)}
+                      />
+                    )}
+                  />
+                  <FieldError message={formState.errors.data?.message} />
+                </div>
+              )}
 
               {!isCard && !isMobile && (
                 <div className="col-span-2 space-y-1 sm:col-span-2">
@@ -1045,7 +1266,8 @@ export function TransactionFormDialog({
                 </div>
               )}
 
-              {tipo === "transferencia" ? (
+              {!isMobile &&
+                (tipo === "transferencia" ? (
                 <div className="col-span-2 grid grid-cols-[1fr_auto_1fr] items-end gap-2 sm:col-span-6">
                   <div className="space-y-1">
                     <FieldLabel htmlFor="transaction-conta">Origem</FieldLabel>
@@ -1274,9 +1496,14 @@ export function TransactionFormDialog({
                     )}
                   </div>
                 </>
-              )}
+              ))}
 
-              <div className="col-span-2 flex flex-wrap items-center gap-2 pb-0.5 sm:col-span-6">
+              <div
+                className={cn(
+                  "col-span-2 flex min-w-0 items-center gap-2 pb-0.5 sm:col-span-6",
+                  isMobile ? "overflow-x-auto pb-1" : "flex-wrap",
+                )}
+              >
                 {(mode === "create" || isGrouped) && (
                   <AdvancedChip
                     icon={Repeat}
@@ -1637,17 +1864,61 @@ export function TransactionFormDialog({
           </div>
 
           {isMobile ? (
-            <div className="shrink-0 border-t border-border bg-card px-3 pb-[calc(0.5rem+env(safe-area-inset-bottom))] pt-2">
+            <div className="shrink-0 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]">
+              <div className="flex h-16 items-center gap-2 px-3">
+                {mode === "edit" && transaction && onRequestDelete ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-12 shrink-0 gap-2 px-3 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={() => onRequestDelete(transaction)}
+                    disabled={formState.isSubmitting}
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                    Excluir
+                  </Button>
+                ) : mode === "create" ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="h-12 shrink-0 gap-2 px-3 text-xs"
+                    onClick={() => void onSubmitAndNew()}
+                    disabled={formState.isSubmitting || !hasAccounts}
+                  >
+                    {formState.isSubmitting ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CopyPlus className="h-4 w-4" aria-hidden="true" />
+                    )}
+                    <span className="whitespace-nowrap">Salvar e criar</span>
+                  </Button>
+                ) : (
+                  <span />
+                )}
+                <Button
+                  type="submit"
+                  className="h-12 flex-1 gap-2 text-sm"
+                  disabled={formState.isSubmitting || !hasAccounts}
+                >
+                  {formState.isSubmitting ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <Check className="h-5 w-5" aria-hidden="true" />
+                  )}
+                  Salvar
+                </Button>
+              </div>
+
               {keypadOpen && (
-                <>
-                  <div className="mx-auto mb-1 flex max-w-sm items-center justify-between px-1">
+                <div className="border-t border-border px-3">
+                  <div className="mx-auto flex h-11 max-w-sm items-center justify-between px-1">
                     <span className="text-xs text-muted-foreground">
                       Valor em reais
                     </span>
                     <button
                       type="button"
                       onClick={() => setKeypadOpen(false)}
-                      className="inline-flex h-11 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      className="inline-flex h-10 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                     >
                       Concluir
                       <ChevronDown className="h-4 w-4" />
@@ -1663,60 +1934,8 @@ export function TransactionFormDialog({
                     }
                     className="mx-auto max-w-sm"
                   />
-                </>
-              )}
-              <div
-                className={cn(
-                  "mx-auto flex max-w-sm items-center justify-between gap-2",
-                  keypadOpen && "mt-2",
-                )}
-              >
-                <div className="flex items-center gap-1">
-                  {mode === "edit" && transaction && onRequestDelete && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-12 w-12 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                      aria-label="Excluir lançamento"
-                      onClick={() => onRequestDelete(transaction)}
-                      disabled={formState.isSubmitting}
-                    >
-                      <Trash2 className="h-5 w-5" />
-                    </Button>
-                  )}
-                  {mode === "create" && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-12 w-12"
-                      aria-label="Salvar e criar outro"
-                      title="Salvar e criar outro"
-                      onClick={() => void onSubmitAndNew()}
-                      disabled={formState.isSubmitting || !hasAccounts}
-                    >
-                      {formState.isSubmitting ? (
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                      ) : (
-                        <CopyPlus className="h-5 w-5" />
-                      )}
-                    </Button>
-                  )}
                 </div>
-                <Button
-                  type="submit"
-                  className="pressable h-16 w-16 rounded-2xl"
-                  aria-label="Salvar lançamento"
-                  disabled={formState.isSubmitting || !hasAccounts}
-                >
-                  {formState.isSubmitting ? (
-                    <Loader2 className="h-7 w-7 animate-spin" />
-                  ) : (
-                    <Check className="h-8 w-8" />
-                  )}
-                </Button>
-              </div>
+              )}
             </div>
           ) : (
             <div className="border-t border-border px-4 py-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3">

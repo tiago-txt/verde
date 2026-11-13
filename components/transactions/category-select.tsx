@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, CircleEllipsis } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  CircleEllipsis,
+  type LucideIcon,
+} from "lucide-react";
 import {
   Popover,
   PopoverAnchor,
@@ -14,6 +19,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { CategoryIcon } from "@/components/category-icon";
+import { EntityTile } from "@/components/entity-tile";
 import {
   CategoryPicker,
   type CategoryOption,
@@ -28,6 +34,8 @@ type CategorySelectProps = {
   onChange: (value: string | null) => void;
   disabled?: boolean;
   className?: string;
+  /** Linha compacta de 56px no mobile. */
+  rowMode?: { icon: LucideIcon; label: string };
 };
 
 /**
@@ -41,6 +49,7 @@ export function CategorySelect({
   onChange,
   disabled,
   className,
+  rowMode,
 }: CategorySelectProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
@@ -95,19 +104,64 @@ export function CategorySelect({
     />
   );
 
+  const rowTrigger = rowMode ? (
+    <button
+      type="button"
+      id={id}
+      onClick={() => setOpen(true)}
+      disabled={disabled}
+      aria-haspopup="dialog"
+      className="flex min-h-14 w-full items-center gap-3 py-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+    >
+      <rowMode.icon
+        className="h-5 w-5 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs text-muted-foreground">
+          {rowMode.label}
+        </span>
+        <span className="mt-0.5 flex min-w-0 items-center gap-2">
+          <EntityTile
+            kind="categoria"
+            entity={
+              selected
+                ? {
+                    id: selected.id,
+                    nome: selected.nome,
+                    icone: selected.icone,
+                    cor: selected.cor,
+                  }
+                : { nome: "Outros" }
+            }
+            size="xs"
+          />
+          <span className="truncate text-base font-medium">
+            {selected?.nome ?? "Outros (padrão)"}
+            {selected?.deletedAt ? " (arquivada)" : ""}
+          </span>
+        </span>
+      </span>
+      <ChevronRight
+        className="h-4 w-4 shrink-0 text-muted-foreground"
+        aria-hidden="true"
+      />
+    </button>
+  ) : null;
+
   if (isMobile) {
     return (
       <>
-        {trigger}
+        {rowMode ? rowTrigger : trigger}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
-            className="max-h-[var(--verde-sheet-max-h,92dvh)] overflow-y-auto p-4"
+            className="max-h-[min(85dvh,var(--verde-sheet-max-h,85dvh))] overflow-hidden p-0"
             onOpenAutoFocus={(event) => event.preventDefault()}
           >
-            <DialogHeader className="pr-10">
+            <DialogHeader className="shrink-0 border-b border-border px-4 py-3 pr-10">
               <DialogTitle>Categoria</DialogTitle>
             </DialogHeader>
-            {panel}
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">{panel}</div>
           </DialogContent>
         </Dialog>
       </>
