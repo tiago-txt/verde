@@ -13,6 +13,7 @@ import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import { addDaysISO } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { invoiceProjectionStatus } from "@/lib/design/row-status";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 
 type CardInvoiceRowProps = {
@@ -48,6 +49,78 @@ export function CardInvoiceRow({
   const pagadorLabel = pagador?.contaNome
     ? `, paga por ${pagador.contaNome}`
     : "";
+  const isMobile = useIsMobile();
+  const mobileStatusLabel = {
+    aberta: "Aberta",
+    fechada: "Fechada",
+    parcial: "Parcial",
+    paga: "Paga",
+    vencida: "Vencida",
+  }[projectionStatus];
+
+  if (isMobile) {
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(event)}
+        aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}${pagadorLabel}`}
+        className="relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
+      >
+        <EntityTile
+          kind="fatura"
+          entity={{
+            id: event.cartaoId,
+            nome: event.cartaoNome,
+            cor: event.cartaoCor,
+            icone: event.cartaoIcone,
+          }}
+          dashed={!isPaid}
+          className="h-10 w-10"
+        />
+
+        <span className="min-w-0 flex-1">
+          <span className="row-title block truncate">
+            Fatura {event.cartaoNome}
+          </span>
+          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
+            Vence {formatDate(event.vencimento).slice(0, 5)} ·{" "}
+            {mobileStatusLabel}
+          </span>
+          <span className="mt-1 block max-w-[220px]">
+            <PaymentProgress
+              pago={event.pago}
+              total={event.total}
+              size="sm"
+            />
+          </span>
+        </span>
+
+        <span className="flex shrink-0 flex-col items-end justify-center gap-0.5">
+          <span
+            className={cn(
+              "tabular text-base font-semibold",
+              isPaid
+                ? "text-primary"
+                : isOverdue
+                  ? "text-clay"
+                  : "text-on-surface",
+            )}
+          >
+            −{formatCurrency(event.total)}
+          </span>
+          <span
+            className={cn(
+              "flex items-center gap-1 text-xs font-medium",
+              statusMeta.tone,
+            )}
+          >
+            <StatusIcon className="h-4 w-4" aria-hidden="true" />
+            {mobileStatusLabel}
+          </span>
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div className="group relative flex min-h-[72px] w-full flex-wrap items-stretch overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)] opacity-90">

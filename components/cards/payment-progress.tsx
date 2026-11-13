@@ -6,10 +6,12 @@ export function PaymentProgress({
   pago,
   total,
   className,
+  size = "md",
 }: {
   pago: number;
   total: number;
   className?: string;
+  size?: "sm" | "md";
 }) {
   const ratio = total > 0 ? Math.min(1, Math.max(0, pago / total)) : 0;
   const tone =
@@ -23,7 +25,8 @@ export function PaymentProgress({
       aria-valuemax={total}
       aria-valuenow={Math.min(pago, total)}
       className={cn(
-        "block h-1.5 w-full overflow-hidden rounded-full bg-forest-highest",
+        "block w-full overflow-hidden rounded-full bg-forest-highest",
+        size === "sm" ? "h-1" : "h-1.5",
         className,
       )}
     >

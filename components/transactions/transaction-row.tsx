@@ -2,6 +2,9 @@
 
 import { useRef, useState } from "react";
 import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
   Pencil,
   Repeat,
   StickyNote,
@@ -16,10 +19,15 @@ import { EntityTile } from "@/components/entity-tile";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
+import { transactionRowStatus } from "@/lib/design/row-status";
+import { secondaryLine, type SecondaryInfo } from "@/lib/finance/row-secondary";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type TransactionRowProps = {
   transaction: TransactionListItem;
+  secondaryInfo: SecondaryInfo;
   selectionMode?: boolean;
   selected?: boolean;
   onToggleSelected?: (id: string) => void;
@@ -67,6 +75,7 @@ function AccountBadge({
 
 export function TransactionRow({
   transaction,
+  secondaryInfo,
   selectionMode = false,
   selected = false,
   onToggleSelected,
@@ -84,6 +93,7 @@ export function TransactionRow({
   const touchStartX = useRef<number | null>(null);
   const [reveal, setReveal] = useState<"left" | "right" | null>(null);
   const paid = transaction.pago;
+  const isMobile = useIsMobile();
   const isTransfer = transaction.tipo === "transferencia";
   const isCardPurchase = Boolean(transaction.cartaoId);
   const isInvoicePayment = Boolean(transaction.cartaoDestinoId);
@@ -114,6 +124,34 @@ export function TransactionRow({
     : transaction.tipo === "receita"
       ? "bg-primary"
       : "bg-clay";
+
+  const rowStatus = transactionRowStatus({
+    pago: paid,
+    data: transaction.data,
+    today: todayISO(),
+  });
+  const statusMeta = {
+    pago: { label: "Pago", icon: CheckCircle2, tone: "text-success" },
+    pendente: {
+      label: "Pendente",
+      icon: Clock3,
+      tone: "text-muted-foreground",
+    },
+    atrasado: { label: "Atrasado", icon: AlertTriangle, tone: "text-amber" },
+  }[rowStatus];
+  const StatusIcon = statusMeta.icon;
+
+  const secondaryText = secondaryLine(secondaryInfo, {
+    categoria: transaction.categoriaNome,
+    conta: transaction.cartaoId
+      ? transaction.cartaoNome
+      : transaction.contaNome,
+    transferencia: isTransfer,
+    origem: transaction.contaNome,
+    destino: isInvoicePayment
+      ? transaction.cartaoDestinoNome
+      : transaction.contaDestinoNome,
+  });
 
   function handleMainClick() {
     if (longPressTriggered.current) {
@@ -168,6 +206,214 @@ export function TransactionRow({
       (event.changedTouches[0]?.clientX ?? start) - start;
     if (Math.abs(delta) < 48) return;
     setReveal(delta > 0 ? "left" : "right");
+  }
+
+  if (isMobile) {
+    return (
+      <div className="group relative overflow-hidden">
+        {reveal === "left" && (
+          <div className="absolute inset-y-0 left-0 flex w-20 items-stretch bg-success/15">
+            <button
+              type="button"
+              onClick={() => {
+                onTogglePaid(transaction, !paid);
+                setReveal(null);
+              }}
+              aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
+              className="flex w-full flex-col items-center justify-center gap-1 text-success"
+            >
+              {paid ? (
+                <ThumbsDown className="h-5 w-5" />
+              ) : (
+                <ThumbsUp className="h-5 w-5" />
+              )}
+              <span className="text-xs">{paid ? "Desfazer" : "Pagar"}</span>
+            </button>
+          </div>
+        )}
+        {reveal === "right" && (
+          <div className="absolute inset-y-0 right-0 flex w-36 items-stretch">
+            <button
+              type="button"
+              onClick={() => {
+                setReveal(null);
+                onEdit(transaction);
+              }}
+              aria-label={`Editar ${transaction.descricao}`}
+              className="flex w-1/2 flex-col items-center justify-center gap-1 bg-info/15 text-info"
+            >
+              <Pencil className="h-5 w-5" />
+              <span className="text-xs">Editar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setReveal(null);
+                onDelete(transaction);
+              }}
+              aria-label={`Excluir ${transaction.descricao}`}
+              className="flex w-1/2 flex-col items-center justify-center gap-1 bg-destructive/15 text-destructive"
+            >
+              <Trash2 className="h-5 w-5" />
+              <span className="text-xs">Excluir</span>
+            </button>
+          </div>
+        )}
+
+        <div
+          onClick={handleMainClick}
+          onPointerDown={handlePointerDown}
+          onPointerUp={clearLongPress}
+          onPointerMove={handlePointerMove}
+          onPointerLeave={clearLongPress}
+          onPointerCancel={clearLongPress}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={{ touchAction: "pan-y" }}
+          className={cn(
+            "relative flex min-h-16 items-center gap-3 bg-background px-0 transition-[transform,background-color] duration-150",
+            selected && "bg-primary/10",
+            reveal === "left" && "translate-x-20",
+            reveal === "right" && "-translate-x-36",
+          )}
+        >
+          {selectionMode && !isCardPurchase && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelected?.(transaction.id)}
+              onClick={(event) => event.stopPropagation()}
+              aria-label={`Selecionar ${transaction.descricao}`}
+              className="h-6 w-6 shrink-0"
+            />
+          )}
+
+          {isTransfer ? (
+            <EntityTile
+              kind={isInvoicePayment ? "fatura" : "transferencia"}
+              entity={
+                isInvoicePayment
+                  ? {
+                      id: transaction.cartaoDestinoId,
+                      nome: transaction.cartaoDestinoNome,
+                      cor: transaction.cartaoDestinoCor,
+                      icone: "CreditCard",
+                    }
+                  : { id: transaction.id, nome: transaction.descricao }
+              }
+              className="h-10 w-10"
+            />
+          ) : isCardPurchase ? (
+            <EntityTile
+              kind="cartao"
+              entity={{
+                id: transaction.cartaoId,
+                nome: transaction.cartaoNome,
+                cor: transaction.cartaoCor,
+                icone: transaction.cartaoIcone,
+              }}
+              className="h-10 w-10"
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                if (selectionMode) {
+                  onToggleSelected?.(transaction.id);
+                  return;
+                }
+                onOpenDetails(transaction);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              aria-label={`Categoria de ${transaction.descricao}`}
+              className="shrink-0 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <EntityTile
+                kind="categoria"
+                entity={{
+                  id: transaction.categoriaId,
+                  nome: transaction.categoriaNome,
+                  icone: transaction.categoriaIcone,
+                  cor: transaction.categoriaCor,
+                }}
+                className="h-10 w-10"
+              />
+            </button>
+          )}
+
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span className="row-title min-w-0 truncate">
+                {transaction.descricao}
+              </span>
+              {transaction.recorrenciaId && (
+                <Repeat
+                  className="h-3.5 w-3.5 shrink-0 text-primary"
+                  aria-label="Lançamento recorrente"
+                />
+              )}
+              {transaction.parcelaGrupoId && (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 px-1.5 py-0 text-xs"
+                >
+                  {transaction.parcelaAtual}/{transaction.parcelaTotal}
+                </Badge>
+              )}
+              {transaction.observacao && (
+                <StickyNote
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-label="Tem observação"
+                />
+              )}
+            </div>
+            {secondaryText && (
+              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+                {secondaryText}
+              </p>
+            )}
+          </div>
+
+          <div className="flex h-16 shrink-0 flex-col items-end justify-center">
+            <span
+              className={cn(
+                "tabular whitespace-nowrap text-base font-semibold leading-4",
+                valueColor,
+              )}
+            >
+              {sign}
+              {formatCurrency(transaction.valor)}
+            </span>
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePaid(transaction, !paid);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              disabled={selectionMode}
+              aria-pressed={paid}
+              aria-label={
+                paid ? "Marcar como não pago" : "Marcar como pago"
+              }
+              title={
+                paid
+                  ? "Pago — toque para desfazer"
+                  : "Pendente — toque para pagar"
+              }
+              className={cn(
+                "flex h-12 items-center gap-1 text-xs font-medium",
+                statusMeta.tone,
+                selectionMode && "opacity-60",
+              )}
+            >
+              <StatusIcon className="h-4 w-4" aria-hidden="true" />
+              {statusMeta.label}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

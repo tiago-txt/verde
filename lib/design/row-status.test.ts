@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   budgetProjectionStatus,
   invoiceProjectionStatus,
+  transactionRowStatus,
 } from "./row-status";
 
 describe("status de linhas virtuais", () => {
@@ -61,5 +62,41 @@ describe("status de linhas virtuais", () => {
     expect(
       invoiceProjectionStatus({ vencida: false, status: "parcial" }),
     ).toBe("parcial");
+  });
+});
+
+describe("status da linha real", () => {
+  it("pago tem prioridade sobre a data", () => {
+    expect(
+      transactionRowStatus({
+        pago: true,
+        data: "2026-01-01",
+        today: "2026-11-13",
+      }),
+    ).toBe("pago");
+  });
+
+  it("classifica pendente e atrasado pela data", () => {
+    expect(
+      transactionRowStatus({
+        pago: false,
+        data: "2026-11-13",
+        today: "2026-11-13",
+      }),
+    ).toBe("pendente");
+    expect(
+      transactionRowStatus({
+        pago: false,
+        data: "2026-11-20",
+        today: "2026-11-13",
+      }),
+    ).toBe("pendente");
+    expect(
+      transactionRowStatus({
+        pago: false,
+        data: "2026-11-12",
+        today: "2026-11-13",
+      }),
+    ).toBe("atrasado");
   });
 });

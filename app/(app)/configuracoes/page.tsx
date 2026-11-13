@@ -13,6 +13,7 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DecorationsToggle } from "@/components/decorations-toggle";
+import { SecondaryInfoToggle } from "@/components/settings/secondary-info-toggle";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireUser } from "@/lib/auth/current-user";
 import { formatDateTime, getInitials } from "@/lib/format";
@@ -103,6 +104,9 @@ export default async function ConfiguracoesPage() {
             <ThemeToggle withLabel />
             <div className="mt-3">
               <DecorationsToggle />
+            </div>
+            <div className="mt-3">
+              <SecondaryInfoToggle />
             </div>
           </CardContent>
         </Card>

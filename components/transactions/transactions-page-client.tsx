@@ -64,6 +64,8 @@ import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import { useToast } from "@/components/ui/toast";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
+import { useSecondaryInfo } from "@/lib/hooks/use-secondary-info";
 import {
   bulkAddTagAction,
   bulkChangeCategoryAction,
@@ -202,6 +204,8 @@ export function TransactionsPageClient({
 }: TransactionsPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [secondaryInfo] = useSecondaryInfo();
   const [optimisticTransactions, applyOptimistic] = useOptimistic(
     transactions,
     optimisticReducer,
@@ -1098,12 +1102,19 @@ export function TransactionsPageClient({
               <div
                 key={group.day}
                 id={`day-${group.day}`}
-                className="scroll-mt-4 overflow-hidden rounded-lg border border-grout bg-surface-low"
+                className={cn(
+                  isMobile
+                    ? "border-b border-border"
+                    : "scroll-mt-4 overflow-hidden rounded-lg border border-grout bg-surface-low",
+                )}
               >
                 <div
                   className={cn(
-                    "flex flex-wrap items-center justify-between gap-2 border-b border-grout bg-forest-container/70 px-3 py-2.5 sm:px-4",
-                    group.day === today && "bg-amber/10",
+                    "flex items-center justify-between gap-2 border-b",
+                    isMobile
+                      ? "sticky top-0 z-20 h-10 flex-nowrap border-border bg-background"
+                      : "flex-wrap border-grout bg-forest-container/70 px-3 py-2.5 sm:px-4",
+                    !isMobile && group.day === today && "bg-amber/10",
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -1122,10 +1133,21 @@ export function TransactionsPageClient({
                         aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
                       />
                     )}
-                    <span className="font-display tabular text-2xl font-bold leading-none">
+                    <span
+                      className={cn(
+                        "font-display tabular font-bold leading-none",
+                        isMobile ? "text-xl" : "text-2xl",
+                      )}
+                    >
                       {Number(group.day.slice(8, 10))}
                     </span>
-                    <span className="rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+                    <span
+                      className={cn(
+                        isMobile
+                          ? "text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                          : "rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary",
+                      )}
+                    >
                       {new Intl.DateTimeFormat("pt-BR", {
                         weekday: "short",
                         timeZone: "UTC",
@@ -1134,37 +1156,58 @@ export function TransactionsPageClient({
                         .replace(".", "")}
                     </span>
                     {group.day === today && (
-                      <Badge className="bg-amber/15 text-amber">Hoje</Badge>
+                      <Badge
+                        className={cn(
+                          "bg-amber/15 text-amber",
+                          isMobile && "h-5 px-2 py-0",
+                        )}
+                      >
+                        Hoje
+                      </Badge>
                     )}
                     <span className="hidden text-xs text-outline sm:inline">
                       {formatDate(group.day)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="shrink-0">
+                  <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
+                    <span className="hidden shrink-0 sm:inline">
                       {summaryParts.join(" · ")}
                     </span>
                     {!filters.de && !filters.ate && (
                       <span
                         className={cn(
                           "tabular inline-flex items-center gap-1 font-semibold",
+                          isMobile ? "text-sm" : "text-xs",
                           balance < 0 ? "text-clay" : "text-on-surface",
                         )}
                         title="Saldo previsto acumulado das contas até este dia"
                       >
-                        <Wallet className="h-3.5 w-3.5 text-amber" aria-hidden="true" />
-                        <span className="hidden sm:inline text-outline">Saldo do dia</span>
+                        <Wallet
+                          className="hidden h-3.5 w-3.5 text-amber sm:inline"
+                          aria-hidden="true"
+                        />
+                        <span
+                          className={cn(
+                            "text-xs font-normal",
+                            isMobile
+                              ? "text-muted-foreground"
+                              : "hidden text-outline sm:inline",
+                          )}
+                        >
+                          Saldo do dia
+                        </span>
                         {formatCurrency(balance)}
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="space-y-2 p-2">
+                <div className={isMobile ? "divide-y divide-border" : "space-y-2 p-2"}>
                   {group.items.map((transaction) => (
                     <TransactionRow
                       key={transaction.id}
                       transaction={transaction}
+                      secondaryInfo={secondaryInfo}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(transaction.id)}
                       onToggleSelected={toggleSelected}

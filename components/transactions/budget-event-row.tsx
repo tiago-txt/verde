@@ -11,6 +11,7 @@ import { BudgetProgress } from "@/components/budgets/budget-progress";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
+import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 
 type BudgetEventRowProps = {
@@ -63,6 +64,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
     },
   }[projectionStatus];
   const StatusIcon = statusMeta.icon;
+  const isMobile = useIsMobile();
 
   const title = isProvision ? "Orçamento" : "Sobra do orçamento";
 
@@ -74,14 +76,18 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         isAlert ? 0 : event.valor,
       )}`}
       className={cn(
-        "group relative flex min-h-[72px] w-full flex-wrap items-center gap-2 overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 text-left shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4",
-        "opacity-90",
+        "group relative flex min-h-[72px] w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+        isMobile
+          ? "gap-3 px-0"
+          : "overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 sm:gap-3 sm:px-4",
+        !isMobile && "opacity-90",
       )}
     >
       <span
         aria-hidden="true"
         className={cn(
           "absolute inset-y-0 left-0 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
+          isMobile && "hidden",
           isAlert
             ? "border-l-destructive/70"
             : isProvision
@@ -99,85 +105,144 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           icone: summary.icone,
         }}
         dashed
-        className="h-10 w-10 sm:h-12 sm:w-12"
+        className={cn("h-10 w-10", !isMobile && "sm:h-12 sm:w-12")}
       />
 
-      <span className="min-w-[10rem] flex-1">
-        <span className="flex flex-wrap items-center gap-1.5">
-          <span className="row-title">{title}</span>
-          <span className="truncate text-xs text-muted-foreground">
-            {summary.nome}
+      <span className={cn("flex-1", isMobile ? "min-w-0" : "min-w-[10rem]")}>
+        {isMobile ? (
+          <span className="row-title block truncate">
+            {(isProvision ? "Orçamento" : "Sobra") + ` · ${summary.nome}`}
           </span>
-        </span>
+        ) : (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="row-title">{title}</span>
+            <span className="truncate text-xs text-muted-foreground">
+              {summary.nome}
+            </span>
+          </span>
+        )}
 
-        <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-          <span className={cn("font-medium", statusMeta.tone)}>
-            {statusMeta.label}
-          </span>
-          {isOverspent || (isProvision && !isConsumed) ? (
-            <>
-              <span aria-hidden="true">·</span>
-              {isOverspent ? (
-                <span>
-                  Estourou{" "}
-                  <span className="tabular text-clay">
-                    {formatCurrency(summary.estouro)}
-                  </span>
+        {isMobile ? (
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0 text-[13px] text-muted-foreground">
+            {isOverspent ? (
+              <span>
+                Estourou{" "}
+                <span className="tabular text-clay">
+                  {formatCurrency(summary.estouro)}
                 </span>
-              ) : (
-                <span>
-                  Restam{" "}
+              </span>
+            ) : isProvision ? (
+              <span>
+                {summary.restante > 0 ? "Restam" : "Consumido"}{" "}
+                {summary.restante > 0 && (
                   <span className="tabular">
                     {formatCurrency(summary.restante)}
                   </span>
+                )}
+              </span>
+            ) : (
+              <span>
+                Sobra{" "}
+                <span className="tabular text-primary">
+                  {formatCurrency(event.valor)}
                 </span>
-              )}
-            </>
-          ) : null}
-          <span aria-hidden="true">·</span>
-          <span>
-            ciclo {formatDate(summary.inicio).slice(0, 5)}–
-            {formatDate(summary.fim).slice(0, 5)}
+              </span>
+            )}
+            <span aria-hidden="true">·</span>
+            <span className="shrink-0">
+              até {formatDate(summary.fim).slice(0, 5)}
+            </span>
           </span>
-        </span>
+        ) : (
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+            <span className={cn("font-medium", statusMeta.tone)}>
+              {statusMeta.label}
+            </span>
+            {isOverspent || (isProvision && !isConsumed) ? (
+              <>
+                <span aria-hidden="true">·</span>
+                {isOverspent ? (
+                  <span>
+                    Estourou{" "}
+                    <span className="tabular text-clay">
+                      {formatCurrency(summary.estouro)}
+                    </span>
+                  </span>
+                ) : (
+                  <span>
+                    Restam{" "}
+                    <span className="tabular">
+                      {formatCurrency(summary.restante)}
+                    </span>
+                  </span>
+                )}
+              </>
+            ) : null}
+            <span aria-hidden="true">·</span>
+            <span>
+              ciclo {formatDate(summary.inicio).slice(0, 5)}–
+              {formatDate(summary.fim).slice(0, 5)}
+            </span>
+          </span>
+        )}
 
         <span className="mt-1 block max-w-[280px]">
           <BudgetProgress
             gasto={summary.gasto}
             limite={summary.limite}
             size="sm"
+            className="h-1"
             label={`Consumo do orçamento ${summary.nome}`}
           />
         </span>
       </span>
 
-      <span className="row-slot">
-        <span
-          className={cn(
-            "row-value row-amount",
-            isAlert
-              ? "text-clay"
-              : isProvision
+      {isMobile ? (
+        <span className="flex shrink-0 flex-col items-end justify-center gap-0.5">
+          <span
+            className={cn(
+              "tabular text-base font-semibold",
+              isAlert ? "text-clay" : isProvision ? "text-clay" : "text-primary",
+            )}
+          >
+            {isAlert
+              ? formatCurrency(0)
+              : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
+          </span>
+          <Clock3
+            className="h-4 w-4 text-muted-foreground"
+            aria-hidden="true"
+          />
+        </span>
+      ) : (
+        <span className="row-slot">
+          <span
+            className={cn(
+              "row-value row-amount",
+              isAlert
                 ? "text-clay"
-                : "text-primary",
-          )}
-        >
-          {isAlert
-            ? formatCurrency(0)
-            : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
+                : isProvision
+                  ? "text-clay"
+                  : "text-primary",
+            )}
+          >
+            {isAlert
+              ? formatCurrency(0)
+              : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
+          </span>
+          <span
+            className={cn(
+              "grid h-12 w-12 shrink-0 place-items-center rounded-lg border",
+              statusMeta.box,
+              statusMeta.tone,
+            )}
+            title={`Status: ${statusMeta.label}`}
+            aria-label={`Status: ${statusMeta.label}`}
+          >
+            <StatusIcon className="h-5 w-5" aria-hidden="true" />
+          </span>
         </span>
-        <span
-          className={cn(
-            "grid h-12 w-12 shrink-0 place-items-center rounded-lg border",
-            statusMeta.box,
-            statusMeta.tone,
-          )}
-          title={`Status: ${statusMeta.label}`}
-          aria-label={`Status: ${statusMeta.label}`}
-        >
-          <StatusIcon className="h-5 w-5" aria-hidden="true" />
-        </span>
-      </span>
+      )}
     </button>
   );
 }

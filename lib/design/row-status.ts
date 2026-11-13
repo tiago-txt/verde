@@ -25,3 +25,15 @@ export function invoiceProjectionStatus(input: {
   if (input.vencida) return "vencida";
   return input.status;
 }
+
+export type TransactionRowStatus = "pago" | "pendente" | "atrasado";
+
+/** Status exibido na linha real da lista (datas ISO comparáveis como texto). */
+export function transactionRowStatus(input: {
+  pago: boolean;
+  data: string;
+  today: string;
+}): TransactionRowStatus {
+  if (input.pago) return "pago";
+  return input.data < input.today ? "atrasado" : "pendente";
+}
