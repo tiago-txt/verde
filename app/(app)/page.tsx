@@ -172,7 +172,7 @@ async function BalanceBlock({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="tabular text-[28px] font-semibold leading-[34px]">
+        <p className="tabular truncate text-[28px] font-semibold leading-[34px]">
           {formatCurrency(data.operational)}
         </p>
         <dl className="space-y-1 text-xs text-muted-foreground">
@@ -250,33 +250,33 @@ async function MonthBlock({
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="relative overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
             <span className="absolute inset-x-0 top-0 h-1 bg-emerald" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Receitas</p>
-            <p className="tabular text-lg font-semibold text-primary">
+            <p className="tabular truncate text-lg font-semibold text-primary">
               {formatCurrency(current.receitas)}
             </p>
             <Variation value={incomeVariation} />
           </div>
-          <div className="relative overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
             <span className="absolute inset-x-0 top-0 h-1 bg-clay" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Despesas</p>
-            <p className="tabular text-lg font-semibold text-clay">
+            <p className="tabular truncate text-lg font-semibold text-clay">
               {formatCurrency(current.despesas)}
             </p>
             <Variation value={expenseVariation} invert />
           </div>
-          <div className="relative col-span-2 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 sm:col-span-1">
+          <div className="relative col-span-2 min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 sm:col-span-1">
             <span className="absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Saldo do mês</p>
             <p
-              className={`tabular text-lg font-semibold ${
+              className={`tabular truncate text-lg font-semibold ${
                 current.saldo >= 0 ? "text-primary" : "text-clay"
               }`}
             >
               {formatCurrency(current.saldo)}
             </p>
-            <p className="text-xs text-muted-foreground">
+            <p className="truncate text-xs text-muted-foreground">
               anterior: {formatCurrency(previous.saldo)}
             </p>
           </div>

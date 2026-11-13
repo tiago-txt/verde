@@ -50,6 +50,7 @@ self.addEventListener("fetch", (event) => {
   const isAsset =
     url.pathname.startsWith("/_next/static/") ||
     url.pathname.startsWith("/icons/") ||
+    url.pathname.startsWith("/banks/") ||
     url.pathname === "/manifest.webmanifest";
 
   if (!isAsset) return;

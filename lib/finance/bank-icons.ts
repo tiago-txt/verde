@@ -1,168 +1,138 @@
-export type BankIconShape = "rounded" | "circle" | "diamond";
-
 export type BankIconDefinition = {
   id: string;
   name: string;
   keywords: string[];
   brandColor: string;
-  inkColor: string;
-  initials: string;
-  shape: BankIconShape;
+  /** Arquivo SVG local servido de `/public/banks`. */
+  logo: string;
 };
 
+/**
+ * Catálogo local de instituições financeiras.
+ *
+ * Os arquivos em `public/banks` vêm do projeto react-bancos
+ * (github.com/henriquezolini/react-bancos) e são marcas registradas de seus
+ * respectivos titulares, usadas aqui apenas para identificação da instituição.
+ */
 export const BANK_ICONS: BankIconDefinition[] = [
   {
     id: "bank:bb",
     name: "Banco do Brasil",
     keywords: ["bb", "banco do brasil", "brasil"],
     brandColor: "#003399",
-    inkColor: "#ffffff",
-    initials: "BB",
-    shape: "rounded",
+    logo: "/banks/bancodobrasil.svg",
   },
   {
     id: "bank:caixa",
     name: "Caixa",
     keywords: ["cef", "caixa economica federal", "caixa"],
     brandColor: "#0067AB",
-    inkColor: "#ffffff",
-    initials: "CX",
-    shape: "rounded",
+    logo: "/banks/caixa.svg",
   },
   {
     id: "bank:itau",
     name: "Itaú",
     keywords: ["itau", "itaú"],
     brandColor: "#EC7000",
-    inkColor: "#ffffff",
-    initials: "IT",
-    shape: "rounded",
+    logo: "/banks/itau.svg",
   },
   {
     id: "bank:bradesco",
     name: "Bradesco",
     keywords: ["bradesco", "brad"],
     brandColor: "#CC092F",
-    inkColor: "#ffffff",
-    initials: "BR",
-    shape: "rounded",
+    logo: "/banks/bradesco.svg",
   },
   {
     id: "bank:santander",
     name: "Santander",
     keywords: ["santander", "santa"],
     brandColor: "#EC0000",
-    inkColor: "#ffffff",
-    initials: "ST",
-    shape: "rounded",
+    logo: "/banks/santander.svg",
   },
   {
     id: "bank:nubank",
     name: "Nubank",
     keywords: ["nu", "nubank", "roxo"],
     brandColor: "#820AD1",
-    inkColor: "#ffffff",
-    initials: "NU",
-    shape: "circle",
+    logo: "/banks/nubank.svg",
   },
   {
     id: "bank:inter",
     name: "Inter",
     keywords: ["inter", "banco inter"],
     brandColor: "#FF7A00",
-    inkColor: "#ffffff",
-    initials: "IN",
-    shape: "rounded",
+    logo: "/banks/inter.svg",
   },
   {
     id: "bank:c6",
     name: "C6 Bank",
     keywords: ["c6", "c6 bank"],
     brandColor: "#242424",
-    inkColor: "#ffffff",
-    initials: "C6",
-    shape: "rounded",
+    logo: "/banks/c6bank.svg",
   },
   {
     id: "bank:btg",
     name: "BTG Pactual",
     keywords: ["btg", "btg pactual"],
     brandColor: "#001E62",
-    inkColor: "#ffffff",
-    initials: "BTG",
-    shape: "rounded",
+    logo: "/banks/btgpactual.svg",
   },
   {
     id: "bank:xp",
     name: "XP",
     keywords: ["xp", "xp investimentos"],
     brandColor: "#111111",
-    inkColor: "#ffffff",
-    initials: "XP",
-    shape: "diamond",
+    logo: "/banks/xp.svg",
   },
   {
     id: "bank:sicredi",
     name: "Sicredi",
     keywords: ["sicredi", "sic"],
     brandColor: "#3C8C3C",
-    inkColor: "#ffffff",
-    initials: "SI",
-    shape: "rounded",
+    logo: "/banks/sicredi.svg",
   },
   {
     id: "bank:sicoob",
     name: "Sicoob",
     keywords: ["sicoob", "sico"],
     brandColor: "#003641",
-    inkColor: "#ffffff",
-    initials: "SC",
-    shape: "rounded",
+    logo: "/banks/sicoob.svg",
   },
   {
     id: "bank:pagbank",
     name: "PagBank",
     keywords: ["pagbank", "pagseguro", "pag"],
     brandColor: "#00A868",
-    inkColor: "#ffffff",
-    initials: "PG",
-    shape: "rounded",
+    logo: "/banks/pagbank.svg",
   },
   {
     id: "bank:mercadopago",
     name: "Mercado Pago",
     keywords: ["mercado pago", "mercadopago", "mp"],
-    brandColor: "#FFE600",
-    inkColor: "#1F2937",
-    initials: "MP",
-    shape: "rounded",
+    brandColor: "#00BCFF",
+    logo: "/banks/mercadopago.svg",
   },
   {
     id: "bank:picpay",
     name: "PicPay",
     keywords: ["picpay", "pic"],
     brandColor: "#21C25E",
-    inkColor: "#ffffff",
-    initials: "PP",
-    shape: "rounded",
+    logo: "/banks/picpay.svg",
   },
   {
     id: "bank:neon",
     name: "Neon",
     keywords: ["neon"],
     brandColor: "#00AEEF",
-    inkColor: "#ffffff",
-    initials: "NE",
-    shape: "rounded",
+    logo: "/banks/neon.svg",
   },
   {
     id: "bank:banrisul",
     name: "Banrisul",
     keywords: ["banrisul", "banri"],
     brandColor: "#00549F",
-    inkColor: "#ffffff",
-    initials: "BN",
-    shape: "rounded",
+    logo: "/banks/banrisul.svg",
   },
 ];
 

@@ -229,7 +229,7 @@ export function TransactionRow({
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
         className={cn(
-          "relative flex min-h-[72px] items-center gap-2 bg-surface-low px-3 py-3 transition-[transform,background-color] duration-150 sm:gap-3 sm:px-4",
+          "relative flex min-h-[72px] flex-wrap items-center gap-2 bg-surface-low px-3 py-3 transition-[transform,background-color] duration-150 sm:gap-3 sm:px-4",
           !transaction.pago && !isCardPurchase && "bg-forest-container/40",
           selected && "bg-primary/10",
           !selectionMode && !selected && "lg:hover:bg-forest-container",
@@ -327,7 +327,7 @@ export function TransactionRow({
           onPointerMove={handlePointerMove}
           onPointerLeave={clearLongPress}
           onPointerCancel={clearLongPress}
-          className="min-w-0 flex-1 cursor-pointer rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="min-w-[10rem] flex-1 cursor-pointer rounded-lg py-0.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span className="flex flex-wrap items-center gap-1.5">
             <button

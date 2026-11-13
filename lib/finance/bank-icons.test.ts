@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import fs from "node:fs";
+import path from "node:path";
 import {
+  BANK_ICONS,
   findBankIcon,
   filterBankIcons,
   isBankIconId,
@@ -53,5 +56,20 @@ describe("catálogo de instituições financeiras", () => {
       false,
     );
     expect(iconNameSchema.safeParse("bank:nubank").success).toBe(false);
+  });
+
+  it("aponta para SVGs locais existentes", () => {
+    const ids = new Set(BANK_ICONS.map((bank) => bank.id));
+    const logos = new Set(BANK_ICONS.map((bank) => bank.logo));
+
+    expect(ids.size).toBe(BANK_ICONS.length);
+    expect(logos.size).toBe(BANK_ICONS.length);
+
+    for (const bank of BANK_ICONS) {
+      expect(bank.logo).toMatch(/^\/banks\/[a-z0-9]+\.svg$/);
+      const file = path.join(process.cwd(), "public", bank.logo);
+      expect(fs.existsSync(file), `${bank.logo} ausente`).toBe(true);
+      expect(fs.readFileSync(file, "utf8")).toContain("<svg");
+    }
   });
 });

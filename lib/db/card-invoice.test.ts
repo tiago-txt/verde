@@ -186,6 +186,9 @@ describe("fatura como evento único", () => {
       restante: 15_000,
       status: "parcial",
     });
+    expect(afterPartial[0]?.pagamentos).toMatchObject([
+      { contaId: fixture.accountId, contaNome: "Conta", valor: 5_000 },
+    ]);
 
     const total = await payInvoiceAction({
       cartaoId: fixture.cardId,
@@ -326,6 +329,9 @@ describe("fatura como evento único", () => {
       pago: 523,
       restante: 19_477,
     });
+    expect(event?.pagamentos).toMatchObject([
+      { contaId: fixture.accountId, contaNome: "Conta", valor: 523 },
+    ]);
     expect(
       getCardInvoiceAccountDeltas(user.workspaceId).get(fixture.accountId),
     ).toBe(-19_477);

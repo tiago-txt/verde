@@ -40,9 +40,17 @@ export function CardInvoiceRow({
     vencida: { label: "vencida", tone: "text-clay", icon: AlertTriangle },
   }[projectionStatus];
   const StatusIcon = statusMeta.icon;
+  const pagador =
+    event.pagamentos.find((item) => Boolean(item.contaNome)) ?? null;
+  const outrosPagadores = pagador
+    ? event.pagamentos.filter((item) => item.contaId !== pagador.contaId).length
+    : 0;
+  const pagadorLabel = pagador?.contaNome
+    ? `, paga por ${pagador.contaNome}`
+    : "";
 
   return (
-    <div className="group relative flex min-h-[72px] w-full items-stretch overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)] opacity-90">
+    <div className="group relative flex min-h-[72px] w-full flex-wrap items-stretch overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)] opacity-90">
       <span
         aria-hidden="true"
         className={cn(
@@ -54,8 +62,8 @@ export function CardInvoiceRow({
       <button
         type="button"
         onClick={() => onOpen(event)}
-        aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}`}
-        className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
+        aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}${pagadorLabel}`}
+        className="flex min-w-[10rem] flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
       >
         <EntityTile
           kind="fatura"
@@ -74,9 +82,32 @@ export function CardInvoiceRow({
             <span className="row-title">
               Fatura {event.cartaoNome}
             </span>
+            {pagador && (
+              <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-grout bg-surface-lowest px-2 py-0.5 text-xs text-muted-foreground">
+                <span
+                  aria-hidden="true"
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: pagador.contaCor ?? undefined }}
+                />
+                <span className="truncate">
+                  paga por{" "}
+                  <span className="font-medium text-foreground/85">
+                    {pagador.contaNome ?? "sem conta"}
+                  </span>
+                </span>
+                {outrosPagadores > 0 && (
+                  <span
+                    className="shrink-0"
+                    title={`Mais ${outrosPagadores} conta(s)`}
+                  >
+                    +{outrosPagadores}
+                  </span>
+                )}
+              </span>
+            )}
           </span>
 
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <span
               className={cn(
                 "inline-flex items-center gap-1 font-medium",
@@ -88,8 +119,12 @@ export function CardInvoiceRow({
             </span>
             <span aria-hidden="true">·</span>
             <span>
-              pago <span className="tabular">{formatCurrency(event.pago)}</span>{" "}
-              · restam{" "}
+              pago{" "}
+              <span className="tabular">{formatCurrency(event.pago)}</span>
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>
+              restam{" "}
               <span className="tabular">{formatCurrency(event.restante)}</span>
             </span>
             <span aria-hidden="true">·</span>
@@ -101,7 +136,7 @@ export function CardInvoiceRow({
             </span>
           </span>
 
-          <span className="mt-1 block max-w-[220px]">
+          <span className="mt-1.5 block max-w-[220px]">
             <PaymentProgress pago={event.pago} total={event.total} />
           </span>
         </span>

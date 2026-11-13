@@ -263,14 +263,14 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
                     </DropdownMenu>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3 border-t border-border pt-4">
-                    <div>
+                  <div className="flex flex-wrap items-start gap-x-6 gap-y-3 border-t border-border pt-4">
+                    <div className="min-w-fit flex-1">
                       <p className="text-xs text-muted-foreground">
                         Saldo atual
                       </p>
                       <p
                         className={cn(
-                          "tabular text-lg font-semibold",
+                          "tabular whitespace-nowrap text-lg font-semibold",
                           account.saldoAtual < 0
                             ? "text-destructive"
                             : "text-foreground",
@@ -279,13 +279,13 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
                         {formatCurrency(account.saldoAtual)}
                       </p>
                     </div>
-                    <div>
+                    <div className="min-w-fit flex-1">
                       <p className="text-xs text-muted-foreground">
                         Saldo previsto
                       </p>
                       <p
                         className={cn(
-                          "tabular text-lg font-semibold",
+                          "tabular whitespace-nowrap text-lg font-semibold",
                           account.saldoPrevisto < 0
                             ? "text-destructive"
                             : "text-muted-foreground",

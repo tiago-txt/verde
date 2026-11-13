@@ -258,7 +258,15 @@
     flex-shrink: 0;
     align-items: center;
     justify-content: flex-end;
-    gap: 4px;
+    gap: 10px;
+  }
+  /* No celular o valor e o controle ganham a própria linha, sem espremer o
+     título/o subtítulo do lançamento. */
+  @media (max-width: 639px) {
+    .row-slot {
+      width: 100%;
+      justify-content: space-between;
+    }
   }
   .row-amount {
     min-width: 0;

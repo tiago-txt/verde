@@ -67,7 +67,8 @@ export function AppShell({ user, children }: AppShellProps) {
     pathname.startsWith("/limite-de-gastos") ||
     pathname.startsWith("/relatorios") ||
     pathname.startsWith("/previsao") ||
-    pathname.startsWith("/cartoes");
+    pathname.startsWith("/cartoes") ||
+    pathname.startsWith("/contas");
 
   useEffect(() => {
     const stored = localStorage.getItem(sidebarKey);
@@ -266,7 +267,7 @@ export function AppShell({ user, children }: AppShellProps) {
             onClick={() =>
               window.dispatchEvent(new Event("verde:new-transaction"))
             }
-            className="verde-fab enamel pressable fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
+            className="verde-fab enamel pressable !fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
           >
             <Plus className="h-8 w-8" aria-hidden="true" />
           </button>
@@ -274,7 +275,7 @@ export function AppShell({ user, children }: AppShellProps) {
           <Link
             href="/lancamentos?novo=1"
             aria-label="Novo lançamento"
-            className="verde-fab enamel pressable fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
+            className="verde-fab enamel pressable !fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
           >
             <Plus className="h-8 w-8" aria-hidden="true" />
           </Link>
@@ -284,7 +285,7 @@ export function AppShell({ user, children }: AppShellProps) {
         aria-label="Navegação principal"
         className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 backdrop-blur lg:hidden"
       >
-        <div className="grid h-16 grid-cols-6">
+        <div className="flex h-16 items-stretch justify-around">
           {MOBILE_NAV.map((item) => {
             const active = isActive(pathname, item.href);
             return (
@@ -293,7 +294,7 @@ export function AppShell({ user, children }: AppShellProps) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-12 flex-col items-center justify-center gap-0.5 text-xs font-medium transition-colors",
+                  "relative flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >

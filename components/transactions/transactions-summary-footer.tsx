@@ -68,6 +68,30 @@ function Value({
   );
 }
 
+function SummaryLine({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: number;
+  tone?: string;
+}) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span
+        className={cn(
+          "tabular whitespace-nowrap text-base font-semibold",
+          tone,
+        )}
+      >
+        {formatCurrency(value)}
+      </span>
+    </div>
+  );
+}
+
 function StatementRow({
   label,
   value,
@@ -269,18 +293,16 @@ export function TransactionsSummaryFooter({
             )}
           >
             {!expanded && (
-              <div className="grid min-w-0 flex-1 grid-cols-2 gap-3">
-                <Value
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <SummaryLine
                   label="Saldo"
                   value={values.saldo}
                   tone={closingTone(values.saldo)}
-                  strong
                 />
-                <Value
+                <SummaryLine
                   label="Previsto"
                   value={values.previsto}
                   tone={closingTone(values.previsto)}
-                  strong
                 />
               </div>
             )}

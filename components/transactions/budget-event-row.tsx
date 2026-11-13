@@ -74,7 +74,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         isAlert ? 0 : event.valor,
       )}`}
       className={cn(
-        "group relative flex min-h-[72px] w-full items-center gap-2 overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 text-left shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4",
+        "group relative flex min-h-[72px] w-full flex-wrap items-center gap-2 overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 text-left shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4",
         "opacity-90",
       )}
     >
@@ -102,7 +102,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         className="h-10 w-10 sm:h-12 sm:w-12"
       />
 
-      <span className="min-w-0 flex-1">
+      <span className="min-w-[10rem] flex-1">
         <span className="flex flex-wrap items-center gap-1.5">
           <span className="row-title">{title}</span>
           <span className="truncate text-xs text-muted-foreground">

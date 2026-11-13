@@ -83,7 +83,7 @@ describe("guarda de design", () => {
   it("só a pastilha renderiza a marca bancária", () => {
     for (const file of sourceFiles.filter((item) => item.endsWith(".tsx"))) {
       const content = fs.readFileSync(file, "utf8");
-      if (!content.includes("bank.initials")) continue;
+      if (!content.includes("bank.logo")) continue;
       expect(
         path.relative(process.cwd(), file),
         "marca bancária renderizada fora de Tile",

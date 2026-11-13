@@ -1,7 +1,6 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { filledSegments } from "@/lib/design/progress";
 
 type BudgetProgressProps = {
   gasto: number;
@@ -36,29 +35,29 @@ export function BudgetProgress({
   const percent = limite > 0 ? Math.round((gasto / limite) * 100) : gasto > 0 ? 100 : 0;
   const tone = budgetTone(gasto, limite);
   const width = Math.min(100, Math.max(0, percent));
-  const segments = 12;
-  const filled = filledSegments(percent, segments);
 
   return (
     <div
-      role="progressbar"      aria-label={label ?? "Progresso do orçamento"}
+      role="progressbar"
+      aria-label={label ?? "Progresso do orçamento"}
       aria-valuemin={0}
       aria-valuemax={limite}
       aria-valuenow={Math.min(gasto, limite)}
       aria-valuetext={`${percent}% do limite`}
-      className={cn("flex w-full gap-0.5", className)}
+      className={cn(
+        "w-full overflow-hidden rounded-full bg-forest-highest",
+        size === "sm" ? "h-1.5" : "h-2",
+        className,
+      )}
     >
-      {Array.from({ length: segments }).map((_, index) => (
-        <span
-          key={index}
-          aria-hidden="true"
-          className={cn(
-            "flex-none rounded-[4px] border border-grout/50 transition-colors",
-            size === "sm" ? "h-1.5 w-3" : "h-2 w-4",
-            index < filled ? tone.bar : "bg-forest-highest",
-          )}
-        />
-      ))}
+      <div
+        aria-hidden="true"
+        className={cn(
+          "h-full rounded-full transition-[width] duration-300",
+          tone.bar,
+        )}
+        style={{ width: `${width}%` }}
+      />
     </div>
   );
 }

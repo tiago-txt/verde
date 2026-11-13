@@ -88,6 +88,14 @@ export type CardInvoiceDetail = {
   contaPagamento: CardAccountInfo | null;
 };
 
+export type CardInvoicePayer = {
+  contaId: string | null;
+  contaNome: string | null;
+  contaCor: string | null;
+  contaIcone: string | null;
+  valor: number;
+};
+
 export type CardInvoiceEvent = {
   id: string;
   cartaoId: string;
@@ -104,6 +112,8 @@ export type CardInvoiceEvent = {
   restante: number;
   status: CardInvoiceSummary["status"];
   vencida: boolean;
+  /** Contas que efetivamente pagaram esta fatura, da maior para a menor. */
+  pagamentos: CardInvoicePayer[];
 };
 
 type MovementRow = {
@@ -119,6 +129,10 @@ type PaymentRow = {
   pago: boolean;
   faturaChave: string | null;
   data: string;
+  contaId: string | null;
+  contaNome: string | null;
+  contaCor: string | null;
+  contaIcone: string | null;
 };
 
 function cardConfig(card: CreditCard): CardCycleConfig {
@@ -158,8 +172,13 @@ function loadLedger(workspaceId: string): {
       pago: transactions.pago,
       faturaChave: transactions.faturaChave,
       data: transactions.data,
+      contaId: accounts.id,
+      contaNome: accounts.nome,
+      contaCor: accounts.cor,
+      contaIcone: accounts.icone,
     })
     .from(transactions)
+    .leftJoin(accounts, eq(transactions.contaId, accounts.id))
     .where(
       and(
         ws(transactions.workspaceId),
@@ -172,20 +191,46 @@ function loadLedger(workspaceId: string): {
   return { movements, payments };
 }
 
+type InvoiceWithPayers = CardInvoiceSummary & {
+  pagamentos: CardInvoicePayer[];
+};
+
 function invoicesForCard(
   card: CreditCard,
   movements: MovementRow[],
   payments: PaymentRow[],
   hoje: string,
   extraMovements: MovementRow[] = [],
-): CardInvoiceSummary[] {
+): InvoiceWithPayers[] {
   const config = cardConfig(card);
-  const buckets = new Map<string, { total: number; pago: number }>();
+  const buckets = new Map<
+    string,
+    { total: number; pago: number; pagadores: Map<string, CardInvoicePayer> }
+  >();
 
   function bucket(key: string) {
-    const current = buckets.get(key) ?? { total: 0, pago: 0 };
+    const current =
+      buckets.get(key) ?? { total: 0, pago: 0, pagadores: new Map() };
     buckets.set(key, current);
     return current;
+  }
+
+  function registrarPagador(
+    target: { pagadores: Map<string, CardInvoicePayer> },
+    payment: PaymentRow,
+    valor: number,
+  ) {
+    if (valor <= 0) return;
+    const key = payment.contaId ?? "sem-conta";
+    const current = target.pagadores.get(key) ?? {
+      contaId: payment.contaId,
+      contaNome: payment.contaNome,
+      contaCor: payment.contaCor,
+      contaIcone: payment.contaIcone,
+      valor: 0,
+    };
+    current.valor += valor;
+    target.pagadores.set(key, current);
   }
 
   for (const movement of [...movements, ...extraMovements]) {
@@ -199,8 +244,11 @@ function invoicesForCard(
 
   for (const payment of payments) {
     if (payment.cartaoId !== card.id || !payment.faturaChave) continue;
-    if (payment.pago) bucket(payment.faturaChave).pago += payment.valor;
-    else bucket(payment.faturaChave);
+    const target = bucket(payment.faturaChave);
+    if (payment.pago) {
+      target.pago += payment.valor;
+      registrarPagador(target, payment, payment.valor);
+    }
   }
 
   // Pagamentos antigos/sem `fatura_chave` são transferências reais: aloca no
@@ -222,15 +270,19 @@ function invoicesForCard(
         if (open <= 0) continue;
         const applied = Math.min(open, remaining);
         totals.pago += applied;
+        registrarPagador(totals, payment, applied);
         remaining -= applied;
       }
     }
   }
 
   return [...buckets.entries()]
-    .map(([chave, totals]) =>
-      montarResumoFatura(chave, config, totals.total, totals.pago, hoje),
-    )
+    .map(([chave, totals]) => ({
+      ...montarResumoFatura(chave, config, totals.total, totals.pago, hoje),
+      pagamentos: [...totals.pagadores.values()].sort(
+        (a, b) => b.valor - a.valor,
+      ),
+    }))
     .sort((a, b) => a.chave.localeCompare(b.chave));
 }
 
@@ -525,6 +577,7 @@ export function listCardInvoiceEventsForMonth(
         restante: fatura.restante,
         status: fatura.status,
         vencida: fatura.vencida,
+        pagamentos: fatura.pagamentos,
       });
     }
   }

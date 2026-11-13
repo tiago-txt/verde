@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { tileSpec } from "@/lib/design/tile-spec";
 import { getIcon } from "@/lib/icons";
-import { filledSegments } from "@/lib/design/progress";
 import { countLabel } from "@/lib/design/plural";
 
 describe("resolvedor único de pastilhas", () => {
@@ -53,13 +52,6 @@ describe("resolvedor único de pastilhas", () => {
 });
 
 describe("peças e plural", () => {
-  it("1% acende pelo menos um segmento", () => {
-    expect(filledSegments(0)).toBe(0);
-    expect(filledSegments(1)).toBe(1);
-    expect(filledSegments(100)).toBe(12);
-    expect(filledSegments(0.4)).toBe(1);
-  });
-
   it("plural não usa (s)", () => {
     expect(countLabel(0, "lançamento", "lançamentos")).toBe("0 lançamentos");
     expect(countLabel(1, "orçamento", "orçamentos")).toBe("1 orçamento");

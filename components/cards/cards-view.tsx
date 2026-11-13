@@ -301,14 +301,14 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                 </Link>
 
                 <div className="space-y-1.5">
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span>
                       Limite usado {formatCurrency(card.limiteUsado)} de{" "}
                       {formatCurrency(card.limite)}
                     </span>
                     <span
                       className={cn(
-                        "tabular font-medium",
+                        "tabular whitespace-nowrap font-medium",
                         card.disponivel < 0
                           ? "text-destructive"
                           : ratio >= 0.8
