@@ -45,7 +45,7 @@ export function ForecastBanner({
       />
       <span
         aria-hidden="true"
-        className="decor-glow pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary/10 blur-2xl"
+        className="decor-glow pointer-events-none absolute -right-10 -top-10 hidden h-32 w-32 rounded-full bg-primary/10 blur-2xl sm:block"
       />
       <span className="tile ml-1 grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-grout bg-forest-high text-amber">
         <AlertTriangle className="h-4 w-4" aria-hidden="true" />

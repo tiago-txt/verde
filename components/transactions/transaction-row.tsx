@@ -1,10 +1,7 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { memo, useRef, useState } from "react";
 import {
-  AlertTriangle,
-  CheckCircle2,
-  Clock3,
   Pencil,
   Repeat,
   StickyNote,
@@ -73,7 +70,7 @@ function AccountBadge({
   );
 }
 
-export function TransactionRow({
+export const TransactionRow = memo(function TransactionRow({
   transaction,
   secondaryInfo,
   selectionMode = false,
@@ -131,15 +128,10 @@ export function TransactionRow({
     today: todayISO(),
   });
   const statusMeta = {
-    pago: { label: "Pago", icon: CheckCircle2, tone: "text-success" },
-    pendente: {
-      label: "Pendente",
-      icon: Clock3,
-      tone: "text-muted-foreground",
-    },
-    atrasado: { label: "Atrasado", icon: AlertTriangle, tone: "text-amber" },
+    pago: { label: "Pago", tone: "text-success" },
+    pendente: { label: "Pendente", tone: "text-muted-foreground" },
+    atrasado: { label: "Atrasado", tone: "text-amber" },
   }[rowStatus];
-  const StatusIcon = statusMeta.icon;
 
   const secondaryText = secondaryLine(secondaryInfo, {
     categoria: transaction.categoriaNome,
@@ -210,7 +202,7 @@ export function TransactionRow({
 
   if (isMobile) {
     return (
-      <div className="group relative overflow-hidden">
+      <div className="list-row-cv group relative overflow-hidden">
         {reveal === "left" && (
           <div className="absolute inset-y-0 left-0 flex w-20 items-stretch bg-success/15">
             <button
@@ -300,7 +292,7 @@ export function TransactionRow({
                     }
                   : { id: transaction.id, nome: transaction.descricao }
               }
-              className="h-10 w-10"
+              className="h-10 w-10 [&_.tile-emblem]:hidden"
             />
           ) : isCardPurchase ? (
             <EntityTile
@@ -311,7 +303,7 @@ export function TransactionRow({
                 cor: transaction.cartaoCor,
                 icone: transaction.cartaoIcone,
               }}
-              className="h-10 w-10"
+              className="h-10 w-10 [&_.tile-emblem]:hidden"
             />
           ) : (
             <button
@@ -336,7 +328,7 @@ export function TransactionRow({
                   icone: transaction.categoriaIcone,
                   cor: transaction.categoriaCor,
                 }}
-                className="h-10 w-10"
+                className="h-10 w-10 [&_.tile-emblem]:hidden"
               />
             </button>
           )}
@@ -407,7 +399,11 @@ export function TransactionRow({
                 selectionMode && "opacity-60",
               )}
             >
-              <StatusIcon className="h-4 w-4" aria-hidden="true" />
+              {paid ? (
+                <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ThumbsDown className="h-4 w-4" aria-hidden="true" />
+              )}
               {statusMeta.label}
             </button>
           </div>
@@ -761,4 +757,4 @@ export function TransactionRow({
       </div>
     </div>
   );
-}
+});

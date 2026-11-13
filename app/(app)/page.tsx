@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BlockBoundary } from "@/components/dashboard/block-boundary";
 import { DashboardMonthHeader } from "@/components/dashboard/month-header";
-import { CategoryDonut, EvolutionChart } from "@/components/dashboard/report-charts";
+import { CategoryDonut, EvolutionChart } from "@/components/dashboard/report-charts-lazy";
 import { DashboardSkeleton } from "@/components/dashboard/skeleton";
 import { BudgetCycleOverview } from "@/components/budgets/budget-cycle-overview";
 import { BudgetProgress } from "@/components/budgets/budget-progress";
@@ -61,11 +61,11 @@ export default async function DashboardPage({
         />
         <div
           aria-hidden="true"
-          className="decor-glow pointer-events-none absolute -right-20 -top-20 h-80 w-80 rounded-full bg-emerald/10 blur-3xl"
+          className="decor-glow pointer-events-none absolute hidden sm:block -right-20 -top-20 h-80 w-80 rounded-full bg-emerald/10 blur-3xl"
         />
         <div
           aria-hidden="true"
-          className="decor-glow pointer-events-none absolute -bottom-24 left-1/3 h-72 w-72 rounded-full bg-forest-highest/40 blur-3xl"
+          className="decor-glow pointer-events-none absolute hidden sm:block -bottom-24 left-1/3 h-72 w-72 rounded-full bg-forest-highest/40 blur-3xl"
         />
         <div className="relative z-10">
           <h1 className="font-display text-[34px] font-bold leading-[42px] tracking-tight sm:text-[48px] sm:leading-[56px]">

@@ -139,7 +139,7 @@ export function AppShell({ user, children }: AppShellProps) {
     <div className="relative min-h-dvh bg-background">
       <div
         aria-hidden="true"
-        className="deco-pattern-page azulejo azulejo-mask pointer-events-none fixed inset-0 z-0"
+        className="deco-pattern-page azulejo azulejo-mask pointer-events-none fixed inset-0 z-0 hidden lg:block"
       />
       <aside
         className={cn(
@@ -279,7 +279,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
       <nav
         aria-label="Navegação principal"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 backdrop-blur lg:hidden"
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 lg:hidden"
       >
         <div className="grid h-14 grid-cols-5 items-stretch">
           {MOBILE_LEFT.map((item) => {
@@ -288,6 +288,7 @@ export function AppShell({ user, children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -329,6 +330,7 @@ export function AppShell({ user, children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

@@ -78,7 +78,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
       className={cn(
         "group relative flex min-h-[72px] w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         isMobile
-          ? "gap-3 px-0"
+          ? "gap-3 px-0 list-row-cv-virtual"
           : "overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 sm:gap-3 sm:px-4",
         !isMobile && "opacity-90",
       )}
@@ -105,7 +105,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           icone: summary.icone,
         }}
         dashed
-        className={cn("h-10 w-10", !isMobile && "sm:h-12 sm:w-12")}
+        className={cn("h-10 w-10", isMobile && "[&_.tile-emblem]:hidden", !isMobile && "sm:h-12 sm:w-12")}
       />
 
       <span className={cn("flex-1", isMobile ? "min-w-0" : "min-w-[10rem]")}>

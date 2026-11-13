@@ -1,7 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ForecastChart } from "./forecast-chart";
+import dynamic from "next/dynamic";
+
+const ForecastChart = dynamic(
+  () => import("./forecast-chart").then((module) => module.ForecastChart),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-[420px] animate-pulse rounded-xl bg-muted/30" />
+    ),
+  },
+);
 import {
   AnnualIncomeSuggestion,
   ForecastAlerts,

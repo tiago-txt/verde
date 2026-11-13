@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import {
   ArrowDownRight,
   ArrowUpRight,
@@ -19,7 +20,19 @@ import {
 } from "@/components/ui/card";
 import { CategoryIcon } from "@/components/category-icon";
 import { ReportFiltersBar } from "./report-filters";
-import { CategoryBars, MonthlyCategoryChart } from "./report-charts";
+
+const chartFallback = (
+  <div className="h-64 animate-pulse rounded-xl bg-muted/30" />
+);
+const CategoryBars = dynamic(
+  () => import("./report-charts").then((module) => module.CategoryBars),
+  { ssr: false, loading: () => chartFallback },
+);
+const MonthlyCategoryChart = dynamic(
+  () =>
+    import("./report-charts").then((module) => module.MonthlyCategoryChart),
+  { ssr: false, loading: () => chartFallback },
+);
 import type { CardOption } from "@/lib/db/queries/cards";
 import {
   buildReportHref,

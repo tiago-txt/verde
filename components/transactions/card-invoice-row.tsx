@@ -5,6 +5,8 @@ import {
   Banknote,
   CheckCircle2,
   Clock3,
+  ThumbsDown,
+  ThumbsUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EntityTile } from "@/components/entity-tile";
@@ -64,7 +66,7 @@ export function CardInvoiceRow({
         type="button"
         onClick={() => onOpen(event)}
         aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}${pagadorLabel}`}
-        className="relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
+        className="list-row-cv-virtual relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
       >
         <EntityTile
           kind="fatura"
@@ -75,7 +77,7 @@ export function CardInvoiceRow({
             icone: event.cartaoIcone,
           }}
           dashed={!isPaid}
-          className="h-10 w-10"
+          className="h-10 w-10 [&_.tile-emblem]:hidden"
         />
 
         <span className="min-w-0 flex-1">
@@ -114,7 +116,11 @@ export function CardInvoiceRow({
               statusMeta.tone,
             )}
           >
-            <StatusIcon className="h-4 w-4" aria-hidden="true" />
+            {isPaid ? (
+              <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+            ) : (
+              <ThumbsDown className="h-4 w-4" aria-hidden="true" />
+            )}
             {mobileStatusLabel}
           </span>
         </span>

@@ -82,6 +82,7 @@ export function MobileMoreSheet({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 onClick={() => onOpenChange(false)}
                 className={cellClass}
               >
@@ -98,6 +99,7 @@ export function MobileMoreSheet({
 
           <Link
             href="/configuracoes/perfil"
+            prefetch={false}
             onClick={() => onOpenChange(false)}
             className={cellClass}
           >

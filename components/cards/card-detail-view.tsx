@@ -32,12 +32,20 @@ import { FormError } from "@/components/form-feedback";
 import { useToast } from "@/components/ui/toast";
 import { BudgetProgress, budgetTone } from "@/components/budgets/budget-progress";
 import { PaymentProgress } from "@/components/cards/payment-progress";
-import { TransactionFormDialog } from "@/components/transactions/transaction-form-dialog";
+import dynamic from "next/dynamic";
 import {
   deleteTransactionAction,
   setTransactionPaidAction,
 } from "@/lib/actions/transactions";
 import { payInvoiceAction } from "@/lib/actions/cards";
+
+const TransactionFormDialog = dynamic(
+  () =>
+    import("@/components/transactions/transaction-form-dialog").then(
+      (module) => module.TransactionFormDialog,
+    ),
+  { ssr: false },
+);
 import type { CardInvoiceDetail } from "@/lib/db/queries/cards";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { addMonths, todayISO } from "@/lib/dates";
@@ -642,7 +650,7 @@ export function CardDetailView({
         </DialogContent>
       </Dialog>
 
-      {!embedded && formData && (
+      {purchaseOpen && !embedded && formData && (
         <TransactionFormDialog
           open={purchaseOpen}
           onOpenChange={setPurchaseOpen}

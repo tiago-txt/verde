@@ -3,6 +3,7 @@
 import {
   useEffect,
   useMemo,
+  useRef,
   useState,
   useOptimistic,
   useTransition,
@@ -54,15 +55,29 @@ import {
 } from "./bulk-actions";
 import { FilterBar } from "./filter-bar";
 import { ScopeDialog } from "./scope-dialog";
-import { TransactionDetailsPanel } from "./transaction-details-panel";
-import { TransactionFormDialog } from "./transaction-form-dialog";
 import { TransactionRow } from "./transaction-row";
 import { BudgetEventRow } from "./budget-event-row";
 import { CardInvoiceRow } from "./card-invoice-row";
 import { CardDetailView } from "@/components/cards/card-detail-view";
+
+const TransactionFormDialog = dynamic(
+  () =>
+    import("./transaction-form-dialog").then(
+      (module) => module.TransactionFormDialog,
+    ),
+  { ssr: false },
+);
+const TransactionDetailsPanel = dynamic(
+  () =>
+    import("./transaction-details-panel").then(
+      (module) => module.TransactionDetailsPanel,
+    ),
+  { ssr: false },
+);
 import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
+import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/toast";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { useSecondaryInfo } from "@/lib/hooks/use-secondary-info";
@@ -211,6 +226,14 @@ export function TransactionsPageClient({
     optimisticReducer,
   );
   const [isBulkPending, startBulkTransition] = useTransition();
+
+  // Pré-carrega o formulário em segundo plano para o "+" abrir imediatamente.
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      void import("./transaction-form-dialog");
+    }, 2000);
+    return () => window.clearTimeout(id);
+  }, []);
 
   const [createOpen, setCreateOpen] = useState(initialNew);
   const [editing, setEditing] = useState<{
@@ -842,6 +865,56 @@ export function TransactionsPageClient({
     { ...filters, detalhe: null },
   ).toString()}`;
 
+  function requestCategory(transaction: TransactionListItem) {
+    setCategoryTarget(transaction);
+    setFlash(null);
+  }
+
+  const handlersRef = useRef({
+    openDetails,
+    handleEdit,
+    handleDelete,
+    handleDuplicate,
+    handleLongPress,
+    handleTogglePaid,
+    toggleSelected,
+    requestCategory,
+  });
+  handlersRef.current = {
+    openDetails,
+    handleEdit,
+    handleDelete,
+    handleDuplicate,
+    handleLongPress,
+    handleTogglePaid,
+    toggleSelected,
+    requestCategory,
+  };
+
+  // Callbacks estáveis: só a linha alterada re-renderiza ao marcar como pago.
+  const rowActions = useMemo(
+    () => ({
+      onOpenDetails: (transaction: TransactionListItem) =>
+        handlersRef.current.openDetails(transaction),
+      onEdit: (transaction: TransactionListItem) =>
+        handlersRef.current.handleEdit(transaction),
+      onDelete: (transaction: TransactionListItem) =>
+        handlersRef.current.handleDelete(transaction),
+      onDuplicate: (transaction: TransactionListItem) => {
+        void handlersRef.current.handleDuplicate(transaction);
+      },
+      onLongPress: (transaction: TransactionListItem) =>
+        handlersRef.current.handleLongPress(transaction),
+      onTogglePaid: (transaction: TransactionListItem, pago: boolean) =>
+        handlersRef.current.handleTogglePaid(transaction, pago),
+      onToggleSelected: (id: string) =>
+        handlersRef.current.toggleSelected(id),
+      onChangeCategory: (transaction: TransactionListItem) =>
+        handlersRef.current.requestCategory(transaction),
+    }),
+    [],
+  );
+
   return (
     <div className="space-y-4 pb-[3.25rem] lg:pb-0">
       {forecastAlert && (
@@ -1210,17 +1283,14 @@ export function TransactionsPageClient({
                       secondaryInfo={secondaryInfo}
                       selectionMode={selectionMode}
                       selected={selectedIds.has(transaction.id)}
-                      onToggleSelected={toggleSelected}
-                      onOpenDetails={openDetails}
-                      onEdit={handleEdit}
-                      onDelete={handleDelete}
-                      onDuplicate={(item) => void handleDuplicate(item)}
-                      onLongPress={handleLongPress}
-                      onTogglePaid={handleTogglePaid}
-                      onChangeCategory={(item) => {
-                        setCategoryTarget(item);
-                        setFlash(null);
-                      }}
+                      onToggleSelected={rowActions.onToggleSelected}
+                      onOpenDetails={rowActions.onOpenDetails}
+                      onEdit={rowActions.onEdit}
+                      onDelete={rowActions.onDelete}
+                      onDuplicate={rowActions.onDuplicate}
+                      onLongPress={rowActions.onLongPress}
+                      onTogglePaid={rowActions.onTogglePaid}
+                      onChangeCategory={rowActions.onChangeCategory}
                     />
                   ))}
 
@@ -1272,13 +1342,15 @@ export function TransactionsPageClient({
         openingBalance={openingBalance}
       />
 
-      <TransactionFormDialog
-        open={createOpen}
-        onOpenChange={closeCreate}
-        mode="create"
-        formData={formData}
-        onSaved={handleSaved}
-      />
+      {createOpen && (
+        <TransactionFormDialog
+          open={createOpen}
+          onOpenChange={closeCreate}
+          mode="create"
+          formData={formData}
+          onSaved={handleSaved}
+        />
+      )}
 
       {editing && (
         <TransactionFormDialog
@@ -1296,15 +1368,17 @@ export function TransactionsPageClient({
         />
       )}
 
-      <TransactionDetailsPanel
-        detail={detail}
-        onClose={closeDetails}
-        onEdit={handleDetailEdit}
-        onDelete={handleDetailDelete}
-        onDuplicate={handleDetailDuplicate}
-        onNavigate={navigateDetail}
-        onTogglePaid={handleDetailTogglePaid}
-      />
+      {detail && (
+        <TransactionDetailsPanel
+          detail={detail}
+          onClose={closeDetails}
+          onEdit={handleDetailEdit}
+          onDelete={handleDetailDelete}
+          onDuplicate={handleDetailDuplicate}
+          onNavigate={navigateDetail}
+          onTogglePaid={handleDetailTogglePaid}
+        />
+      )}
 
       <Dialog
         open={Boolean(invoiceTarget)}

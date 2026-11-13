@@ -353,6 +353,24 @@
   }
 }
 
+@media (max-width: 639px) {
+  /* Um único nível de superfície e nada de brilho/profundidade nas listas. */
+  .tile {
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent);
+  }
+  .enamel {
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+  .list-row-cv {
+    content-visibility: auto;
+    contain-intrinsic-size: 64px;
+  }
+  .list-row-cv-virtual {
+    content-visibility: auto;
+    contain-intrinsic-size: 72px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
