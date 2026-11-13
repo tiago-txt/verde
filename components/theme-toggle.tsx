@@ -14,7 +14,13 @@ function resolveDark(theme: Theme): boolean {
   return theme === "dark";
 }
 
-export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
+export function ThemeToggle({
+  withLabel = false,
+  className,
+}: {
+  withLabel?: boolean;
+  className?: string;
+}) {
   const [theme, setTheme] = useState<Theme>("dark");
   const [mounted, setMounted] = useState(false);
 
@@ -93,6 +99,7 @@ export function ThemeToggle({ withLabel = false }: { withLabel?: boolean }) {
       onClick={toggle}
       aria-label={label}
       title={label}
+      className={className}
     >
       {mounted && resolveDark(theme) ? (
         <Sun className="h-5 w-5" />

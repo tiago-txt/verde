@@ -90,6 +90,15 @@ export function CardDetailView({
   }, [initialPay]);
 
   useEffect(() => {
+    function openPurchase() {
+      setPurchaseOpen(true);
+    }
+    window.addEventListener("verde:new-transaction", openPurchase);
+    return () =>
+      window.removeEventListener("verde:new-transaction", openPurchase);
+  }, []);
+
+  useEffect(() => {
     if (!payOpen) return;
     setError(null);
     setPayAccountId(

@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeftRight,
   BarChart3,
   CreditCard,
   LayoutDashboard,
   LineChart,
+  Menu,
   PanelLeftClose,
   PanelLeftOpen,
   Plus,
@@ -19,6 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { MobileMoreSheet } from "@/components/mobile-more-sheet";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
@@ -39,13 +41,21 @@ const NAV_ITEMS: NavItem[] = [
   { href: "/cartoes", label: "Cartões", icon: CreditCard },
 ];
 
-const MOBILE_NAV: NavItem[] = [
+const MOBILE_LEFT: NavItem[] = [
   { href: "/", label: "Início", icon: LayoutDashboard },
   { href: "/lancamentos", label: "Lançamentos", icon: ArrowLeftRight },
-  { href: "/relatorios", label: "Relatórios", icon: BarChart3 },
-  { href: "/previsao", label: "Previsão", icon: LineChart },
+];
+
+const MOBILE_RIGHT: NavItem[] = [
   { href: "/limite-de-gastos", label: "Orçamentos", icon: Target },
-  { href: "/configuracoes", label: "Perfil", icon: Settings },
+];
+
+const MORE_PREFIXES = [
+  "/relatorios",
+  "/previsao",
+  "/contas",
+  "/cartoes",
+  "/configuracoes",
 ];
 
 function isActive(pathname: string, href: string): boolean {
@@ -59,16 +69,24 @@ type AppShellProps = {
 
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const sidebarKey = `verde:${user.userId}:sidebar-collapsed`;
-  const isTransactionsPage = pathname.startsWith("/lancamentos");
-  const hideFloatingNew =
-    pathname === "/" ||
-    pathname.startsWith("/limite-de-gastos") ||
-    pathname.startsWith("/relatorios") ||
-    pathname.startsWith("/previsao") ||
-    pathname.startsWith("/cartoes") ||
-    pathname.startsWith("/contas");
+  const moreActive = MORE_PREFIXES.some((prefix) =>
+    pathname.startsWith(prefix),
+  );
+
+  function openNewTransaction() {
+    if (
+      pathname.startsWith("/lancamentos") ||
+      pathname.startsWith("/cartoes/")
+    ) {
+      window.dispatchEvent(new Event("verde:new-transaction"));
+      return;
+    }
+    router.push("/lancamentos?novo=1");
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem(sidebarKey);
@@ -254,39 +272,17 @@ export function AppShell({ user, children }: AppShellProps) {
       </aside>
 
       <div className="relative z-10 transition-[padding] duration-200 lg:pl-[var(--sidebar-width,260px)]">
-        <main className="mx-auto w-full max-w-7xl px-4 pb-40 pt-4 lg:px-8 lg:pb-28 lg:pt-7">
+        <main className="mx-auto w-full max-w-7xl px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] pt-4 lg:px-8 lg:pb-28 lg:pt-7">
           {children}
         </main>
       </div>
-
-      {!hideFloatingNew &&
-        (isTransactionsPage ? (
-          <button
-            type="button"
-            aria-label="Novo lançamento"
-            onClick={() =>
-              window.dispatchEvent(new Event("verde:new-transaction"))
-            }
-            className="verde-fab enamel pressable !fixed bottom-[calc(4rem+var(--verde-summary-height,4rem)+0.75rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-[bottom,opacity] duration-200 lg:hidden"
-          >
-            <Plus className="h-8 w-8" aria-hidden="true" />
-          </button>
-        ) : (
-          <Link
-            href="/lancamentos?novo=1"
-            aria-label="Novo lançamento"
-            className="verde-fab enamel pressable !fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 z-40 grid h-16 w-16 place-items-center rounded-xl bg-primary-fill text-primary-fill-foreground shadow-lg shadow-primary/25 transition-opacity lg:hidden"
-          >
-            <Plus className="h-8 w-8" aria-hidden="true" />
-          </Link>
-        ))}
 
       <nav
         aria-label="Navegação principal"
         className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 backdrop-blur lg:hidden"
       >
-        <div className="flex h-16 items-stretch justify-around">
-          {MOBILE_NAV.map((item) => {
+        <div className="grid h-14 grid-cols-5 items-stretch">
+          {MOBILE_LEFT.map((item) => {
             const active = isActive(pathname, item.href);
             return (
               <Link
@@ -294,23 +290,98 @@ export function AppShell({ user, children }: AppShellProps) {
                 href={item.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "relative flex min-h-12 min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors",
+                  "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
                 {active && (
                   <span
-                    className="absolute top-0 h-0.5 w-8 rounded-full bg-gold"
+                    className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
                     aria-hidden="true"
                   />
                 )}
-                <item.icon className="h-6 w-6" aria-hidden="true" />
+                <item.icon
+                  className={cn(
+                    "h-6 w-6",
+                    active ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden="true"
+                />
                 {item.label}
               </Link>
             );
           })}
+
+          <button
+            type="button"
+            onClick={openNewTransaction}
+            aria-label="Novo lançamento"
+            className="relative flex h-14 items-center justify-center focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <span className="-translate-y-1 grid h-[52px] w-[52px] place-items-center rounded-full bg-primary-fill text-primary-fill-foreground shadow-md">
+              <Plus className="h-6 w-6" aria-hidden="true" />
+            </span>
+          </button>
+
+          {MOBILE_RIGHT.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+                  active ? "text-primary" : "text-muted-foreground",
+                )}
+              >
+                {active && (
+                  <span
+                    className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
+                    aria-hidden="true"
+                  />
+                )}
+                <item.icon
+                  className={cn(
+                    "h-6 w-6",
+                    active ? "text-primary" : "text-muted-foreground",
+                  )}
+                  aria-hidden="true"
+                />
+                {item.label}
+              </Link>
+            );
+          })}
+
+          <button
+            type="button"
+            onClick={() => setMoreOpen(true)}
+            aria-pressed={moreActive}
+            aria-label="Mais"
+            className={cn(
+              "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
+              moreActive ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            {moreActive && (
+              <span
+                className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
+                aria-hidden="true"
+              />
+            )}
+            <Menu
+              className={cn(
+                "h-6 w-6",
+                moreActive ? "text-primary" : "text-muted-foreground",
+              )}
+              aria-hidden="true"
+            />
+            Mais
+          </button>
         </div>
       </nav>
+
+      <MobileMoreSheet open={moreOpen} onOpenChange={setMoreOpen} user={user} />
     </div>
   );
 }

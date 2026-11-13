@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, Info } from "lucide-react";
+import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -64,30 +64,6 @@ function Value({
       >
         {formatCurrency(value)}
       </p>
-    </div>
-  );
-}
-
-function SummaryLine({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: number;
-  tone?: string;
-}) {
-  return (
-    <div className="flex items-baseline justify-between gap-3">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span
-        className={cn(
-          "tabular whitespace-nowrap text-base font-semibold",
-          tone,
-        )}
-      >
-        {formatCurrency(value)}
-      </span>
     </div>
   );
 }
@@ -192,10 +168,10 @@ export function TransactionsSummaryFooter({
   openingBalance = 0,
 }: TransactionsSummaryFooterProps) {
   const [expanded, setExpanded] = useState(false);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const [breakdownKind, setBreakdownKind] = useState<
     "despesa" | "receita" | null
   >(null);
-  const mobileRef = useRef<HTMLDivElement>(null);
   const values = buildFooterSummary(summary, openingBalance);
   const breakdown = buildFooterBreakdown(summary);
   const items = breakdownKind ? breakdown[breakdownKind] : [];
@@ -204,32 +180,6 @@ export function TransactionsSummaryFooter({
     breakdownKind === "despesa"
       ? values.saidasPrevistas
       : values.entradasPrevistas;
-
-  // O FAB usa a altura real do resumo para ficar sempre logo acima dele.
-  useEffect(() => {
-    const node = mobileRef.current;
-    if (!node) return;
-
-    const update = () => {
-      const height = Math.max(
-        64,
-        Math.round(node.getBoundingClientRect().height),
-      );
-      document.documentElement.style.setProperty(
-        "--verde-summary-height",
-        `${height}px`,
-      );
-    };
-
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-
-    return () => {
-      observer.disconnect();
-      document.documentElement.style.removeProperty("--verde-summary-height");
-    };
-  }, []);
 
   const totals = (
     <>
@@ -281,56 +231,66 @@ export function TransactionsSummaryFooter({
         </div>
       </div>
 
-      <div
-        ref={mobileRef}
-        className="fixed inset-x-0 bottom-[calc(4rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card/95 backdrop-blur lg:hidden"
-      >
-        <div className="px-3 py-2">
-          <div
-            className={cn(
-              "flex items-center gap-2",
-              expanded ? "justify-end" : "justify-between",
-            )}
-          >
-            {!expanded && (
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <SummaryLine
-                  label="Saldo"
-                  value={values.saldo}
-                  tone={closingTone(values.saldo)}
-                />
-                <SummaryLine
-                  label="Previsto"
-                  value={values.previsto}
-                  tone={closingTone(values.previsto)}
-                />
-              </div>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-12 w-12 shrink-0"
-              onClick={() => setExpanded((current) => !current)}
-              aria-expanded={expanded}
-              aria-label={expanded ? "Recolher resumo" : "Expandir resumo"}
-            >
-              <ChevronDown
+      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card/95 lg:hidden">
+        <div className="flex h-[52px] items-center gap-2 pl-4 pr-2">
+          <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
+            <div className="min-w-0 text-right">
+              <p className="text-xs leading-tight text-muted-foreground">
+                Saldo atual
+              </p>
+              <p
                 className={cn(
-                  "h-5 w-5 transition-transform",
-                  expanded && "rotate-180",
+                  "tabular truncate text-sm font-semibold leading-tight tracking-tight min-[380px]:text-base",
+                  closingTone(values.saldo),
                 )}
-              />
-            </Button>
-          </div>
-
-          {expanded && (
-            <div className="mt-2 border-t border-border pt-2">
-              <Statement values={values} onOpen={setBreakdownKind} />
+              >
+                {formatCurrency(values.saldo)}
+              </p>
             </div>
-          )}
+            <div className="min-w-0 text-right">
+              <p className="text-xs leading-tight text-muted-foreground">
+                Previsto
+              </p>
+              <p
+                className={cn(
+                  "tabular truncate text-sm font-semibold leading-tight tracking-tight min-[380px]:text-base",
+                  closingTone(values.previsto),
+                )}
+              >
+                {formatCurrency(values.previsto)}
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-12 w-12 shrink-0"
+            onClick={() => setSummaryOpen(true)}
+            aria-label="Ver resumo do mês"
+          >
+            <ChevronUp className="h-5 w-5" />
+          </Button>
         </div>
       </div>
+
+      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
+        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Resumo do mês</DialogTitle>
+            <DialogDescription>
+              Saldo, receitas e despesas usados no rodapé.
+            </DialogDescription>
+          </DialogHeader>
+          <Statement
+            values={values}
+            onOpen={(kind) => {
+              setSummaryOpen(false);
+              setBreakdownKind(kind);
+            }}
+          />
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={breakdownKind !== null}

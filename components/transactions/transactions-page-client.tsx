@@ -839,7 +839,7 @@ export function TransactionsPageClient({
   ).toString()}`;
 
   return (
-    <div className="space-y-4 pb-48 lg:pb-28">
+    <div className="space-y-4 pb-[3.25rem] lg:pb-0">
       {forecastAlert && (
         <ForecastBanner
           userId={userId}
@@ -888,7 +888,7 @@ export function TransactionsPageClient({
             type="button"
             variant="outline"
             size="icon"
-            className="h-10 w-10 lg:hidden"
+            className="h-11 w-11 lg:hidden"
             aria-label="Buscar lançamentos"
             onClick={() => {
               setFiltersSearchFocus(true);
@@ -902,7 +902,7 @@ export function TransactionsPageClient({
             type="button"
             variant="outline"
             size="icon"
-            className="relative h-10 w-10 lg:hidden"
+            className="relative h-11 w-11 lg:hidden"
             aria-label={
               countActiveFilters(filters) > 0
                 ? `Filtros (${countActiveFilters(filters)} ativos)`
@@ -962,7 +962,7 @@ export function TransactionsPageClient({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-10 w-10 lg:h-11 lg:w-11"
+                className="h-11 w-11"
                 aria-label="Mais ações"
               >
                 <MoreVertical className="h-5 w-5" />
