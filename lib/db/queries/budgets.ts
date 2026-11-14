@@ -71,6 +71,7 @@ export type BudgetWithCategories = {
   diaFechamento: number;
   antecedenciaCiclos: number;
   origens: BudgetOrigin;
+  sobraPolicy: "rolar" | "liberar";
   contaId: string | null;
   cartaoId: string | null;
   dataInicio: string;
@@ -125,7 +126,11 @@ export type BudgetEventView = {
   resumo: BudgetCycleSummary;
   transactions: BudgetSpendingItem[];
   /** Sobra do ciclo anterior embutida nesta linha (exibição unificada). */
-  sobraAnterior?: { valor: number; ciclo: string } | null;
+  sobraAnterior?: {
+    valor: number;
+    ciclo: string;
+    rolada?: boolean;
+  } | null;
   /** Compatibilidade com o formato puro de eventos. */
   tipo: BudgetEventKind;
   ciclo: string;
@@ -206,6 +211,7 @@ function cycleConfigFromBudget(budget: BudgetWithCategories) {
     dataFim: budget.dataFim,
     arquivado: budget.arquivado,
     origens: budget.origens,
+    sobraPolicy: budget.sobraPolicy,
   };
 }
 
@@ -365,6 +371,7 @@ export function loadBudgetSeries(
       dataInicio,
       dataFim: budget.dataFim,
       arquivado: budget.arquivado,
+      sobraPolicy: budget.sobraPolicy,
       versions,
       exceptions: exceptionsByBudget.get(budget.id) ?? [],
       cor: budget.cor,
@@ -459,13 +466,88 @@ export function listBudgetsWithCategories(
     .filter((budget) => options?.incluirArquivados || !budget.arquivado);
 }
 
+type SpendingContext = {
+  seriesByBudgetId: Map<string, BudgetSeriesRow>;
+  categoriesById: Map<string, BudgetCategoryInfo>;
+};
+
+/**
+ * Para orçamentos com rolagem, inclui os ciclos anteriores no cálculo do
+ * gasto. Limita a 36 ciclos para não crescer indefinidamente em bases antigas.
+ */
+function expandRolloverPairs(
+  pairs: SpendingPair[],
+  context?: SpendingContext,
+): SpendingPair[] {
+  if (!context) return pairs;
+  const byKey = new Map(
+    pairs.map((pair) => [pairKey(pair.budget.id, pair.ciclo), pair]),
+  );
+  for (const pair of pairs) {
+    const series = context.seriesByBudgetId.get(pair.budget.budgetId);
+    if (!series || (series.sobraPolicy ?? "liberar") !== "rolar") continue;
+    const start = series.dataInicio || pair.ciclo;
+    const cap = addMonths(pair.ciclo, -36);
+    const from = start > cap ? start : cap;
+    for (let ciclo = from; ciclo <= pair.ciclo; ciclo = addMonths(ciclo, 1)) {
+      const key = pairKey(pair.budget.budgetId, ciclo);
+      if (byKey.has(key)) continue;
+      const resolved = toResolvedBudget(series, ciclo, context.categoriesById);
+      if (!resolved) continue;
+      byKey.set(key, { budget: resolved, ciclo });
+    }
+  }
+  return [...byKey.values()];
+}
+
+/** Soma a sobra do ciclo anterior ao limite dos ciclos seguintes. */
+function applyRollover(
+  pairs: SpendingPair[],
+  spending: Map<string, SpendingResult>,
+): void {
+  const byBudget = new Map<string, SpendingPair[]>();
+  for (const pair of pairs) {
+    const list = byBudget.get(pair.budget.budgetId) ?? [];
+    list.push(pair);
+    byBudget.set(pair.budget.budgetId, list);
+  }
+
+  for (const list of byBudget.values()) {
+    const policy = list[0]?.budget.sobraPolicy ?? "liberar";
+    list.sort((a, b) => a.ciclo.localeCompare(b.ciclo));
+    let previousRestante = 0;
+
+    for (const pair of list) {
+      const entry = spending.get(pairKey(pair.budget.budgetId, pair.ciclo));
+      if (!entry) continue;
+      const info = entry.info;
+      const baseLimit = info.limite;
+      const rolled = policy === "rolar" ? previousRestante : 0;
+      info.limite = Math.max(0, baseLimit + rolled);
+      info.restante = Math.max(0, info.limite - info.gasto);
+      info.estouro = Math.max(0, info.gasto - info.limite);
+      info.proporcao =
+        info.limite > 0 ? info.gasto / info.limite : info.gasto > 0 ? 1 : 0;
+      info.percentual =
+        info.limite > 0
+          ? Math.round((info.gasto / info.limite) * 100)
+          : info.gasto > 0
+            ? 100
+            : 0;
+      previousRestante = info.restante;
+    }
+  }
+}
+
 function loadSpending(
   workspaceId: string,
   pairs: SpendingPair[],
+  context?: SpendingContext,
 ): Map<string, SpendingResult> {
   const { db, ws } = scopedDb(workspaceId);
   const result = new Map<string, SpendingResult>();
   if (pairs.length === 0) return result;
+  const allPairs = expandRolloverPairs(pairs, context);
 
   const allCategories = listAllCategories(workspaceId).map((category) => ({
     id: category.id,
@@ -477,7 +559,7 @@ function loadSpending(
   let maxEnd: string | null = null;
   const allCategoryIds = new Set<string>();
 
-  for (const { budget, ciclo } of pairs) {
+  for (const { budget, ciclo } of allPairs) {
     const expanded = expandirCategorias(
       allCategories,
       budget.categories.map((category) => category.id),
@@ -550,7 +632,7 @@ function loadSpending(
           .all()
       : [];
 
-  for (const { budget, ciclo } of pairs) {
+  for (const { budget, ciclo } of allPairs) {
     const key = pairKey(budget.id, ciclo);
     const expanded = expandedByBudget.get(key);
     if (!expanded) continue;
@@ -654,6 +736,7 @@ function loadSpending(
     });
   }
 
+  applyRollover(allPairs, result);
   return result;
 }
 
@@ -681,9 +764,15 @@ export function listBudgetCycleDetails(
       options?.incluirArquivados || !budget.arquivado,
   );
 
+  const series = loadBudgetSeries(workspaceId, options);
+  const categoriesById = categoryInfoMap(workspaceId);
   const spending = loadSpending(
     workspaceId,
     eligible.map((budget) => ({ budget, ciclo })),
+    {
+      seriesByBudgetId: new Map(series.map((row) => [row.id, row])),
+      categoriesById,
+    },
   );
 
   return eligible.flatMap((budget) => {
@@ -719,9 +808,20 @@ export function getBudgetCycleDetail(
   }).find((item) => item.id === budgetId);
   if (!budget) return null;
 
-  const spending = loadSpending(workspaceId, [{ budget, ciclo }]).get(
-    pairKey(budget.id, ciclo),
-  );
+  const seriesRow = loadBudgetSeries(workspaceId, {
+    incluirArquivados: true,
+  }).find((row) => row.id === budgetId);
+  const categoriesById = categoryInfoMap(workspaceId);
+  const spending = loadSpending(
+    workspaceId,
+    [{ budget, ciclo }],
+    seriesRow
+      ? {
+          seriesByBudgetId: new Map([[seriesRow.id, seriesRow]]),
+          categoriesById,
+        }
+      : undefined,
+  ).get(pairKey(budget.id, ciclo));
   if (!spending) return null;
 
   return {
@@ -789,7 +889,10 @@ export function getBudgetEventsForMonth(
     }
   }
 
-  const spending = loadSpending(workspaceId, pairs);
+  const spending = loadSpending(workspaceId, pairs, {
+    seriesByBudgetId: new Map(series.map((row) => [row.id, row])),
+    categoriesById,
+  });
   const today = todayISO();
   const events: BudgetEventView[] = [];
 
@@ -802,7 +905,7 @@ export function getBudgetEventsForMonth(
       cycleConfigFromBudget(budget),
       ciclo,
       data.info.gasto,
-      {},
+      { [ciclo]: data.info.limite },
     );
 
     for (const event of cycleEvents) {
@@ -813,7 +916,7 @@ export function getBudgetEventsForMonth(
       );
       if (!passes) continue;
 
-      events.push({
+      const view: BudgetEventView = {
         id: `${budget.id}:${ciclo}:${event.tipo}`,
         tipoEvento: event.tipo,
         tipo: event.tipo,
@@ -824,7 +927,9 @@ export function getBudgetEventsForMonth(
           event.tipo === "sobra" && event.data < today ? "apurada" : null,
         resumo: summary,
         transactions: data.transactions,
-      });
+      };
+
+      events.push(view);
     }
   }
 
@@ -863,6 +968,7 @@ function mergeSobrasNasProvisoes(
         provision.sobraAnterior = {
           valor: event.valor,
           ciclo: event.ciclo,
+          rolada: provision.resumo.sobraPolicy === "rolar",
         };
         continue;
       }
@@ -912,7 +1018,10 @@ export function listBudgetForecastEvents(
     }
   }
 
-  const spending = loadSpending(workspaceId, pairs);
+  const spending = loadSpending(workspaceId, pairs, {
+    seriesByBudgetId: new Map(series.map((row) => [row.id, row])),
+    categoriesById,
+  });
   const events: ForecastBudgetEvent[] = [];
 
   for (const { budget, ciclo } of pairs) {
@@ -923,7 +1032,7 @@ export function listBudgetForecastEvents(
       cycleConfigFromBudget(budget),
       ciclo,
       data.info.gasto,
-      {},
+      { [ciclo]: data.info.limite },
     );
     for (const event of cycleEvents) {
       if (event.data < minDate || event.data > endDate) continue;
@@ -1249,9 +1358,14 @@ export function getBudgetNoticeForTransactions(
         const key = pairKey(budget.id, ciclo);
         if (notices.has(key)) continue;
 
-        const spending = loadSpending(workspaceId, [{ budget, ciclo }]).get(
-          key,
-        );
+        const spending = loadSpending(
+          workspaceId,
+          [{ budget, ciclo }],
+          {
+            seriesByBudgetId: new Map([[row.id, row]]),
+            categoriesById: categoryById,
+          },
+        ).get(key);
         if (!spending) continue;
         const info = spending.info;
 

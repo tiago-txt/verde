@@ -68,6 +68,10 @@ export type CardClosingBehavior = (typeof CARD_CLOSING_BEHAVIORS)[number];
 export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
 export type BudgetOrigin = (typeof BUDGET_ORIGINS)[number];
 
+/** Destino da sobra não gasta no fim do ciclo. */
+export const BUDGET_SOBRA_POLICIES = ["rolar", "liberar"] as const;
+export type BudgetSobraPolicy = (typeof BUDGET_SOBRA_POLICIES)[number];
+
 export const BUDGET_EXCEPTION_TYPES = ["excluido", "ajustado"] as const;
 export type BudgetExceptionType = (typeof BUDGET_EXCEPTION_TYPES)[number];
 
@@ -467,6 +471,10 @@ export const budgets = sqliteTable(
     dataInicio: text("data_inicio").notNull().default(""),
     /** Último ciclo de vigência (YYYY-MM), inclusive. */
     dataFim: text("data_fim"),
+    /** `rolar` soma a sobra ao limite do ciclo seguinte; `liberar` devolve. */
+    sobraPolicy: text("sobra_policy", { enum: BUDGET_SOBRA_POLICIES })
+      .notNull()
+      .default("liberar"),
     cor: text("cor").notNull().default("#34d399"),
     icone: text("icone").notNull().default("Target"),
     arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),

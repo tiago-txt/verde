@@ -85,6 +85,13 @@
       "when": 1794800000002,
       "tag": "0011_cuddly_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1794800000003,
+      "tag": "0012_chunky_swordsman",
+      "breakpoints": true
     }
   ]
 }

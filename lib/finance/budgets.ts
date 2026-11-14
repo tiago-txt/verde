@@ -1,6 +1,7 @@
 import { addDaysISO, addMonths, dateInMonth } from "@/lib/dates";
 import type {
   BudgetOrigin,
+  BudgetSobraPolicy,
   BudgetVersionData,
   TransactionType,
 } from "@/lib/db/schema";
@@ -29,6 +30,8 @@ export type BudgetCycleConfig = {
   arquivado?: boolean;
   /** Origens de gasto que consomem o envelope. */
   origens?: BudgetOrigin;
+  /** Destino da sobra no fim do ciclo. */
+  sobraPolicy?: BudgetSobraPolicy;
   /** Modo indicador: acompanha gasto sem gerar reserva/liberação. */
   modoIndicador?: boolean;
 };
@@ -100,6 +103,7 @@ export type BudgetSeriesInput = {
   arquivado: boolean;
   versions: BudgetVersionInput[];
   exceptions: BudgetCycleExceptionInput[];
+  sobraPolicy?: BudgetSobraPolicy;
 };
 
 export type ResolvedBudgetCycle = BudgetVersionData & {
@@ -108,6 +112,7 @@ export type ResolvedBudgetCycle = BudgetVersionData & {
   dataInicio: string;
   dataFim: string | null;
   arquivado: boolean;
+  sobraPolicy: BudgetSobraPolicy;
   exception: "excluido" | "ajustado" | null;
 };
 
@@ -162,6 +167,7 @@ export function resolverCiclo(
     dataInicio: series.dataInicio,
     dataFim: series.dataFim,
     arquivado: series.arquivado,
+    sobraPolicy: series.sobraPolicy ?? "liberar",
     exception: exception?.tipo ?? null,
   };
 }

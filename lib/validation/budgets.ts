@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { BUDGET_ORIGINS } from "@/lib/db/schema";
+import { BUDGET_ORIGINS, BUDGET_SOBRA_POLICIES } from "@/lib/db/schema";
 import {
   hexColorSchema,
   iconNameSchema,
@@ -26,6 +26,7 @@ const budgetFields = z.object({
     error: "A antecedência deve ser 0 ou 1 ciclo",
   }),
   origens: z.enum(BUDGET_ORIGINS).default("todas"),
+  sobraPolicy: z.enum(BUDGET_SOBRA_POLICIES).optional(),
   categoriaIds: z
     .array(idSchema)
     .min(1, "Escolha pelo menos uma categoria")

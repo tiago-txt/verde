@@ -393,6 +393,98 @@ describe("categorias no formulário de orçamento", () => {
     expect(provision?.sobraAnterior).toEqual({
       valor: 30_000,
       ciclo: previous,
+      rolada: false,
+    });
+    expect(
+      merged.some(
+        (event) =>
+          event.tipoEvento === "sobra" &&
+          event.resumo.nome === "Alimentação",
+      ),
+    ).toBe(false);
+  });
+
+  it("rola a sobra para o limite do ciclo seguinte", async () => {
+    const mercado = categoryIdByName("Mercado");
+    const accountId = crypto.randomUUID();
+    testDb.db
+      .insert(accounts)
+      .values({
+        id: accountId,
+        workspaceId: user.workspaceId,
+        nome: "Conta da rolagem",
+        tipo: "corrente",
+      })
+      .run();
+
+    setCurrent(user);
+    const previous = addMonths(currentMonth(), -1);
+    const budget = await createBudgetAction({
+      nome: "Alimentação",
+      valorPadrao: 50_000,
+      diaFechamento: 1,
+      antecedenciaCiclos: 0,
+      origens: "todas",
+      sobraPolicy: "rolar",
+      categoriaIds: [mercado],
+      contaId: accountId,
+      cartaoId: null,
+      cor: "#34d399",
+      icone: "Target",
+      dataInicio: previous,
+      dataFim: null,
+    });
+    if (!budget.ok) throw new Error(budget.error);
+
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "despesa",
+        descricao: "Compra do ciclo anterior",
+        valor: 20_000,
+        data: `${previous}-10`,
+        pago: true,
+        contaId: accountId,
+        categoriaId: mercado,
+      })
+      .run();
+
+    const filters = {
+      mes: currentMonth(),
+      tipo: null,
+      contas: [],
+      categorias: [],
+      tags: [],
+      status: "todos" as const,
+      q: null,
+      dias: 31,
+      detalhe: null,
+      cartoes: [],
+      comprasCartao: true,
+      de: null,
+      ate: null,
+    };
+    const merged = getBudgetEventsForMonth(
+      user.workspaceId,
+      currentMonth(),
+      filters,
+      { mergeSobras: true },
+    );
+
+    const provision = merged.find(
+      (event) =>
+        event.tipoEvento === "provisao" &&
+        event.resumo.nome === "Alimentação",
+    );
+    expect(provision?.resumo.limite).toBe(80_000);
+    expect(provision?.valor).toBe(80_000);
+    expect(provision?.resumo.restante).toBe(80_000);
+    expect(provision?.sobraAnterior).toEqual({
+      valor: 30_000,
+      ciclo: previous,
+      rolada: true,
     });
     expect(
       merged.some(

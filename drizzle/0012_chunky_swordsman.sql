@@ -1,0 +1,1 @@
+ALTER TABLE `budgets` ADD `sobra_policy` text DEFAULT 'liberar' NOT NULL;

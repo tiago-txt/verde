@@ -303,8 +303,7 @@ export async function createBudgetAction(
 
   const data = parsed.data;
   const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
-  if (categoryCheck.error) return fail(categoryCheck.error);
-  const linkError = validateBudgetLinks(
+  if (categoryCheck.error) return fail(categoryCheck.error);  const linkError = validateBudgetLinks(
     workspaceId,
     data.contaId ?? null,
     data.cartaoId ?? null,
@@ -335,6 +334,7 @@ export async function createBudgetAction(
           diaFechamento: data.diaFechamento,
           antecedenciaCiclos: data.antecedenciaCiclos,
           origens: data.origens,
+          sobraPolicy: data.sobraPolicy ?? "liberar",
           cartaoId: data.cartaoId ?? null,
           contaId,
           dataInicio: data.dataInicio,
@@ -442,6 +442,12 @@ export async function updateBudgetAction(
 
   try {
     db.transaction((tx) => {
+      if (data.sobraPolicy !== undefined) {
+        tx.update(budgets)
+          .set({ sobraPolicy: data.sobraPolicy, updatedAt: now })
+          .where(and(eq(budgets.id, series.id), ws(budgets.workspaceId)))
+          .run();
+      }
       if (scope === "single") {
         // Exceção do ciclo: sobrepõe valor, categorias, fechamento etc.
         upsertException(

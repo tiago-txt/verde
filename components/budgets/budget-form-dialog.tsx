@@ -57,6 +57,7 @@ function defaultValues(
       diaFechamento: budget.diaFechamento,
       antecedenciaCiclos: budget.antecedenciaCiclos === 1 ? 1 : 0,
       origens: budget.origens,
+      sobraPolicy: budget.sobraPolicy,
       cartaoId: budget.cartaoId,
       categoriaIds: budget.categories.map((category) => category.id),
       contaId: budget.contaId,
@@ -73,6 +74,7 @@ function defaultValues(
     diaFechamento: 1,
     antecedenciaCiclos: 0,
     origens: "todas",
+    sobraPolicy: "liberar",
     cartaoId: null,
     categoriaIds: [],
     contaId: formData.defaultAccountId,
@@ -93,6 +95,9 @@ function relevantChange(
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
   if (budget.origens !== values.origens) return true;
+  if ((budget.sobraPolicy ?? "liberar") !== (values.sobraPolicy ?? "liberar")) {
+    return true;
+  }
 
   const before = budget.categories.map((category) => category.id).sort();
   const after = [...values.categoriaIds].sort();
@@ -480,6 +485,34 @@ export function BudgetFormDialog({
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="space-y-1">
+              <Label
+                htmlFor="budget-sobra"
+                className="text-xs text-muted-foreground"
+              >
+                Sobra do ciclo
+              </Label>
+              <Controller
+                control={control}
+                name="sobraPolicy"
+                render={({ field }) => (
+                  <NativeSelect
+                    id="budget-sobra"
+                    value={field.value ?? "liberar"}
+                    onChange={(event) => field.onChange(event.target.value)}
+                  >
+                    <option value="liberar">Liberar (não rolar)</option>
+                    <option value="rolar">Rolar para o próximo ciclo</option>
+                  </NativeSelect>
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                {watch("sobraPolicy") === "rolar"
+                  ? "A sobra não gasta aumenta o limite do próximo ciclo."
+                  : "A sobra não gasta volta para o saldo livre."}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

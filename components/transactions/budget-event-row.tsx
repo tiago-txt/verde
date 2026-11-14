@@ -166,7 +166,8 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         {event.sobraAnterior && (
           <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span>
-              Sobra de {formatMonthShort(event.sobraAnterior.ciclo)}:
+              Sobra de {formatMonthShort(event.sobraAnterior.ciclo)}
+              {event.sobraAnterior.rolada ? " incluída:" : " livre:"}
             </span>
             <span className="tabular font-medium text-primary">
               +{formatCurrency(event.sobraAnterior.valor)}
