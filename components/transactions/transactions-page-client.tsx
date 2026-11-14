@@ -924,7 +924,7 @@ export function TransactionsPageClient({
           alert={forecastAlert}
         />
       )}
-      <div className="flex items-center gap-1 lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
+      <div className="flex items-center gap-1 max-[379px]:flex-wrap lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
         <div className="hidden min-w-0 lg:block">
           <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>
           <p className="text-sm text-muted-foreground">
@@ -932,12 +932,12 @@ export function TransactionsPageClient({
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border border-grout bg-forest-container/90 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] lg:flex-none lg:gap-1 lg:p-1">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border border-grout bg-forest-container/90 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] max-[379px]:w-full max-[379px]:flex-none lg:flex-none lg:gap-1 lg:p-1">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11 shrink-0 rounded-lg"
+            className="compact-44 tap-48 h-11 w-11 shrink-0 rounded-lg"
             aria-label="Mês anterior"
             onClick={() => changeMonth(addMonths(filters.mes, -1))}
           >
@@ -952,7 +952,7 @@ export function TransactionsPageClient({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11 shrink-0 rounded-lg"
+            className="compact-44 tap-48 h-11 w-11 shrink-0 rounded-lg"
             aria-label="Próximo mês"
             onClick={() => changeMonth(addMonths(filters.mes, 1))}
           >
@@ -960,12 +960,12 @@ export function TransactionsPageClient({
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 lg:justify-end">
+        <div className="flex items-center gap-1 max-[379px]:ml-auto lg:justify-end">
           <Button
             type="button"
             variant="outline"
             size="icon"
-            className="h-11 w-11 lg:hidden"
+            className="compact-44 tap-48 h-11 w-11 lg:hidden"
             aria-label="Buscar lançamentos"
             onClick={() => {
               setFiltersSearchFocus(true);
@@ -979,7 +979,7 @@ export function TransactionsPageClient({
             type="button"
             variant="outline"
             size="icon"
-            className="relative h-11 w-11 lg:hidden"
+            className="compact-44 tap-48 relative h-11 w-11 lg:hidden"
             aria-label={
               countActiveFilters(filters) > 0
                 ? `Filtros (${countActiveFilters(filters)} ativos)`
@@ -1039,7 +1039,7 @@ export function TransactionsPageClient({
                 type="button"
                 variant="ghost"
                 size="icon"
-                className="h-11 w-11"
+                className="compact-44 tap-48 h-11 w-11"
                 aria-label="Mais ações"
               >
                 <MoreVertical className="h-5 w-5" />

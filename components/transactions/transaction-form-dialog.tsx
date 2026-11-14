@@ -244,7 +244,7 @@ function Accordion({
 }) {
   return (
     <div
-      className="grid transition-[grid-template-rows] duration-200 ease-out"
+      className="grid"
       style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
       aria-hidden={!open}
     >
@@ -746,7 +746,7 @@ export function TransactionFormDialog({
 
   const suggestionList =
     descriptionOpen && suggestions.length > 0 ? (
-      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
+      <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg max-sm:shadow-md">
         {suggestions.map((suggestion) => (
           <button
             key={`${suggestion.descricao}-${suggestion.valor}`}

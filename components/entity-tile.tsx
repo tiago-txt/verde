@@ -12,6 +12,7 @@ export function EntityTile({
   entity,
   size = "md",
   dashed = false,
+  plain = false,
   className,
   iconClassName,
 }: {
@@ -19,6 +20,7 @@ export function EntityTile({
   entity?: TileEntity;
   size?: TileSize;
   dashed?: boolean;
+  plain?: boolean;
   className?: string;
   iconClassName?: string;
 }) {
@@ -32,6 +34,7 @@ export function EntityTile({
       color={spec.color}
       size={size}
       dashed={dashed}
+      plain={plain}
       className={cn(className)}
       iconClassName={iconClassName}
     />

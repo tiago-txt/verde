@@ -4,14 +4,14 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:transition-transform",
+  "relative inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-transform duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:transition-transform",
   {
     variants: {
       variant: {
         default:
           "enamel bg-primary-fill text-primary-fill-foreground hover:brightness-105",
         destructive:
-          "bg-destructive text-destructive-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.16),0_2px_8px_hsl(var(--destructive)/.18)] hover:bg-destructive/90",
+          "bg-destructive text-destructive-foreground shadow-[inset_0_1px_0_rgba(255,255,255,.16),0_2px_8px_hsl(var(--destructive)/.18)] hover:bg-destructive/90 max-sm:shadow-none",
         outline:
           "border border-grout bg-surface-low text-on-surface shadow-sm hover:bg-forest-high hover:text-foreground",
         secondary:
@@ -20,10 +20,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-11 px-4 py-2",
-        sm: "h-10 rounded-lg px-3 text-xs",
+        default: "h-11 px-4 py-2 max-sm:h-12",
+        sm: "h-10 rounded-lg px-3 text-xs max-sm:h-12",
         lg: "h-12 rounded-xl px-8",
-        icon: "h-11 w-11",
+        icon: "h-11 w-11 max-sm:h-12 max-sm:w-12",
       },
     },
     defaultVariants: {

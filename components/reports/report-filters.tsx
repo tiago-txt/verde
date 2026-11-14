@@ -191,7 +191,7 @@ export function ReportFiltersBar({
                 onClick={() => patch({ tipo })}
                 aria-pressed={filters.tipo === tipo}
                 className={cn(
-                  "h-9 rounded px-3 text-xs font-medium transition-colors",
+                  "h-9 rounded px-3 text-xs font-medium transition-colors max-sm:min-h-12",
                   filters.tipo === tipo
                     ? "bg-card text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground",
@@ -336,7 +336,7 @@ export function ReportFiltersBar({
               onClick={() => patch({ onlyPaid: option.value })}
               aria-pressed={filters.onlyPaid === option.value}
               className={cn(
-                "h-9 rounded px-2.5 text-xs font-medium transition-colors",
+                "h-9 rounded px-2.5 text-xs font-medium transition-colors max-sm:min-h-12",
                 filters.onlyPaid === option.value
                   ? "bg-card text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",

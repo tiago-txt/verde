@@ -83,6 +83,7 @@ export function Tile({
   color,
   size = "md",
   dashed = false,
+  plain = false,
   className,
   iconClassName,
 }: {
@@ -93,6 +94,8 @@ export function Tile({
   color?: string | null;
   size?: TileSize;
   dashed?: boolean;
+  /** Sem emblema desenhado: usado nas linhas da lista mobile. */
+  plain?: boolean;
   className?: string;
   iconClassName?: string;
 }) {
@@ -111,13 +114,15 @@ export function Tile({
       style={{ color: color ?? undefined }}
       aria-hidden="true"
     >
-      <svg
-        viewBox="0 0 40 40"
-        className="tile-emblem pointer-events-none absolute inset-0 h-full w-full"
-        fill="none"
-      >
-        {MOTIFS[motif % MOTIFS.length]}
-      </svg>
+      {!plain && (
+        <svg
+          viewBox="0 0 40 40"
+          className="tile-emblem pointer-events-none absolute inset-0 h-full w-full"
+          fill="none"
+        >
+          {MOTIFS[motif % MOTIFS.length]}
+        </svg>
+      )}
       {bank ? (
         <span className="absolute inset-[3px] z-10 overflow-hidden rounded-[9px] ring-1 ring-black/10">
           <img

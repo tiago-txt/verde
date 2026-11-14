@@ -22,7 +22,7 @@ export function Brand({
         className,
       )}
     >
-      <span className="tile grid h-9 w-9 place-items-center rounded-[12px] bg-primary-fill text-primary-fill-foreground shadow-[0_0_16px_hsl(var(--primary)/.28)]">
+      <span className="tile grid h-9 w-9 place-items-center rounded-[12px] bg-primary-fill text-primary-fill-foreground shadow-[0_0_16px_hsl(var(--primary)/.28)] max-sm:shadow-none">
         <Leaf className="h-5 w-5" aria-hidden="true" />
       </span>
       {!compact && (

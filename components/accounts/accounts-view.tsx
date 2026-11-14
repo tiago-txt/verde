@@ -217,7 +217,7 @@ export function AccountsView({ accounts }: { accounts: AccountWithBalance[] }) {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-10 w-10 shrink-0"
+                          className="h-10 w-10 shrink-0 max-sm:h-12 max-sm:w-12"
                           aria-label={`Ações da conta ${account.nome}`}
                           disabled={isPending}
                         >

@@ -143,7 +143,7 @@ export function AppShell({ user, children }: AppShellProps) {
       />
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-grout/70 bg-surface-lowest shadow-[0_12px_32px_-8px_rgba(7,16,11,0.9)] transition-[width] duration-200 lg:flex",
+          "fixed inset-y-0 left-0 z-40 hidden flex-col border-r border-grout/70 bg-surface-lowest shadow-[0_12px_32px_-8px_rgba(7,16,11,0.9)] transition-[width] duration-150 lg:flex",
           collapsed ? "w-[72px]" : "w-[260px]",
         )}
       >
@@ -271,7 +271,7 @@ export function AppShell({ user, children }: AppShellProps) {
         </div>
       </aside>
 
-      <div className="relative z-10 transition-[padding] duration-200 lg:pl-[var(--sidebar-width,260px)]">
+      <div className="relative z-10 transition-[padding] duration-150 lg:pl-[var(--sidebar-width,260px)]">
         <main className="mx-auto w-full max-w-7xl px-4 pb-[calc(3.5rem+env(safe-area-inset-bottom)+1rem)] pt-4 lg:px-8 lg:pb-28 lg:pt-7">
           {children}
         </main>

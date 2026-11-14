@@ -38,10 +38,10 @@ export function ForecastBanner({
   }
 
   return (
-    <div className="relative flex items-start gap-3 overflow-hidden rounded-lg border border-grout bg-surface-low p-3 text-xs shadow-[0_12px_28px_-6px_rgba(7,16,11,0.9)]">
+    <div className="relative flex items-start gap-3 overflow-hidden rounded-lg border border-grout bg-surface-low p-3 text-xs shadow-[0_12px_28px_-6px_rgba(7,16,11,0.9)] max-sm:shadow-md">
       <span
         aria-hidden="true"
-        className="absolute inset-y-0 left-0 w-2.5 bg-amber shadow-[0_0_12px_hsl(var(--amber)/.55)]"
+        className="absolute inset-y-0 left-0 w-2.5 bg-amber shadow-[0_0_12px_hsl(var(--amber)/.55)] max-sm:shadow-none"
       />
       <span
         aria-hidden="true"

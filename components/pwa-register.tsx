@@ -78,7 +78,7 @@ export function PwaRegister() {
       role="status"
       className="pointer-events-none fixed inset-x-3 bottom-[calc(5rem+env(safe-area-inset-bottom))] z-[80] flex justify-end sm:inset-x-auto sm:bottom-4 sm:right-4"
     >
-      <div className="pointer-events-auto flex max-w-[360px] items-center gap-3 rounded-lg border border-primary/40 bg-card p-3 shadow-xl">
+      <div className="pointer-events-auto flex max-w-[360px] items-center gap-3 rounded-lg border border-primary/40 bg-card p-3 shadow-xl max-sm:shadow-md">
         <RefreshCw className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
         <p className="min-w-0 flex-1 text-sm">
           Nova versão disponível.

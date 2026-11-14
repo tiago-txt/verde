@@ -292,7 +292,7 @@ export const TransactionRow = memo(function TransactionRow({
                     }
                   : { id: transaction.id, nome: transaction.descricao }
               }
-              className="h-10 w-10 [&_.tile-emblem]:hidden"
+              plain className="h-10 w-10"
             />
           ) : isCardPurchase ? (
             <EntityTile
@@ -303,7 +303,7 @@ export const TransactionRow = memo(function TransactionRow({
                 cor: transaction.cartaoCor,
                 icone: transaction.cartaoIcone,
               }}
-              className="h-10 w-10 [&_.tile-emblem]:hidden"
+              plain className="h-10 w-10"
             />
           ) : (
             <button
@@ -318,7 +318,7 @@ export const TransactionRow = memo(function TransactionRow({
               }}
               onPointerDown={(event) => event.stopPropagation()}
               aria-label={`Categoria de ${transaction.descricao}`}
-              className="shrink-0 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="tap-48 shrink-0 rounded-[12px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <EntityTile
                 kind="categoria"
@@ -328,7 +328,7 @@ export const TransactionRow = memo(function TransactionRow({
                   icone: transaction.categoriaIcone,
                   cor: transaction.categoriaCor,
                 }}
-                className="h-10 w-10 [&_.tile-emblem]:hidden"
+                plain className="h-10 w-10"
               />
             </button>
           )}

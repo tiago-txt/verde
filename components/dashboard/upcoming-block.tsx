@@ -63,8 +63,8 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
 
   if (items.length === 0) {
     return (
-      <div className="flex items-center gap-3 rounded-lg border border-grout bg-forest-container/50 p-3 text-sm text-muted-foreground">
-        <span className="tile grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-grout bg-forest-high text-primary">
+      <div className="flex items-center gap-3 rounded-lg border border-grout bg-forest-container/50 p-3 text-sm text-muted-foreground max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 max-sm:py-2">
+        <span className="tile tile-plain grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-grout bg-forest-high text-primary max-sm:border-0 max-sm:bg-transparent max-sm:shadow-none">
           <Check className="h-4 w-4" aria-hidden="true" />
         </span>
         <span>
@@ -127,7 +127,7 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
             </span>
 
             {item.kind === "invoice" ? (
-              <Button asChild variant="outline" size="sm" className="h-11 sm:h-9">
+              <Button asChild variant="outline" size="sm" className="h-11 max-sm:h-12 sm:h-9">
                 <Link
                   href={`/cartoes/${item.data.cartaoId}?fatura=${item.data.faturaChave}`}
                 >
@@ -139,7 +139,7 @@ export function UpcomingBlock({ expenses, invoices }: UpcomingBlockProps) {
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-11 sm:h-9"
+                className="h-11 max-sm:h-12 sm:h-9"
                 onClick={() => markPaid(item.data.id)}
                 disabled={isPending}
               >

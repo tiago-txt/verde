@@ -52,7 +52,7 @@ export function LogoutButton({
       onClick={handleClick}
       disabled={pending}
       className={cn(
-        "flex min-h-11 items-center gap-2 rounded-md text-sm transition-colors hover:bg-accent disabled:opacity-60",
+        "flex min-h-11 items-center gap-2 rounded-md text-sm transition-colors hover:bg-accent disabled:opacity-60 max-sm:min-h-12",
         compact ? "w-full px-2" : "w-full px-2",
         className,
       )}

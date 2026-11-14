@@ -68,7 +68,7 @@ export function ThemeToggle({
             Escolha claro, escuro ou siga o sistema.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 max-sm:grid max-sm:grid-cols-3">
           {options.map((option) => {
             const Icon = option.icon;
             const active = theme === option.value;
@@ -77,7 +77,7 @@ export function ThemeToggle({
                 key={option.value}
                 type="button"
                 variant={active ? "default" : "outline"}
-                className={cn("h-12 sm:h-10", active && "enamel")}
+                className={cn("h-12 sm:h-10 max-sm:px-2", active && "enamel")}
                 aria-pressed={active}
                 onClick={() => apply(option.value)}
               >

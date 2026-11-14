@@ -105,7 +105,8 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           icone: summary.icone,
         }}
         dashed
-        className={cn("h-10 w-10", isMobile && "[&_.tile-emblem]:hidden", !isMobile && "sm:h-12 sm:w-12")}
+        plain={isMobile}
+        className={cn("h-10 w-10", !isMobile && "sm:h-12 sm:w-12")}
       />
 
       <span className={cn("flex-1", isMobile ? "min-w-0" : "min-w-[10rem]")}>

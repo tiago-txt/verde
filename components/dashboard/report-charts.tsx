@@ -118,7 +118,7 @@ export function CategoryDonut({
             {item.href ? (
               <a
                 href={item.href}
-                className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-accent"
+                className="flex items-center gap-2 rounded-md px-1.5 py-1 text-xs transition-colors hover:bg-accent max-sm:min-h-12"
               >
                 <span
                   className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
@@ -182,7 +182,7 @@ export function EvolutionChart({
             type="button"
             variant={months === 6 ? "default" : "ghost"}
             size="sm"
-            className="h-11 sm:h-9"
+            className="h-11 max-sm:h-12 sm:h-9"
             onClick={() => setMonths(6)}
             aria-pressed={months === 6}
           >
@@ -192,7 +192,7 @@ export function EvolutionChart({
             type="button"
             variant={months === 12 ? "default" : "ghost"}
             size="sm"
-            className="h-11 sm:h-9"
+            className="h-11 max-sm:h-12 sm:h-9"
             onClick={() => setMonths(12)}
             aria-pressed={months === 12}
           >

@@ -54,7 +54,7 @@ export default async function DashboardPage({
 
   return (
     <div className="space-y-4">
-      <section className="relative flex min-h-32 items-center overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] sm:min-h-36 sm:p-7">
+      <section className="relative flex min-h-32 items-center overflow-hidden rounded-lg border border-grout bg-surface-low p-5 shadow-[0_20px_48px_-24px_rgba(7,16,11,0.9)] max-sm:shadow-md sm:min-h-36 sm:p-7">
         <div
           aria-hidden="true"
           className="deco-pattern-hero azulejo absolute inset-0"
@@ -191,7 +191,7 @@ async function BalanceBlock({
             </dd>
           </div>
         </dl>
-        <Button asChild variant="outline" size="sm" className="h-11 w-full sm:h-9">
+        <Button asChild variant="outline" size="sm" className="h-11 w-full max-sm:h-12 sm:h-9">
           <Link href="/contas">
             Ver contas
             <ArrowRight className="h-3.5 w-3.5" />
@@ -395,7 +395,7 @@ async function CategoryBlock({
     <Card className="h-full">
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm">Gastos por categoria</CardTitle>
-        <Button asChild variant="ghost" size="sm" className="h-9">
+        <Button asChild variant="ghost" size="sm" className="h-9 max-sm:min-h-12">
           <Link href={`/relatorios?periodo=mes&mes=${month}&tipo=despesa&aba=categoria`}>
             Relatório
           </Link>
@@ -475,7 +475,7 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
         {cards.length === 0 ? (
           <div className="space-y-2 text-xs text-muted-foreground">
             <p>Nenhum cartão cadastrado.</p>
-            <Button asChild variant="outline" size="sm" className="h-11 w-full sm:h-9">
+            <Button asChild variant="outline" size="sm" className="h-11 w-full max-sm:h-12 sm:h-9">
               <Link href="/cartoes">Cadastrar cartão</Link>
             </Button>
           </div>

@@ -37,7 +37,7 @@ export function BudgetCycleOverview({
         </div>
         <Link
           href={`/limite-de-gastos?ciclo=${ciclo}`}
-          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+          className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline max-sm:min-h-12"
         >
           Ver
           <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
@@ -45,7 +45,7 @@ export function BudgetCycleOverview({
       </div>
 
       {budgets.length === 0 ? (
-        <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground">
+        <div className="flex items-center gap-2 rounded-md border border-dashed border-border p-3 text-xs text-muted-foreground max-sm:rounded-none max-sm:border-0 max-sm:p-0">
           <EntityTile kind="orcamento" size="xs" dashed />
           Nenhum orçamento neste ciclo.
         </div>

@@ -231,7 +231,7 @@ export function BudgetsView({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11"
+            className="month-stepper h-11 w-11"
             aria-label="Ciclo anterior"
             onClick={() => changeCycle(addMonths(ciclo, -1))}
           >
@@ -246,7 +246,7 @@ export function BudgetsView({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-11 w-11"
+            className="month-stepper h-11 w-11"
             aria-label="Próximo ciclo"
             onClick={() => changeCycle(addMonths(ciclo, 1))}
           >

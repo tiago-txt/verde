@@ -20,7 +20,7 @@ export function DashboardMonthHeader({ month }: { month: string }) {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11 rounded-lg"
+          className="month-stepper h-11 w-11 rounded-lg"
           aria-label="Mês anterior"
           onClick={() => go(addMonths(month, -1))}
         >
@@ -31,7 +31,7 @@ export function DashboardMonthHeader({ month }: { month: string }) {
           type="button"
           variant="ghost"
           size="icon"
-          className="h-11 w-11 rounded-lg"
+          className="month-stepper h-11 w-11 rounded-lg"
           aria-label="Próximo mês"
           onClick={() => go(addMonths(month, 1))}
         >
@@ -40,10 +40,10 @@ export function DashboardMonthHeader({ month }: { month: string }) {
       </div>
 
       <div className="ml-auto flex items-center gap-2">
-        <Button asChild variant="outline" className="h-11">
+        <Button asChild variant="outline" className="h-11 max-sm:h-12">
           <a href="/relatorios">Relatórios</a>
         </Button>
-        <Button asChild className="h-11">
+        <Button asChild className="h-11 max-sm:h-12">
           <a href="/lancamentos?novo=1">
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Novo lançamento</span>

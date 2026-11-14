@@ -78,7 +78,7 @@ function TooltipContent({
   const dayEvents = eventos.filter((event) => event.data === date).slice(0, 5);
 
   return (
-    <div className="max-w-64 rounded-lg border border-border bg-card p-2.5 text-xs shadow-lg">
+    <div className="max-w-64 rounded-lg border border-border bg-card p-2.5 text-xs shadow-lg max-sm:shadow-md">
       <p className="font-medium">{formatDate(date)}</p>
       <p className="tabular mt-1 text-sm font-semibold">{formatCurrency(saldo)}</p>
       {dayEvents.length > 0 && (

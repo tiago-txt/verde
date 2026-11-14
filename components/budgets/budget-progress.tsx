@@ -53,7 +53,7 @@ export function BudgetProgress({
       <div
         aria-hidden="true"
         className={cn(
-          "h-full rounded-full transition-[width] duration-300",
+          "h-full rounded-full",
           tone.bar,
         )}
         style={{ width: `${width}%` }}

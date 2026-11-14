@@ -32,7 +32,7 @@ export function PaymentProgress({
     >
       <span
         aria-hidden="true"
-        className={cn("block h-full rounded-full transition-[width] duration-300", tone)}
+        className={cn("block h-full rounded-full", tone)}
         style={{ width: `${ratio * 100}%` }}
       />
     </span>

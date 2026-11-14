@@ -77,7 +77,8 @@ export function CardInvoiceRow({
             icone: event.cartaoIcone,
           }}
           dashed={!isPaid}
-          className="h-10 w-10 [&_.tile-emblem]:hidden"
+          plain
+          className="h-10 w-10"
         />
 
         <span className="min-w-0 flex-1">

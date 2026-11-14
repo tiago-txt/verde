@@ -181,7 +181,7 @@ export function ReportsView({
             role="tab"
             aria-selected={filters.aba === tab.value}
             className={cn(
-              "flex h-10 shrink-0 items-center rounded px-3 text-xs font-medium transition-colors",
+              "flex h-10 shrink-0 items-center rounded px-3 text-xs font-medium transition-colors max-sm:min-h-12",
               filters.aba === tab.value
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
@@ -256,9 +256,9 @@ function CategoryTab({
           <table className="w-full text-sm max-sm:table-fixed">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="max-sm:w-1/2 px-4 py-2 font-medium">Categoria</th>
-                <th className="max-sm:w-[30%] px-2 py-2 text-right font-medium">Total</th>
-                <th className="max-sm:w-[20%] px-2 py-2 text-right font-medium">%</th>
+                <th className="max-sm:w-[50%] max-sm:pl-2 max-sm:pr-1 px-4 py-2 font-medium">Categoria</th>
+                <th className="max-sm:w-[32%] px-2 py-2 text-right font-medium">Total</th>
+                <th className="max-sm:w-[18%] px-2 py-2 text-right font-medium">%</th>
                 <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">
                   Lanç.
                 </th>
@@ -290,7 +290,7 @@ function CategoryTab({
             </tbody>
             <tfoot>
               <tr className="border-t border-border text-xs font-semibold">
-                <td className="px-4 py-2">Total</td>
+                <td className="max-sm:pl-2 max-sm:pr-1 px-4 py-2">Total</td>
                 <td className="tabular px-2 py-2 text-right">
                   {formatCurrency(report.total)}
                 </td>
@@ -336,7 +336,7 @@ function CategoryRows({
   return (
     <>
       <tr className="border-b border-border/60 hover:bg-accent/30">
-        <td className="px-4 py-2">
+        <td className="max-sm:pl-2 max-sm:pr-1 px-4 py-2">
           <div className="flex items-center gap-2">
             {item.children.length > 0 ? (
               <button
@@ -344,7 +344,7 @@ function CategoryRows({
                 onClick={onToggle}
                 aria-expanded={isOpen}
                 aria-label={`${isOpen ? "Recolher" : "Expandir"} ${item.nome}`}
-                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+                className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground max-sm:h-12 max-sm:w-12"
               >
                 {isOpen ? (
                   <ChevronDown className="h-3.5 w-3.5" />
@@ -353,9 +353,9 @@ function CategoryRows({
                 )}
               </button>
             ) : (
-              <span className="w-8 shrink-0" />
+              <span className="w-8 shrink-0 max-sm:hidden" />
             )}
-            <Link href={href} className="flex min-w-0 items-center gap-2 hover:underline">
+            <Link href={href} className="flex min-w-0 items-center gap-2 hover:underline max-sm:min-h-12">
               <CategoryIcon
                 id={item.id}
                 icon={item.icone}
@@ -394,7 +394,7 @@ function CategoryRows({
           return (
             <tr key={child.id} className="border-b border-border/40 bg-muted/10">
               <td className="py-2 pl-14 pr-4">
-                <Link href={childHref} className="flex items-center gap-2 hover:underline">
+                <Link href={childHref} className="flex items-center gap-2 hover:underline max-sm:min-h-12">
                   <CategoryIcon
                     id={child.id}
                     icon={child.icone}
@@ -464,7 +464,7 @@ function MonthTab({
             <tbody>
               {series.map((point) => (
                 <tr key={point.mes} className="border-b border-border/60">
-                  <td className="px-4 py-2">{formatMonthTitle(point.mes)}</td>
+                  <td className="max-sm:pl-2 max-sm:pr-1 px-4 py-2">{formatMonthTitle(point.mes)}</td>
                   <td className="tabular px-2 py-2 text-right text-success">
                     {formatCurrency(point.receitas)}
                   </td>
@@ -484,7 +484,7 @@ function MonthTab({
             </tbody>
             <tfoot>
               <tr className="border-t border-border text-xs font-semibold">
-                <td className="px-4 py-2">Total</td>
+                <td className="max-sm:pl-2 max-sm:pr-1 px-4 py-2">Total</td>
                 <td className="tabular px-2 py-2 text-right">
                   {formatCurrency(totals.receitas)}
                 </td>
@@ -551,7 +551,7 @@ function OriginTab({
                 return (
                   <tr key={`${item.kind}-${item.id}`} className="border-b border-border/60">
                     <td className="px-2 py-2">
-                      <Link href={href} className="flex items-center gap-2 hover:underline">
+                      <Link href={href} className="flex items-center gap-2 hover:underline max-sm:min-h-12">
                         <span
                           className="h-2.5 w-2.5 rounded-full"
                           style={{ background: item.cor ?? "hsl(var(--outline))" }}

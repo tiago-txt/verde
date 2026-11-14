@@ -44,7 +44,7 @@ function DialogContent({
       <DialogOverlay className={hideOverlayOnDesktop ? "sm:hidden" : undefined} />
       <DialogPrimitive.Content
         className={cn(
-          "fixed z-50 flex flex-col border-border bg-card text-card-foreground shadow-2xl",
+          "fixed z-50 flex flex-col border-border bg-card text-card-foreground shadow-2xl max-sm:shadow-md",
           isRightPanel
             ? "inset-0 h-dvh max-h-dvh overflow-hidden border-l p-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:inset-y-0 sm:left-auto sm:right-0 sm:w-full sm:max-w-md"
             : [

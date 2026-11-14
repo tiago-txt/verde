@@ -221,7 +221,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="h-11 w-11 shrink-0"
+                        className="h-11 w-11 shrink-0 max-sm:h-12 max-sm:w-12"
                         aria-label={`Ações do cartão ${card.nome}`}
                       >
                         <MoreVertical className="h-4 w-4" />
@@ -343,7 +343,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                   </span>
                   <Link
                     href={`/cartoes/${card.id}?fatura=${invoice.chave}`}
-                    className="font-medium text-primary hover:underline"
+                    className="font-medium text-primary hover:underline max-sm:inline-flex max-sm:min-h-12 max-sm:items-center"
                   >
                     Ver fatura
                   </Link>
