@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Leaf, Server, ShieldCheck, Smartphone } from "lucide-react";
+import { Server, ShieldCheck, Smartphone } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { LoginForm } from "@/components/auth/login-form";
 import { getCurrentUser } from "@/lib/auth/current-user";
@@ -45,7 +45,7 @@ export default async function LoginPage({
   return (
     <main className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       {/* Painel de marca (desktop) */}
-      <section className="azulejo decor-pattern relative hidden overflow-hidden border-r border-grout bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
+      <section className="deco-surface relative hidden overflow-hidden border-r border-grout bg-sidebar p-12 lg:flex lg:flex-col lg:justify-between">
         <div
           aria-hidden="true"
           className="decor-glow pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgba(52,211,153,0.16),transparent_55%),radial-gradient(ellipse_at_bottom_right,rgba(120,80,40,0.14),transparent_50%)]"
@@ -55,10 +55,6 @@ export default async function LoginPage({
 
         <div className="relative max-w-lg space-y-8">
           <div className="space-y-4">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/25 bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
-              <Leaf className="h-3.5 w-3.5" />
-              Finanças da família
-            </span>
             <h1 className="text-4xl font-semibold leading-tight tracking-tight xl:text-5xl">
               Clareza para o seu dinheiro,{" "}
               <span className="text-primary">todos os dias.</span>
