@@ -48,9 +48,6 @@ export function CardInvoiceRow({
   const outrosPagadores = pagador
     ? event.pagamentos.filter((item) => item.contaId !== pagador.contaId).length
     : 0;
-  const pagadorLabel = pagador?.contaNome
-    ? `, paga por ${pagador.contaNome}`
-    : "";
   const isMobile = useIsMobile();
   const mobileStatusLabel = {
     aberta: "Aberta",
@@ -201,7 +198,7 @@ export function CardInvoiceRow({
       <button
         type="button"
         onClick={() => onOpen(event)}
-        aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}${pagadorLabel}`}
+        aria-label={ariaLabel}
         className="flex min-w-[10rem] flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
       >
         <EntityTile
@@ -219,9 +216,11 @@ export function CardInvoiceRow({
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="row-title">
-              Fatura {event.cartaoNome}
+              {isPaid
+                ? `Pagamento de Fatura · ${event.cartaoNome}`
+                : `Fatura ${event.cartaoNome}`}
             </span>
-            {pagador && (
+            {pagador && !isPaid && (
               <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-grout bg-surface-lowest px-2 py-0.5 text-xs text-muted-foreground">
                 <span
                   aria-hidden="true"
@@ -247,42 +246,95 @@ export function CardInvoiceRow({
           </span>
 
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 font-medium capitalize",
-                statusMeta.tone,
-              )}
-            >
-              <StatusIcon className="h-3 w-3" aria-hidden="true" />
-              {statusMeta.label}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              pago{" "}
-              <span className="tabular">{formatCurrency(event.pago)}</span>
-            </span>
-            {event.restante > 0 && (
+            {isPaid && pagador ? (
               <>
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <EntityTile
+                    kind="conta"
+                    entity={{
+                      id: pagador.contaId,
+                      nome: pagador.contaNome,
+                      cor: pagador.contaCor,
+                      icone: pagador.contaIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">
+                    {pagador.contaNome ?? "sem conta"}
+                  </span>
+                  {outrosPagadores > 0 && (
+                    <span
+                      className="shrink-0"
+                      title={`Mais ${outrosPagadores} conta(s)`}
+                    >
+                      +{outrosPagadores}
+                    </span>
+                  )}
+                </span>
+                <span aria-hidden="true">→</span>
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <EntityTile
+                    kind="cartao"
+                    entity={{
+                      id: event.cartaoId,
+                      nome: event.cartaoNome,
+                      cor: event.cartaoCor,
+                      icone: event.cartaoIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">{event.cartaoNome}</span>
+                </span>
                 <span aria-hidden="true">·</span>
                 <span>
-                  restam{" "}
-                  <span className="tabular">
-                    {formatCurrency(event.restante)}
-                  </span>
+                  ciclo {formatDate(event.inicio).slice(0, 5)}–
+                  {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
+                </span>
+              </>
+            ) : (
+              <>
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1 font-medium capitalize",
+                    statusMeta.tone,
+                  )}
+                >
+                  <StatusIcon className="h-3 w-3" aria-hidden="true" />
+                  {statusMeta.label}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span>
+                  pago{" "}
+                  <span className="tabular">{formatCurrency(event.pago)}</span>
+                </span>
+                {event.restante > 0 && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>
+                      restam{" "}
+                      <span className="tabular">
+                        {formatCurrency(event.restante)}
+                      </span>
+                    </span>
+                  </>
+                )}
+                {!isPaid && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>vence {formatDate(event.vencimento)}</span>
+                  </>
+                )}
+                <span aria-hidden="true">·</span>
+                <span>
+                  ciclo {formatDate(event.inicio).slice(0, 5)}–
+                  {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
                 </span>
               </>
             )}
-            {!isPaid && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>vence {formatDate(event.vencimento)}</span>
-              </>
-            )}
-            <span aria-hidden="true">·</span>
-            <span>
-              ciclo {formatDate(event.inicio).slice(0, 5)}–
-              {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
-            </span>
           </span>
         </span>
       </button>
