@@ -253,12 +253,12 @@ function CategoryTab({
           </span>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm max-sm:table-fixed">
             <thead>
               <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-2 font-medium">Categoria</th>
-                <th className="px-2 py-2 text-right font-medium">Total</th>
-                <th className="px-2 py-2 text-right font-medium">%</th>
+                <th className="max-sm:w-1/2 px-4 py-2 font-medium">Categoria</th>
+                <th className="max-sm:w-[30%] px-2 py-2 text-right font-medium">Total</th>
+                <th className="max-sm:w-[20%] px-2 py-2 text-right font-medium">%</th>
                 <th className="hidden px-2 py-2 text-right font-medium sm:table-cell">
                   Lanç.
                 </th>

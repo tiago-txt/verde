@@ -249,8 +249,8 @@ async function MonthBlock({
         <CardTitle className="text-sm">Receitas × despesas</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
             <span className="absolute inset-x-0 top-0 h-1 bg-emerald" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Receitas</p>
             <p className="tabular truncate text-lg font-semibold text-primary">
@@ -258,7 +258,7 @@ async function MonthBlock({
             </p>
             <Variation value={incomeVariation} />
           </div>
-          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3">
+          <div className="relative min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
             <span className="absolute inset-x-0 top-0 h-1 bg-clay" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Despesas</p>
             <p className="tabular truncate text-lg font-semibold text-clay">
@@ -266,7 +266,7 @@ async function MonthBlock({
             </p>
             <Variation value={expenseVariation} invert />
           </div>
-          <div className="relative col-span-2 min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 sm:col-span-1">
+          <div className="relative col-span-1 min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 sm:col-span-1">
             <span className="absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Saldo do mês</p>
             <p
@@ -282,7 +282,7 @@ async function MonthBlock({
           </div>
         </div>
 
-        <div className="mt-auto rounded-lg border border-grout bg-forest-container/50 p-3">
+        <div className="mt-auto rounded-lg border border-grout bg-forest-container/50 p-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <span className="font-mono text-xs uppercase tracking-[0.08em] text-outline">
               Comprometimento da receita

@@ -366,7 +366,7 @@ export const TransactionRow = memo(function TransactionRow({
             )}
           </div>
 
-          <div className="flex h-16 shrink-0 flex-col items-end justify-center">
+          <div className="flex h-16 shrink-0 translate-y-1 flex-col items-end justify-center">
             <span
               className={cn(
                 "tabular whitespace-nowrap text-base font-semibold leading-4",
@@ -394,11 +394,15 @@ export const TransactionRow = memo(function TransactionRow({
                   : "Pendente — toque para pagar"
               }
               className={cn(
-                "flex h-12 items-center gap-1 text-xs font-medium",
+                "relative flex h-8 items-center gap-1 text-xs font-medium",
                 statusMeta.tone,
                 selectionMode && "opacity-60",
               )}
             >
+              <span
+                aria-hidden="true"
+                className="absolute -inset-x-2 -inset-y-2"
+              />
               {paid ? (
                 <ThumbsUp className="h-4 w-4" aria-hidden="true" />
               ) : (

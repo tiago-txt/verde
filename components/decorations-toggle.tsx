@@ -33,7 +33,7 @@ export function DecorationsToggle() {
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-grout bg-forest-container/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-3 rounded-lg border border-grout bg-forest-container/40 p-3 sm:flex-row sm:items-center sm:justify-between max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0">
       <div className="flex items-start gap-3">
         <span className="tile grid h-10 w-10 shrink-0 place-items-center rounded-[12px] border border-grout bg-forest-high text-amber">
           <Sparkles className="h-4 w-4" aria-hidden="true" />

@@ -268,7 +268,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
 
                 <Link
                   href={`/cartoes/${card.id}?fatura=${invoice.chave}`}
-                  className="rounded-lg border border-border p-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="rounded-lg border border-border p-3 transition-colors hover:bg-accent/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:rounded-none max-sm:border-x-0 max-sm:border-t-0 max-sm:border-b max-sm:border-border max-sm:p-0 max-sm:pb-3"
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div>
