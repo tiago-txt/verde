@@ -2,6 +2,7 @@
 
 import { memo, useRef, useState } from "react";
 import {
+  ArrowRight,
   Pencil,
   Repeat,
   StickyNote,
@@ -17,7 +18,7 @@ import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { transactionRowStatus } from "@/lib/design/row-status";
-import { secondaryLine, type SecondaryInfo } from "@/lib/finance/row-secondary";
+import type { SecondaryInfo } from "@/lib/finance/row-secondary";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -133,17 +134,20 @@ export const TransactionRow = memo(function TransactionRow({
     atrasado: { label: "Atrasado", tone: "text-amber" },
   }[rowStatus];
 
-  const secondaryText = secondaryLine(secondaryInfo, {
-    categoria: transaction.categoriaNome,
-    conta: transaction.cartaoId
-      ? transaction.cartaoNome
-      : transaction.contaNome,
-    transferencia: isTransfer,
-    origem: transaction.contaNome,
-    destino: isInvoicePayment
-      ? transaction.cartaoDestinoNome
-      : transaction.contaDestinoNome,
-  });
+  const showAccount =
+    secondaryInfo === "conta-categoria" || secondaryInfo === "conta";
+  const showCategory =
+    secondaryInfo === "conta-categoria" || secondaryInfo === "categoria";
+  const accountName = isCardPurchase
+    ? transaction.cartaoNome
+    : transaction.contaNome;
+  const destinationName = isInvoicePayment
+    ? transaction.cartaoDestinoNome
+    : transaction.contaDestinoNome;
+  const hasSecondary =
+    isTransfer ||
+    (showAccount && Boolean(accountName)) ||
+    (showCategory && Boolean(transaction.categoriaNome));
 
   function handleMainClick() {
     if (longPressTriggered.current) {
@@ -281,14 +285,14 @@ export const TransactionRow = memo(function TransactionRow({
 
           {isTransfer ? (
             <EntityTile
-              kind={isInvoicePayment ? "fatura" : "transferencia"}
+              kind={isInvoicePayment ? "cartao" : "transferencia"}
               entity={
                 isInvoicePayment
                   ? {
                       id: transaction.cartaoDestinoId,
                       nome: transaction.cartaoDestinoNome,
                       cor: transaction.cartaoDestinoCor,
-                      icone: "CreditCard",
+                      icone: transaction.cartaoDestinoIcone,
                     }
                   : { id: transaction.id, nome: transaction.descricao }
               }
@@ -359,10 +363,95 @@ export const TransactionRow = memo(function TransactionRow({
                 />
               )}
             </div>
-            {secondaryText && (
-              <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-                {secondaryText}
-              </p>
+            {hasSecondary && (
+              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] text-muted-foreground">
+                {isTransfer ? (
+                  <>
+                    <EntityTile
+                      kind="conta"
+                      entity={{
+                        id: transaction.contaId,
+                        nome: transaction.contaNome,
+                        cor: transaction.contaCor,
+                        icone: transaction.contaIcone,
+                      }}
+                      size="xxs"
+                      plain
+                      className="shrink-0"
+                    />
+                    <span className="truncate">
+                      {transaction.contaNome ?? "Sem conta"}
+                    </span>
+                    <ArrowRight
+                      className="h-3 w-3 shrink-0"
+                      aria-hidden="true"
+                    />
+                    <EntityTile
+                      kind={isInvoicePayment ? "cartao" : "conta"}
+                      entity={
+                        isInvoicePayment
+                          ? {
+                              id: transaction.cartaoDestinoId,
+                              nome: transaction.cartaoDestinoNome,
+                              cor: transaction.cartaoDestinoCor,
+                              icone: transaction.cartaoDestinoIcone,
+                            }
+                          : {
+                              id: transaction.contaDestinoId,
+                              nome: transaction.contaDestinoNome,
+                              cor: transaction.contaDestinoCor,
+                              icone: transaction.contaDestinoIcone,
+                            }
+                      }
+                      size="xxs"
+                      plain
+                      className="shrink-0"
+                    />
+                    <span className="truncate">
+                      {destinationName ?? "Sem conta"}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    {showAccount && accountName && (
+                      <>
+                        <EntityTile
+                          kind={isCardPurchase ? "cartao" : "conta"}
+                          entity={
+                            isCardPurchase
+                              ? {
+                                  id: transaction.cartaoId,
+                                  nome: transaction.cartaoNome,
+                                  cor: transaction.cartaoCor,
+                                  icone: transaction.cartaoIcone,
+                                }
+                              : {
+                                  id: transaction.contaId,
+                                  nome: transaction.contaNome,
+                                  cor: transaction.contaCor,
+                                  icone: transaction.contaIcone,
+                                }
+                          }
+                          size="xxs"
+                          plain
+                          className="shrink-0"
+                        />
+                        <span className="truncate">{accountName}</span>
+                        {showCategory && transaction.categoriaNome && (
+                          <span aria-hidden="true" className="shrink-0">
+                            ·
+                          </span>
+                        )}
+                      </>
+                    )}
+                    {showCategory && transaction.categoriaNome && (
+                      <span className="truncate">
+                        {transaction.categoriaNome}
+                      </span>
+                    )}
+                  </>
+                )}
+              </span>
             )}
           </div>
 
@@ -679,7 +768,7 @@ export const TransactionRow = memo(function TransactionRow({
                   <AccountBadge
                     id={transaction.cartaoDestinoId}
                     nome={transaction.cartaoDestinoNome}
-                    icone="CreditCard"
+                    icone={transaction.cartaoDestinoIcone}
                     cor={transaction.cartaoDestinoCor}
                     kind="cartao"
                   />

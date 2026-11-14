@@ -7,7 +7,6 @@ import {
   CircleAlert,
 } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
-import { BudgetProgress } from "@/components/budgets/budget-progress";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
@@ -156,7 +155,9 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           </span>
         ) : (
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            <span className={cn("font-medium", statusMeta.tone)}>
+            <span
+              className={cn("font-medium capitalize", statusMeta.tone)}
+            >
               {statusMeta.label}
             </span>
             {isOverspent || (isProvision && !isConsumed) ? (
@@ -187,15 +188,6 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           </span>
         )}
 
-        <span className="mt-1 block max-w-[280px]">
-          <BudgetProgress
-            gasto={summary.gasto}
-            limite={summary.limite}
-            size="sm"
-            className="h-1"
-            label={`Consumo do orçamento ${summary.nome}`}
-          />
-        </span>
       </span>
 
       {isMobile ? (
@@ -210,10 +202,15 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
               ? formatCurrency(0)
               : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
           </span>
-          <Clock3
-            className="h-4 w-4 text-muted-foreground"
-            aria-hidden="true"
-          />
+          <span
+            className={cn(
+              "flex whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
+              statusMeta.tone,
+            )}
+          >
+            <StatusIcon className="h-4 w-4" aria-hidden="true" />
+            {statusMeta.label}
+          </span>
         </span>
       ) : (
         <span className="row-slot">

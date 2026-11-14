@@ -65,6 +65,7 @@ const MOTIFS = [
 ];
 
 const DIMENSIONS: Record<TileSize, { box: string; icon: string }> = {
+  xxs: { box: "h-5 w-5", icon: "h-3 w-3" },
   xs: { box: "h-8 w-8", icon: "h-3.5 w-3.5" },
   sm: { box: "h-10 w-10", icon: "h-4 w-4" },
   md: { box: "h-12 w-12", icon: "h-5 w-5" },

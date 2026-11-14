@@ -1,5 +1,5 @@
 export const SECONDARY_INFO_OPTIONS = [
-  "categoria-conta",
+  "conta-categoria",
   "categoria",
   "conta",
   "nenhuma",
@@ -7,15 +7,20 @@ export const SECONDARY_INFO_OPTIONS = [
 
 export type SecondaryInfo = (typeof SECONDARY_INFO_OPTIONS)[number];
 
-export const DEFAULT_SECONDARY_INFO: SecondaryInfo = "categoria-conta";
+export const DEFAULT_SECONDARY_INFO: SecondaryInfo = "conta-categoria";
 
 export const SECONDARY_INFO_STORAGE_KEY = "verde-secondary-info";
 
 export const SECONDARY_INFO_LABELS: Record<SecondaryInfo, string> = {
-  "categoria-conta": "Categoria · Conta",
+  "conta-categoria": "Conta · Categoria",
   categoria: "Só categoria",
   conta: "Só conta",
   nenhuma: "Nenhuma",
+};
+
+/** Valor antigo, quando a linha mobile mostrava categoria antes da conta. */
+const LEGACY_OPTIONS: Record<string, SecondaryInfo> = {
+  "categoria-conta": "conta-categoria",
 };
 
 export function isSecondaryInfo(value: unknown): value is SecondaryInfo {
@@ -23,6 +28,14 @@ export function isSecondaryInfo(value: unknown): value is SecondaryInfo {
     typeof value === "string" &&
     (SECONDARY_INFO_OPTIONS as readonly string[]).includes(value)
   );
+}
+
+/** Aceita o valor persistido e migra a ordem antiga sem perder a preferência. */
+export function normalizeSecondaryInfo(value: unknown): SecondaryInfo | null {
+  if (typeof value === "string" && value in LEGACY_OPTIONS) {
+    return LEGACY_OPTIONS[value] ?? null;
+  }
+  return isSecondaryInfo(value) ? value : null;
 }
 
 /** Texto da segunda linha da lista de lançamentos. */
@@ -49,5 +62,5 @@ export function secondaryLine(
   if (option === "nenhuma") return "";
   if (option === "categoria") return categoria ?? "";
   if (option === "conta") return conta ?? "";
-  return [categoria, conta].filter(Boolean).join(" · ");
+  return [conta, categoria].filter(Boolean).join(" · ");
 }

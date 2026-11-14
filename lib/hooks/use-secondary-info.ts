@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   DEFAULT_SECONDARY_INFO,
   SECONDARY_INFO_STORAGE_KEY,
-  isSecondaryInfo,
+  normalizeSecondaryInfo,
   type SecondaryInfo,
 } from "@/lib/finance/row-secondary";
 
@@ -20,14 +20,15 @@ export function useSecondaryInfo(): readonly [
     function read() {
       try {
         const stored = localStorage.getItem(SECONDARY_INFO_STORAGE_KEY);
-        setOption(isSecondaryInfo(stored) ? stored : DEFAULT_SECONDARY_INFO);
+        setOption(normalizeSecondaryInfo(stored) ?? DEFAULT_SECONDARY_INFO);
       } catch {
         setOption(DEFAULT_SECONDARY_INFO);
       }
     }
     function onChange(event: Event) {
       const detail = (event as CustomEvent<unknown>).detail;
-      if (isSecondaryInfo(detail)) setOption(detail);
+      const next = normalizeSecondaryInfo(detail);
+      if (next) setOption(next);
       else read();
     }
 

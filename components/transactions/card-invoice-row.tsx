@@ -2,6 +2,7 @@
 
 import {
   AlertTriangle,
+  ArrowRight,
   Banknote,
   CheckCircle2,
   Clock3,
@@ -10,7 +11,6 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { EntityTile } from "@/components/entity-tile";
-import { PaymentProgress } from "@/components/cards/payment-progress";
 import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import { addDaysISO } from "@/lib/dates";
 import { formatCurrency, formatDate } from "@/lib/format";
@@ -60,16 +60,29 @@ export function CardInvoiceRow({
     vencida: "Vencida",
   }[projectionStatus];
 
+  const ariaLabel = [
+    `Fatura ${event.cartaoNome}`,
+    `total ${formatCurrency(event.total)}`,
+    ...(event.restante > 0
+      ? [`restam ${formatCurrency(event.restante)}`]
+      : []),
+    ...(isPaid
+      ? pagador?.contaNome
+        ? [`paga por ${pagador.contaNome}`]
+        : []
+      : [`vence ${formatDate(event.vencimento)}`]),
+  ].join(", ");
+
   if (isMobile) {
     return (
       <button
         type="button"
         onClick={() => onOpen(event)}
-        aria-label={`Fatura ${event.cartaoNome}, total ${formatCurrency(event.total)}, restam ${formatCurrency(event.restante)}, vence ${formatDate(event.vencimento)}${pagadorLabel}`}
+        aria-label={ariaLabel}
         className="list-row-cv-virtual relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
       >
         <EntityTile
-          kind="fatura"
+          kind="cartao"
           entity={{
             id: event.cartaoId,
             nome: event.cartaoNome,
@@ -85,16 +98,62 @@ export function CardInvoiceRow({
           <span className="row-title block truncate">
             Fatura {event.cartaoNome}
           </span>
-          <span className="mt-0.5 block truncate text-[13px] text-muted-foreground">
-            Vence {formatDate(event.vencimento).slice(0, 5)} ·{" "}
-            {mobileStatusLabel}
-          </span>
-          <span className="mt-1 block max-w-[220px]">
-            <PaymentProgress
-              pago={event.pago}
-              total={event.total}
-              size="sm"
-            />
+          <span className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-[13px] text-muted-foreground">
+            {isPaid ? (
+              pagador ? (
+                <>
+                  <EntityTile
+                    kind="conta"
+                    entity={{
+                      id: pagador.contaId,
+                      nome: pagador.contaNome,
+                      cor: pagador.contaCor,
+                      icone: pagador.contaIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">
+                    {pagador.contaNome ?? "sem conta"}
+                  </span>
+                  {outrosPagadores > 0 && (
+                    <span
+                      className="shrink-0"
+                      title={`Mais ${outrosPagadores} conta(s)`}
+                    >
+                      +{outrosPagadores}
+                    </span>
+                  )}
+                  <ArrowRight
+                    className="h-3 w-3 shrink-0"
+                    aria-hidden="true"
+                  />
+                  <EntityTile
+                    kind="cartao"
+                    entity={{
+                      id: event.cartaoId,
+                      nome: event.cartaoNome,
+                      cor: event.cartaoCor,
+                      icone: event.cartaoIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">{event.cartaoNome}</span>
+                </>
+              ) : (
+                <span className="truncate">{mobileStatusLabel}</span>
+              )
+            ) : event.restante > 0 ? (
+              <span className="truncate">
+                restam{" "}
+                <span className="tabular">
+                  {formatCurrency(event.restante)}
+                </span>
+              </span>
+            ) : null}
           </span>
         </span>
 
@@ -146,7 +205,7 @@ export function CardInvoiceRow({
         className="flex min-w-[10rem] flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
       >
         <EntityTile
-          kind="fatura"
+          kind="cartao"
           entity={{
             id: event.cartaoId,
             nome: event.cartaoNome,
@@ -190,7 +249,7 @@ export function CardInvoiceRow({
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             <span
               className={cn(
-                "inline-flex items-center gap-1 font-medium",
+                "inline-flex items-center gap-1 font-medium capitalize",
                 statusMeta.tone,
               )}
             >
@@ -202,22 +261,28 @@ export function CardInvoiceRow({
               pago{" "}
               <span className="tabular">{formatCurrency(event.pago)}</span>
             </span>
-            <span aria-hidden="true">·</span>
-            <span>
-              restam{" "}
-              <span className="tabular">{formatCurrency(event.restante)}</span>
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>vence {formatDate(event.vencimento)}</span>
+            {event.restante > 0 && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>
+                  restam{" "}
+                  <span className="tabular">
+                    {formatCurrency(event.restante)}
+                  </span>
+                </span>
+              </>
+            )}
+            {!isPaid && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>vence {formatDate(event.vencimento)}</span>
+              </>
+            )}
             <span aria-hidden="true">·</span>
             <span>
               ciclo {formatDate(event.inicio).slice(0, 5)}–
               {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
             </span>
-          </span>
-
-          <span className="mt-1.5 block max-w-[220px]">
-            <PaymentProgress pago={event.pago} total={event.total} />
           </span>
         </span>
       </button>
