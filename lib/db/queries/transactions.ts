@@ -79,6 +79,9 @@ export type TransactionListItem = {
   cartaoDestinoNome: string | null;
   cartaoDestinoCor: string | null;
   cartaoDestinoIcone: string | null;
+  cartaoDestinoDiaFechamento: number | null;
+  cartaoDestinoDiaVencimento: number | null;
+  cartaoDestinoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
   faturaChave: string | null;
   cartaoDiaFechamento: number | null;
   cartaoDiaVencimento: number | null;
@@ -165,6 +168,9 @@ function selectTransactionFields() {
     cartaoDestinoNome: cartaoDestino.nome,
     cartaoDestinoCor: cartaoDestino.cor,
     cartaoDestinoIcone: cartaoDestino.icone,
+    cartaoDestinoDiaFechamento: cartaoDestino.diaFechamento,
+    cartaoDestinoDiaVencimento: cartaoDestino.diaVencimento,
+    cartaoDestinoFechamentoCompra: cartaoDestino.fechamentoCompra,
     faturaChave: transactions.faturaChave,
     cartaoDiaFechamento: cartao.diaFechamento,
     cartaoDiaVencimento: cartao.diaVencimento,

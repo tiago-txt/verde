@@ -295,12 +295,6 @@ export function AppShell({ user, children }: AppShellProps) {
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                {active && (
-                  <span
-                    className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
-                    aria-hidden="true"
-                  />
-                )}
                 <item.icon
                   className={cn(
                     "h-6 w-6",
@@ -337,12 +331,6 @@ export function AppShell({ user, children }: AppShellProps) {
                   active ? "text-primary" : "text-muted-foreground",
                 )}
               >
-                {active && (
-                  <span
-                    className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
-                    aria-hidden="true"
-                  />
-                )}
                 <item.icon
                   className={cn(
                     "h-6 w-6",
@@ -365,12 +353,6 @@ export function AppShell({ user, children }: AppShellProps) {
               moreActive ? "text-primary" : "text-muted-foreground",
             )}
           >
-            {moreActive && (
-              <span
-                className="absolute top-1 h-1.5 w-1.5 rounded-full bg-primary"
-                aria-hidden="true"
-              />
-            )}
             <Menu
               className={cn(
                 "h-6 w-6",

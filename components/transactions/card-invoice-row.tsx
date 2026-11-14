@@ -82,7 +82,7 @@ export function CardInvoiceRow({
         className="list-row-cv-virtual relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
       >
         <EntityTile
-          kind="cartao"
+          kind="fatura"
           entity={{
             id: event.cartaoId,
             nome: event.cartaoNome,
@@ -205,7 +205,7 @@ export function CardInvoiceRow({
         className="flex min-w-[10rem] flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
       >
         <EntityTile
-          kind="cartao"
+          kind="fatura"
           entity={{
             id: event.cartaoId,
             nome: event.cartaoNome,

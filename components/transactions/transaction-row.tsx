@@ -7,6 +7,7 @@ import {
   Repeat,
   StickyNote,
   Tag,
+  Target,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -15,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { EntityTile } from "@/components/entity-tile";
 import type { TransactionListItem } from "@/lib/db/queries/transactions";
-import { faturaDaCompra } from "@/lib/finance/cards";
+import { faturaDaCompra, intervaloDaFatura } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { transactionRowStatus } from "@/lib/design/row-status";
 import type { SecondaryInfo } from "@/lib/finance/row-secondary";
@@ -144,7 +145,22 @@ export const TransactionRow = memo(function TransactionRow({
   const destinationName = isInvoicePayment
     ? transaction.cartaoDestinoNome
     : transaction.contaDestinoNome;
+  const invoiceCycle =
+    isInvoicePayment &&
+    transaction.faturaChave &&
+    transaction.cartaoDestinoDiaFechamento != null &&
+    transaction.cartaoDestinoDiaVencimento != null
+      ? intervaloDaFatura(transaction.faturaChave, {
+          diaFechamento: transaction.cartaoDestinoDiaFechamento,
+          diaVencimento: transaction.cartaoDestinoDiaVencimento,
+          fechamentoCompra:
+            transaction.cartaoDestinoFechamentoCompra ?? "proxima_fatura",
+        })
+      : null;
+  const budgetCycle = transaction.orcamentoCiclo;
+  const hasBudget = Boolean(budgetCycle);
   const hasSecondary =
+    hasBudget ||
     isTransfer ||
     (showAccount && Boolean(accountName)) ||
     (showCategory && Boolean(transaction.categoriaNome));
@@ -285,14 +301,14 @@ export const TransactionRow = memo(function TransactionRow({
 
           {isTransfer ? (
             <EntityTile
-              kind={isInvoicePayment ? "cartao" : "transferencia"}
+              kind={isInvoicePayment ? "fatura" : "transferencia"}
               entity={
                 isInvoicePayment
                   ? {
                       id: transaction.cartaoDestinoId,
                       nome: transaction.cartaoDestinoNome,
                       cor: transaction.cartaoDestinoCor,
-                      icone: transaction.cartaoDestinoIcone,
+                      icone: "CreditCard",
                     }
                   : { id: transaction.id, nome: transaction.descricao }
               }
@@ -340,12 +356,22 @@ export const TransactionRow = memo(function TransactionRow({
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-1.5">
               <span className="row-title min-w-0 truncate">
-                {transaction.descricao}
+                {isInvoicePayment ? "Pagamento de fatura" : transaction.descricao}
               </span>
               {transaction.recorrenciaId && (
                 <Repeat
                   className="h-3.5 w-3.5 shrink-0 text-primary"
                   aria-label="Lançamento recorrente"
+                />
+              )}
+              {budgetCycle && (
+                <Target
+                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                  aria-label={
+                    transaction.orcamentoNome
+                      ? `Orçamento ${transaction.orcamentoNome}`
+                      : "Lançamento vinculado a orçamento"
+                  }
                 />
               )}
               {transaction.parcelaGrupoId && (
@@ -364,7 +390,7 @@ export const TransactionRow = memo(function TransactionRow({
               )}
             </div>
             {hasSecondary && (
-              <span className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[13px] text-muted-foreground">
+              <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-[13px] text-muted-foreground">
                 {isTransfer ? (
                   <>
                     <EntityTile
@@ -412,7 +438,7 @@ export const TransactionRow = memo(function TransactionRow({
                     </span>
                   </>
                 ) : (
-                  <>
+                  <span className="inline-flex min-w-0 items-center gap-1.5">
                     {showAccount && accountName && (
                       <>
                         <EntityTile
@@ -449,7 +475,33 @@ export const TransactionRow = memo(function TransactionRow({
                         {transaction.categoriaNome}
                       </span>
                     )}
-                  </>
+                  </span>
+                )}
+                {budgetCycle && (
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <span
+                      aria-hidden="true"
+                      className="shrink-0 max-[429px]:hidden"
+                    >
+                      ·
+                    </span>
+                    <EntityTile
+                      kind="orcamento"
+                      entity={{
+                        id: transaction.orcamentoNome,
+                        nome: transaction.orcamentoNome,
+                        cor: transaction.orcamentoCor,
+                        icone: transaction.orcamentoIcone,
+                      }}
+                      size="xxs"
+                      plain
+                      className="shrink-0"
+                    />
+                    <span className="truncate">
+                      {transaction.orcamentoNome ?? "Orçamento"}{" "}
+                      {formatMonthShort(budgetCycle)}
+                    </span>
+                  </span>
                 )}
               </span>
             )}
@@ -713,30 +765,15 @@ export const TransactionRow = memo(function TransactionRow({
                 Fatura {formatMonthShort(cardInvoiceKey)}
               </Badge>
             )}
-            {transaction.orcamentoCiclo && (
-              <span className="inline-flex items-center gap-1">
-                <EntityTile
-                  kind="orcamento"
-                  entity={{
-                    id: transaction.orcamentoNome,
-                    nome: transaction.orcamentoNome,
-                    cor: transaction.orcamentoCor,
-                    icone: transaction.orcamentoIcone,
-                  }}
-                  size="xs"
-                />
-                <Badge
-                  variant="outline"
-                  className="px-1.5 py-0 text-xs"
-                  title={
-                    transaction.orcamentoNome
-                      ? `Orçamento ${transaction.orcamentoNome}`
-                      : "Orçamento consumido"
-                  }
-                >
-                  Orçamento {formatMonthShort(transaction.orcamentoCiclo)}
-                </Badge>
-              </span>
+            {budgetCycle && (
+              <Target
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-label={
+                  transaction.orcamentoNome
+                    ? `Orçamento ${transaction.orcamentoNome}`
+                    : "Lançamento vinculado a orçamento"
+                }
+              />
             )}
             {transaction.observacao && (
               <StickyNote
@@ -810,6 +847,38 @@ export const TransactionRow = memo(function TransactionRow({
                 {transaction.categoriaNome && (
                   <span className="truncate">· {transaction.categoriaNome}</span>
                 )}
+              </>
+            )}
+            {invoiceCycle && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="shrink-0">
+                  ciclo {formatDate(invoiceCycle.inicio).slice(0, 5)}–
+                  {formatDate(invoiceCycle.fim).slice(0, 5)}
+                </span>
+              </>
+            )}
+            {budgetCycle && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <EntityTile
+                    kind="orcamento"
+                    entity={{
+                      id: transaction.orcamentoNome,
+                      nome: transaction.orcamentoNome,
+                      cor: transaction.orcamentoCor,
+                      icone: transaction.orcamentoIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">
+                    {transaction.orcamentoNome ?? "Orçamento"}{" "}
+                    {formatMonthShort(budgetCycle)}
+                  </span>
+                </span>
               </>
             )}
           </span>
