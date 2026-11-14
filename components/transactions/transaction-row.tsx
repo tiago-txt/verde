@@ -64,7 +64,8 @@ function AccountBadge({
       <EntityTile
         kind={kind}
         entity={{ id, nome, icone, cor }}
-        size="xs"
+        size="xxs"
+        className="rounded-full"
       />
       <span className="truncate">{nome ?? "Sem conta"}</span>
     </span>
