@@ -104,3 +104,21 @@ export function computeAccountBalance(
 ): number {
   return computeAccountBalances([account], transactions, mode).get(account.id) ?? 0;
 }
+
+export type DatedBalanceTransaction = BalanceTransaction & { data: string };
+
+/**
+ * Saldo atual em uma data de referência: apenas lançamentos pagos com
+ * `data <= asOf`. Transações futuras não entram, mesmo marcadas como pagas.
+ */
+export function computeAccountBalancesAsOf(
+  accounts: BalanceAccount[],
+  transactions: DatedBalanceTransaction[],
+  asOf: string,
+): Map<string, number> {
+  return computeAccountBalances(
+    accounts,
+    transactions.filter((transaction) => transaction.data <= asOf),
+    "atual",
+  );
+}

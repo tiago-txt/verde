@@ -303,7 +303,8 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                 <div className="space-y-1.5">
                   <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted-foreground">
                     <span>
-                      Limite usado {formatCurrency(card.limiteUsado)} de{" "}
+                      Limite usado (inclui parcelas futuras){" "}
+                      {formatCurrency(card.limiteUsado)} de{" "}
                       {formatCurrency(card.limite)}
                     </span>
                     <span
@@ -324,7 +325,7 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                   <BudgetProgress
                     gasto={card.limiteUsado}
                     limite={card.limite}
-                    label={`Limite usado do cartão ${card.nome}`}
+                    label={`Limite usado do cartão ${card.nome} (inclui parcelas futuras)`}
                   />
                   {ratio >= 0.8 && (
                     <p className={cn("text-xs font-medium", tone.text)}>

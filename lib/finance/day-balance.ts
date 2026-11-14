@@ -48,13 +48,15 @@ export function computeDayBalancesFromDeltas(
 
 /**
  * Saldo total das contas ao final de cada dia.
- * Considera saldo inicial + receitas − despesas (pagas ou não), ignora
- * compras no cartão (só afetam a fatura) e transferências (cancelam no total).
+ * `modo = "previsto"` (padrão) inclui pagos e não pagos; `"realizado"` usa
+ * apenas pagos. Ignora compras no cartão (só afetam a fatura) e transferências
+ * entre contas próprias (cancelam no total).
  */
 export function computeDayBalances(
   accounts: DayBalanceAccount[],
   transactions: DayBalanceTransaction[],
   days: string[],
+  modo: "realizado" | "previsto" = "previsto",
 ): Map<string, number> {
   const initialTotal = accounts.reduce(
     (sum, account) => sum + account.saldoInicial,
@@ -64,6 +66,7 @@ export function computeDayBalances(
 
   for (const transaction of transactions) {
     if (transaction.deletedAt || transaction.cartaoId) continue;
+    if (modo === "realizado" && !transaction.pago) continue;
 
     let delta = 0;
     if (transaction.tipo === "receita") delta = transaction.valor;

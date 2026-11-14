@@ -42,10 +42,9 @@ export async function saveForecastPreferencesAction(input: {
     };
   }
 
+  // Contas de investimento fazem parte do escopo total da previsão.
   const allowed = new Set(
-    listAllAccounts(user.workspaceId)
-      .filter((account) => account.tipo !== "investimento")
-      .map((account) => account.id),
+    listAllAccounts(user.workspaceId).map((account) => account.id),
   );
   if (parsed.data.contas.some((id) => !allowed.has(id))) {
     return { ok: false, error: "Conta inválida para este workspace." };

@@ -1,15 +1,19 @@
 import { cache } from "react";
 import { addDaysISO, monthRange, todayISO } from "@/lib/dates";
-import { listCards, listCardInvoiceEventsForMonth } from "./cards";
+import {
+  getCardDebtSnapshot,
+  listCards,
+  listCardInvoiceEventsForMonth,
+} from "./cards";
 import { listAccountsWithBalances } from "./accounts";
 import {
   listReportRows,
+  listResultRows,
   listUpcomingExpenses,
 } from "./reports";
 import type { ReportFilters } from "@/lib/finance/report-filters";
 import {
   buildCategoryReport,
-  buildMonthlySeries,
   buildTopCategories,
   evolutionRange,
   percentChange,
@@ -19,6 +23,12 @@ import {
   type ReportCategory,
   type TopCategory,
 } from "@/lib/finance/reports";
+import {
+  buildMonthlyResultSeries,
+  summarizeResult,
+  type CardBasis,
+  type ResultSummary,
+} from "@/lib/finance/result";
 
 function reportFilters(month: string, range: DateRange): ReportFilters {
   return {
@@ -39,10 +49,16 @@ function reportFilters(month: string, range: DateRange): ReportFilters {
 
 export type DashboardMonthData = {
   month: string;
+  basis: CardBasis;
+  /** Resultado do mês na base escolhida pelo usuário. */
+  result: ResultSummary;
+  previousResult: ResultSummary;
   current: MonthlyPoint;
   previous: MonthlyPoint;
   categoryReport: ReturnType<typeof buildCategoryReport>;
   categories: TopCategory[];
+  /** Gastos por categoria são sempre por competência (rótulo explícito). */
+  categoryBasis: "competencia";
   series6: MonthlyPoint[];
   series12: MonthlyPoint[];
   expenseVariation: number | null;
@@ -50,10 +66,14 @@ export type DashboardMonthData = {
 };
 
 export const getDashboardMonth = cache(
-  async (workspaceId: string, month: string): Promise<DashboardMonthData> => {
+  async (
+    workspaceId: string,
+    month: string,
+    basis: CardBasis,
+  ): Promise<DashboardMonthData> => {
     const range12 = evolutionRange(month, 12);
-    const rows = listReportRows(workspaceId, reportFilters(month, range12));
-    const series12 = buildMonthlySeries(rows, range12);
+    const resultRows = listResultRows(workspaceId, range12);
+    const series12 = buildMonthlyResultSeries(resultRows, range12, basis);
     const series6 = series12.slice(-6);
     const monthRangeValue = monthRange(month);
     const currentRange = { from: monthRangeValue.start, to: monthRangeValue.end };
@@ -63,6 +83,8 @@ export const getDashboardMonth = cache(
       from: previousMonthRange.start,
       to: previousMonthRange.end,
     };
+    // Resultado por categoria permanece em competência (data da compra).
+    const reportRows = listReportRows(workspaceId, reportFilters(month, range12));
     const previousMonth = series12.at(-2) ?? {
       mes: "",
       receitas: 0,
@@ -75,15 +97,29 @@ export const getDashboardMonth = cache(
       despesas: 0,
       saldo: 0,
     };
-    const currentRows = rowsInRange(rows, currentRange);
-    const previousRows = rowsInRange(rows, previousRangeValue);
+    const currentReportRows = rowsInRange(reportRows, currentRange);
+    const previousReportRows = rowsInRange(reportRows, previousRangeValue);
+    const currentMonthRows = resultRows.filter(
+      (row) => row.data >= currentRange.from && row.data <= currentRange.to,
+    );
+    const previousMonthRows = resultRows.filter(
+      (row) => row.data >= previousRangeValue.from && row.data <= previousRangeValue.to,
+    );
 
     return {
       month,
+      basis,
+      result: summarizeResult(currentMonthRows, basis),
+      previousResult: summarizeResult(previousMonthRows, basis),
       current,
       previous: previousMonth,
-      categoryReport: buildCategoryReport(currentRows, previousRows, "despesa"),
-      categories: buildTopCategories(currentRows, "despesa", 6).items,
+      categoryReport: buildCategoryReport(
+        currentReportRows,
+        previousReportRows,
+        "despesa",
+      ),
+      categories: buildTopCategories(currentReportRows, "despesa", 6).items,
+      categoryBasis: "competencia",
       series6,
       series12,
       expenseVariation: percentChange(current.despesas, previousMonth.despesas),
@@ -98,37 +134,55 @@ function addMonthsSafe(month: string, delta: number): string {
   return date.toISOString().slice(0, 7);
 }
 
-export const getDashboardBalance = cache(async (workspaceId: string) => {
-  const accounts = listAccountsWithBalances(workspaceId);
-  const cards = listCards(workspaceId);
-  const operational = accounts
-    .filter(
-      (account) =>
-        !account.deletedAt &&
-        account.tipo !== "investimento" &&
-        !account.arquivada,
-    )
-    .reduce((sum, account) => sum + account.saldoAtual, 0);
-  const investments = accounts
-    .filter(
-      (account) =>
-        !account.deletedAt &&
-        account.tipo === "investimento" &&
-        !account.arquivada,
-    )
-    .reduce((sum, account) => sum + account.saldoAtual, 0);
-  const cardDebt = cards.reduce((sum, card) => sum + card.limiteUsado, 0);
+/**
+ * Saldo no escopo TOTAL (contas operacionais + investimentos) na data de
+ * referência. Compras no cartão não entram no saldo das contas.
+ */
+export const getDashboardBalance = cache(
+  async (workspaceId: string, asOf = todayISO()) => {
+    const accounts = listAccountsWithBalances(workspaceId, {
+      referenceDate: asOf,
+    });
+    const cards = listCards(workspaceId);
+    const debt = getCardDebtSnapshot(workspaceId, asOf);
+    const operational = accounts
+      .filter(
+        (account) =>
+          !account.deletedAt &&
+          account.tipo !== "investimento" &&
+          !account.arquivada,
+      )
+      .reduce((sum, account) => sum + account.saldoAtual, 0);
+    const investments = accounts
+      .filter(
+        (account) =>
+          !account.deletedAt &&
+          account.tipo === "investimento" &&
+          !account.arquivada,
+      )
+      .reduce((sum, account) => sum + account.saldoAtual, 0);
+    const total = operational + investments;
 
-  return {
-    operational,
-    investments,
-    cardDebt,
-    accounts: accounts.filter(
-      (account) => !account.deletedAt && !account.arquivada,
-    ),
-    cards,
-  };
-});
+    return {
+      asOf,
+      total,
+      operational,
+      investments,
+      currentCardDebt: debt.current,
+      currentInvoiceDebt: debt.currentInvoice,
+      futureInstallmentsDebt: debt.futureInstallments,
+      futureCardDebt: debt.future,
+      netWorth: total - debt.current,
+      /** Compatibilidade: dívida atual (não inclui compras futuras). */
+      cardDebt: debt.current,
+      debt,
+      accounts: accounts.filter(
+        (account) => !account.deletedAt && !account.arquivada,
+      ),
+      cards,
+    };
+  },
+);
 
 export type UpcomingInvoice = ReturnType<
   typeof listCardInvoiceEventsForMonth

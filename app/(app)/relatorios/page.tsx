@@ -5,6 +5,7 @@ import { listAllAccounts } from "@/lib/db/queries/accounts";
 import { listCardsForFilter } from "@/lib/db/queries/cards";
 import { listAllCategories, listTags } from "@/lib/db/queries/categories";
 import { getReportData } from "@/lib/db/queries/reports";
+import { getCardBasis } from "@/lib/db/queries/finance-preferences";
 import { parseReportFilters } from "@/lib/finance/report-filters";
 
 export const metadata: Metadata = { title: "Relatórios" };
@@ -18,11 +19,13 @@ export default async function RelatoriosPage({
 
   const params = await searchParams;
   const filters = parseReportFilters(params);
-  const data = getReportData(user.workspaceId, filters);
+  const basis = getCardBasis(user.workspaceId, user.id);
+  const data = getReportData(user.workspaceId, filters, basis);
 
   return (
     <ReportsView
       filters={filters}
+      cardBasis={basis}
       categoryReport={data.categoryReport}
       monthlySeries={data.monthlySeries}
       monthlyCategorySeries={data.monthlyCategorySeries}

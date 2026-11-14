@@ -146,6 +146,35 @@ export const users = sqliteTable(
   ],
 );
 
+/** Base de reconhecimento das compras no cartão. */
+export const CARD_BASES = ["caixa", "competencia"] as const;
+export type CardBasis = (typeof CARD_BASES)[number];
+
+/** Preferências financeiras por usuário e workspace. */
+export const financePreferences = sqliteTable(
+  "finance_preferences",
+  {
+    userId: text("user_id")
+      .primaryKey()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    /** `caixa` (padrão) ou `competencia`. */
+    cardBasis: text("card_basis", { enum: CARD_BASES })
+      .notNull()
+      .default("caixa"),
+    ...timestamps,
+  },
+  (table) => [
+    index("finance_preferences_workspace_idx").on(table.workspaceId),
+    check(
+      "finance_preferences_card_basis_check",
+      sql`${table.cardBasis} in ('caixa', 'competencia')`,
+    ),
+  ],
+);
+
 /** Preferências da previsão de saldo, por usuário e workspace. */
 export const forecastPreferences = sqliteTable(
   "forecast_preferences",

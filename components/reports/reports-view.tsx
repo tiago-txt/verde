@@ -47,6 +47,7 @@ import type {
   OriginReport,
   ReportCategory,
 } from "@/lib/finance/reports";
+import { CARD_BASIS_LABELS, type CardBasis } from "@/lib/finance/result";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,7 @@ type CategoryOption = {
 
 type ReportsViewProps = {
   filters: ReportFilters;
+  cardBasis: CardBasis;
   categoryReport: CategoryReport;
   monthlySeries: MonthlyPoint[];
   monthlyCategorySeries: MonthlyCategorySeries;
@@ -118,6 +120,7 @@ function Variation({
 
 export function ReportsView({
   filters,
+  cardBasis,
   categoryReport,
   monthlySeries,
   monthlyCategorySeries,
@@ -192,6 +195,11 @@ export function ReportsView({
         ))}
       </div>
 
+      <p className="text-xs text-muted-foreground">
+        Resultado do mês: base {CARD_BASIS_LABELS[cardBasis].toLowerCase()} ·
+        Gastos por categoria e por conta/cartão: por competência.
+      </p>
+
       {filters.aba === "categoria" && (
         <CategoryTab
           filters={filters}
@@ -207,6 +215,7 @@ export function ReportsView({
           series={monthlySeries}
           categorySeries={monthlyCategorySeries}
           totals={totals}
+          cardBasis={cardBasis}
         />
       )}
 
@@ -247,6 +256,9 @@ function CategoryTab({
         <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle className="text-sm">
             {filters.tipo === "despesa" ? "Despesas" : "Receitas"} por categoria
+            <span className="ml-2 rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+              por competência
+            </span>
           </CardTitle>
           <span className="tabular text-sm font-semibold">
             {formatCurrency(report.total)}
@@ -430,11 +442,13 @@ function MonthTab({
   series,
   categorySeries,
   totals,
+  cardBasis,
 }: {
   filters: ReportFilters;
   series: MonthlyPoint[];
   categorySeries: MonthlyCategorySeries;
   totals: { receitas: number; despesas: number; saldo: number };
+  cardBasis: CardBasis;
 }) {
   return (
     <div className="space-y-4">
@@ -443,6 +457,9 @@ function MonthTab({
           <CardTitle className="text-sm">
             {filters.tipo === "despesa" ? "Despesas" : "Receitas"} por mês e
             categoria
+            <span className="ml-2 rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+              por competência
+            </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -458,7 +475,7 @@ function MonthTab({
                 <th className="px-4 py-2 font-medium">Mês</th>
                 <th className="px-2 py-2 text-right font-medium">Receitas</th>
                 <th className="px-2 py-2 text-right font-medium">Despesas</th>
-                <th className="px-4 py-2 text-right font-medium">Saldo</th>
+                <th className="px-4 py-2 text-right font-medium">Resultado</th>
               </tr>
             </thead>
             <tbody>
@@ -605,3 +622,4 @@ function OriginTab({
     </Card>
   );
 }
+

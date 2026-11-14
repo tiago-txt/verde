@@ -386,7 +386,9 @@ export function CardDetailView({
         {!embedded && (
           <div className="space-y-2 rounded-xl border border-border bg-card p-4">
           <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">Limite usado</span>
+            <span className="text-muted-foreground">
+              Limite usado (inclui parcelas futuras)
+            </span>
             <span className={cn("tabular font-medium", tone.text)}>
               {formatCurrency(detail.limiteUsado)} de{" "}
               {formatCurrency(detail.card.limite)}
@@ -395,7 +397,7 @@ export function CardDetailView({
           <BudgetProgress
             gasto={detail.limiteUsado}
             limite={detail.card.limite}
-            label={`Limite usado do cartão ${detail.card.nome}`}
+            label={`Limite usado do cartão ${detail.card.nome} (inclui parcelas futuras)`}
           />
           <p className="text-xs text-muted-foreground">
             Disponível:{" "}

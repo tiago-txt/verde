@@ -224,6 +224,110 @@ export function calcularLimiteUsado(
   return faturas.reduce((sum, fatura) => sum + Math.max(0, fatura.restante), 0);
 }
 
+export type CardDebtPurchase = {
+  id: string;
+  data: string;
+  tipo: "despesa" | "receita";
+  valor: number;
+  faturaChave: string;
+};
+
+export type CardDebtSplit = {
+  /** Fatura atual/em aberto: compras já feitas na fatura corrente ou anterior. */
+  currentInvoice: number;
+  /** Parcelas futuras de compras já feitas (faturas seguintes). */
+  futureInstallments: number;
+  /** Compras com data > referência (ainda não aconteceram). */
+  futurePurchases: number;
+  /** Dívida atual = fatura em aberto + parcelas futuras de compras feitas. */
+  current: number;
+  /** Compras futuras, fora da dívida atual. */
+  future: number;
+};
+
+/**
+ * Separa a dívida do cartão entre o que já é dívida na data de referência
+ * (compras com data <= hoje) e compras futuras.
+ *
+ * Pagamentos já efetivados são alocados por FIFO dentro da fatura, na ordem
+ * das compras. Assim, uma compra futura na mesma fatura não vira dívida atual
+ * e um pagamento parcial não quita uma compra mais nova antes da mais antiga.
+ *
+ * `currentInvoiceChave` identifica a fatura corrente; compras já feitas em
+ * faturas seguintes são "parcelas futuras", mas continuam sendo dívida atual.
+ */
+export function splitCardDebt(
+  purchases: CardDebtPurchase[],
+  paidByInvoice: Map<string, number>,
+  referenceDate: string,
+  currentInvoiceChave?: string | null,
+): CardDebtSplit {
+  const byInvoice = new Map<string, CardDebtPurchase[]>();
+  for (const purchase of purchases) {
+    const bucket = byInvoice.get(purchase.faturaChave) ?? [];
+    bucket.push(purchase);
+    byInvoice.set(purchase.faturaChave, bucket);
+  }
+
+  let currentInvoice = 0;
+  let futureInstallments = 0;
+  let futurePurchases = 0;
+
+  for (const [invoice, items] of byInvoice) {
+    const ordered = [...items].sort(
+      (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id),
+    );
+    const remaining = ordered.map((item) =>
+      item.tipo === "despesa" ? item.valor : -item.valor,
+    );
+    let available = Math.max(0, paidByInvoice.get(invoice) ?? 0);
+
+    // Estornos abatem primeiro as compras mais antigas da fatura.
+    for (let index = 0; index < remaining.length; index += 1) {
+      const value = remaining[index] ?? 0;
+      if (value >= 0) continue;
+      let credit = -value;
+      remaining[index] = 0;
+      for (let target = 0; target < remaining.length && credit > 0; target += 1) {
+        const targetValue = remaining[target] ?? 0;
+        if (target === index || targetValue <= 0) continue;
+        const applied = Math.min(targetValue, credit);
+        remaining[target] = targetValue - applied;
+        credit -= applied;
+      }
+    }
+
+    for (let index = 0; index < remaining.length && available > 0; index += 1) {
+      const value = remaining[index] ?? 0;
+      if (value <= 0) continue;
+      const applied = Math.min(value, available);
+      remaining[index] = value - applied;
+      available -= applied;
+    }
+
+    for (let index = 0; index < ordered.length; index += 1) {
+      const item = ordered[index] as CardDebtPurchase;
+      const value = remaining[index] ?? 0;
+      if (value === 0) continue;
+      if (item.data > referenceDate) {
+        futurePurchases += value;
+      } else if (currentInvoiceChave && invoice > currentInvoiceChave) {
+        futureInstallments += value;
+      } else {
+        currentInvoice += value;
+      }
+    }
+  }
+
+  return {
+    currentInvoice,
+    futureInstallments,
+    futurePurchases,
+    current: currentInvoice + futureInstallments,
+    future: futurePurchases,
+  };
+}
+
 export function limiteDisponivel(limite: number, usado: number): number {
   return limite - usado;
 }

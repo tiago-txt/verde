@@ -16,7 +16,9 @@ import {
   faturaPassaFiltros,
   limiteDisponivel,
   montarResumoFatura,
+  splitCardDebt,
   type CardCycleConfig,
+  type CardDebtPurchase,
   type CardInvoiceFilters,
   type CardInvoiceSummary,
 } from "@/lib/finance/cards";
@@ -319,6 +321,139 @@ export function listCardInvoicesForForecast(
       (invoice) => ({ card, invoice }),
     ),
   );
+}
+
+export type CardDebtSnapshot = {
+  asOf: string;
+  /** Fatura atual/em aberto. */
+  currentInvoice: number;
+  /** Parcelas futuras de compras já feitas (ainda são dívida atual). */
+  futureInstallments: number;
+  /** Dívida atual = fatura em aberto + parcelas futuras de compras feitas. */
+  current: number;
+  /** Compras futuras, fora da dívida atual. */
+  future: number;
+  perCard: {
+    cartaoId: string;
+    nome: string;
+    currentInvoice: number;
+    futureInstallments: number;
+    current: number;
+    future: number;
+  }[];
+};
+
+/**
+ * Dívida de cartão na data de referência, separando compras já realizadas de
+ * compras futuras. Pagamentos com data futura não abatem a dívida de hoje.
+ */
+export function getCardDebtSnapshot(
+  workspaceId: string,
+  asOf = todayISO(),
+): CardDebtSnapshot {
+  const { db, ws } = scopedDb(workspaceId);
+  const cards = db
+    .select()
+    .from(creditCards)
+    .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
+    .all();
+  if (cards.length === 0) {
+    return {
+      asOf,
+      currentInvoice: 0,
+      futureInstallments: 0,
+      current: 0,
+      future: 0,
+      perCard: [],
+    };
+  }
+
+  const { movements, payments } = loadLedger(workspaceId);
+  const perCard = cards.map((card) => {
+    const config = cardConfig(card);
+    const purchases: CardDebtPurchase[] = movements
+      .filter(
+        (movement) =>
+          movement.cartaoId === card.id && movement.tipo !== "transferencia",
+      )
+      .map((movement, index) => ({
+        id: `${card.id}:${movement.data}:${index}`,
+        data: movement.data,
+        tipo: movement.tipo as "despesa" | "receita",
+        valor: movement.valor,
+        faturaChave: faturaDaCompra(movement.data, config),
+      }));
+    const paidByInvoice = new Map<string, number>();
+    let unlinkedPaid = 0;
+    for (const payment of payments) {
+      if (payment.cartaoId !== card.id) continue;
+      if (!payment.pago || payment.data > asOf) continue;
+      if (!payment.faturaChave) {
+        // Pagamentos antigos sem vínculo entram no FIFO das faturas abertas.
+        unlinkedPaid += payment.valor;
+        continue;
+      }
+      paidByInvoice.set(
+        payment.faturaChave,
+        (paidByInvoice.get(payment.faturaChave) ?? 0) + payment.valor,
+      );
+    }
+
+    if (unlinkedPaid > 0) {
+      const totals = new Map<string, number>();
+      for (const purchase of purchases) {
+        totals.set(
+          purchase.faturaChave,
+          (totals.get(purchase.faturaChave) ?? 0) +
+            (purchase.tipo === "despesa" ? purchase.valor : -purchase.valor),
+        );
+      }
+      for (const invoice of [...totals.keys()].sort()) {
+        if (unlinkedPaid <= 0) break;
+        const open = Math.max(
+          0,
+          (totals.get(invoice) ?? 0) - (paidByInvoice.get(invoice) ?? 0),
+        );
+        const applied = Math.min(open, unlinkedPaid);
+        if (applied <= 0) continue;
+        paidByInvoice.set(
+          invoice,
+          (paidByInvoice.get(invoice) ?? 0) + applied,
+        );
+        unlinkedPaid -= applied;
+      }
+    }
+
+    const debt = splitCardDebt(
+      purchases,
+      paidByInvoice,
+      asOf,
+      faturaDaCompra(asOf, config),
+    );
+    return {
+      cartaoId: card.id,
+      nome: card.nome,
+      currentInvoice: debt.currentInvoice,
+      futureInstallments: debt.futureInstallments,
+      current: debt.current,
+      future: debt.future,
+    };
+  });
+
+  return {
+    asOf,
+    currentInvoice: perCard.reduce(
+      (sum, card) => sum + card.currentInvoice,
+      0,
+    ),
+    futureInstallments: perCard.reduce(
+      (sum, card) => sum + card.futureInstallments,
+      0,
+    ),
+    current: perCard.reduce((sum, card) => sum + card.current, 0),
+    future: perCard.reduce((sum, card) => sum + card.future, 0),
+    perCard,
+  };
 }
 
 export function listCards(workspaceId: string): CardWithInvoice[] {

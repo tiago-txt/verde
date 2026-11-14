@@ -14,14 +14,17 @@ import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DecorationsToggle } from "@/components/decorations-toggle";
 import { SecondaryInfoToggle } from "@/components/settings/secondary-info-toggle";
+import { FinancePreferences } from "@/components/settings/finance-preferences";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireUser } from "@/lib/auth/current-user";
+import { getFinancePreferences } from "@/lib/db/queries/finance-preferences";
 import { formatDateTime, getInitials } from "@/lib/format";
 
 export const metadata: Metadata = { title: "Configurações" };
 
 export default async function ConfiguracoesPage() {
   const user = await requireUser();
+  const preferences = getFinancePreferences(user.workspaceId, user.id);
 
   return (
     <div className="space-y-6">
@@ -108,6 +111,23 @@ export default async function ConfiguracoesPage() {
             <div className="mt-3">
               <SecondaryInfoToggle />
             </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex-row items-center gap-3 space-y-0">
+            <span className="tile grid h-9 w-9 place-items-center rounded-xl bg-muted text-muted-foreground">
+              <Wallet className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div>
+              <CardTitle>Preferências financeiras</CardTitle>
+              <CardDescription>
+                Como compras no cartão entram no resultado.
+              </CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <FinancePreferences cardBasis={preferences.cardBasis} />
           </CardContent>
         </Card>
 

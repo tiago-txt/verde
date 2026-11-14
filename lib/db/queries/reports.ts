@@ -7,6 +7,7 @@ import {
   inArray,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
@@ -26,7 +27,6 @@ import type { ReportFilters } from "@/lib/finance/report-filters";
 import {
   buildCategoryReport,
   buildMonthlyCategorySeries,
-  buildMonthlySeries,
   buildOriginReport,
   buildTopCategories,
   filterReportRows,
@@ -34,6 +34,11 @@ import {
   rowsInRange,
   type ReportRow,
 } from "@/lib/finance/reports";
+import {
+  buildMonthlyResultSeries,
+  type CardBasis,
+  type ResultTransaction,
+} from "@/lib/finance/result";
 import { getCardInvoiceStatuses } from "./cards";
 import { listAllCategories } from "./categories";
 
@@ -52,6 +57,56 @@ function categoryFilterIds(
     categoriaPaiId: category.categoriaPaiId,
   }));
   return [...expandirCategorias(all, categoriaIds)];
+}
+
+/**
+ * Lançamentos crus (incluindo transferências e compras no cartão) para o
+ * cálculo de resultado. A classificação caixa/competência fica nas funções
+ * puras de `lib/finance/result`.
+ */
+export function listResultRows(
+  workspaceId: string,
+  range: { from: string; to: string },
+  filters?: { contas?: string[]; cartoes?: string[] },
+): ResultTransaction[] {
+  const { db, ws } = scopedDb(workspaceId);
+  const conditions = [
+    ws(transactions.workspaceId),
+    isNull(transactions.deletedAt),
+    gte(transactions.data, range.from),
+    lte(transactions.data, range.to),
+  ];
+  const contas = filters?.contas ?? [];
+  const cartoes = filters?.cartoes ?? [];
+  if (contas.length > 0 || cartoes.length > 0) {
+    const origins = [];
+    if (contas.length > 0) {
+      origins.push(
+        inArray(transactions.contaId, contas),
+        inArray(transactions.contaDestinoId, contas),
+      );
+    }
+    if (cartoes.length > 0) {
+      origins.push(
+        inArray(transactions.cartaoId, cartoes),
+        inArray(transactions.cartaoDestinoId, cartoes),
+      );
+    }
+    conditions.push(or(...origins)!);
+  }
+  return db
+    .select({
+      tipo: transactions.tipo,
+      valor: transactions.valor,
+      data: transactions.data,
+      pago: transactions.pago,
+      cartaoId: transactions.cartaoId,
+      cartaoDestinoId: transactions.cartaoDestinoId,
+      faturaChave: transactions.faturaChave,
+    })
+    .from(transactions)
+    .where(and(...conditions))
+    .all();
 }
 
 /** Uma consulta de lançamentos para o intervalo; agregações são puras. */
@@ -183,6 +238,7 @@ export function listReportRows(
 export function getReportData(
   workspaceId: string,
   filters: ReportFilters,
+  basis: CardBasis = "competencia",
 ) {
   const previousRange = previousEquivalentRange(filters.range);
   const queryFilters: ReportFilters = {
@@ -205,7 +261,16 @@ export function getReportData(
     { onlyPaid: filters.onlyPaid },
   );
 
-  const monthlySeries = buildMonthlySeries(currentRows, filters.range);
+  // Totais e série mensal seguem a preferência de cartão (caixa/competência).
+  const resultRows = listResultRows(workspaceId, filters.range, {
+    contas: filters.contas,
+    cartoes: filters.cartoes,
+  });
+  const monthlySeries = buildMonthlyResultSeries(
+    resultRows,
+    filters.range,
+    basis,
+  );
   const categoryReport = buildCategoryReport(
     currentRows,
     previousRows,
@@ -227,6 +292,8 @@ export function getReportData(
 
   return {
     filters,
+    basis,
+    categoryBasis: "competencia" as const,
     previousRange,
     currentRows,
     previousRows,

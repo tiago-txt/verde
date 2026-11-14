@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ForecastData } from "@/lib/db/queries/forecast";
+import { NumberSource } from "@/components/dashboard/number-source";
 
 function sparklinePoints(data: ForecastData): string {
   const points = data.projection.pontos.filter((_, index) => index % Math.max(1, Math.ceil(data.projection.pontos.length / 24)) === 0);
@@ -24,10 +25,19 @@ function sparklinePoints(data: ForecastData): string {
 export function ForecastMiniCard({ data }: { data: ForecastData }) {
   const negativo = data.alertas.length > 0;
   const first = data.alertas[0];
+  const escopoRestrito =
+    data.prefs.contas.length <
+    data.contasDisponiveis.filter((conta) => !conta.arquivada).length;
   const situation =
     negativo && first
-      ? `Negativo a partir de ${formatDate(first.inicio)}; mínimo ${formatCurrency(first.menorSaldo)}.`
+      ? data.projection.saldoInicial < data.prefs.margem
+        ? `Saldo atual já negativo (${formatCurrency(data.projection.saldoInicial)}); mínimo ${formatCurrency(first.menorSaldo)} em ${formatDate(first.menorData)}.`
+        : `Negativo a partir de ${formatDate(first.inicio)}; mínimo ${formatCurrency(first.menorSaldo)}.`
       : `Positivo pelos próximos ${data.prefs.horizonte} meses; mínimo ${formatCurrency(data.menorSaldo.saldo)} em ${formatDate(data.menorSaldo.data)}.`;
+  const ultimo = data.projection.pontos.at(-1)?.saldo ?? data.projection.saldoInicial;
+  const entradas = data.meses.reduce((sum, mes) => sum + mes.entradas, 0);
+  const saidas = data.meses.reduce((sum, mes) => sum + mes.saidas, 0);
+  const liberacoes = data.meses.reduce((sum, mes) => sum + mes.liberacoes, 0);
 
   return (
     <Card className="h-full">
@@ -60,6 +70,42 @@ export function ForecastMiniCard({ data }: { data: ForecastData }) {
           />
         </svg>
         <p className="text-xs text-muted-foreground">{situation}</p>
+        {escopoRestrito && (
+          <p className="rounded-md border border-warning/40 bg-warning/5 px-2 py-1.5 text-xs text-muted-foreground">
+            Escopo restrito: a previsão não inclui todas as contas. O saldo
+            total do app pode ser diferente.
+          </p>
+        )}
+        <NumberSource
+          title="De onde vem a previsão?"
+          description="Ponto de partida: saldo total em contas hoje (operacional + investimentos). Transferências entre contas próprias são neutras."
+          total={ultimo}
+          items={[
+            {
+              label: "Saldo total em contas hoje",
+              value: data.projection.saldoInicial,
+              href: "/contas",
+            },
+            {
+              label: "Entradas previstas",
+              value: entradas,
+              href: "/lancamentos",
+            },
+            {
+              label: "Saídas previstas",
+              value: -saidas,
+              href: "/lancamentos",
+            },
+            {
+              label: "Liberações de orçamento",
+              value: liberacoes,
+              href: "/limite-de-gastos",
+            },
+          ]}
+          formula={`Saldo no fim do horizonte de ${data.prefs.horizonte} meses.`}
+          note="Sem média diária de gastos. Faturas de cartão e reservas de orçamento entram nas saídas."
+          triggerClassName="w-full justify-start px-0"
+        />
       </CardContent>
     </Card>
   );

@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, lte } from "drizzle-orm";
 import { scopedDb } from "@/lib/db/scoped";
+import { listAccountsWithBalances } from "./accounts";
 import {
   accounts,
   creditCards,
@@ -9,7 +10,7 @@ import {
   type RecurrenceTemplate,
   type TransactionType,
 } from "@/lib/db/schema";
-import { addDaysISO, todayISO } from "@/lib/dates";
+import { addDaysISO, monthRange, todayISO } from "@/lib/dates";
 import { computeAccountBalances, type BalanceTransaction } from "@/lib/finance/balance";
 import {
   cicloCompetencia,
@@ -167,7 +168,6 @@ function eligibleAccounts(workspaceId: string): ForecastAccount[] {
     .from(accounts)
     .where(and(ws(accounts.workspaceId), isNull(accounts.deletedAt)))
     .all()
-    .filter((account) => account.tipo !== "investimento")
     .map((account) => ({
       id: account.id,
       nome: account.nome,
@@ -571,6 +571,49 @@ function currentBalances(
   }));
 }
 
+function buildProjectionForAccounts(
+  workspaceId: string,
+  contas: ForecastAccount[],
+  hoje: string,
+  fim: string,
+  margem: number,
+  incluirEstimativas: boolean,
+  comEstimativas: boolean,
+): {
+  contas: ForecastAccount[];
+  eventos: ForecastEvent[];
+  projection: ForecastProjection;
+} {
+  const rows = loadForecastTransactions(workspaceId, fim);
+  const accountsWithBalance = currentBalances(workspaceId, contas, rows, hoje);
+  const eventosReais = rows
+    .map((row) => realEvent(row, hoje))
+    .filter((event): event is ForecastEvent => Boolean(event));
+  const { eventos: eventosRecorrencia, cardMovements } =
+    virtualRecurrenceEvents(workspaceId, hoje, fim);
+  const eventosFatura = cardInvoiceEvents(workspaceId, hoje, fim, cardMovements);
+  const eventosOrcamento = budgetEvents(workspaceId, hoje, fim);
+  const eventos = [
+    ...eventosReais,
+    ...eventosRecorrencia,
+    ...eventosFatura,
+    ...eventosOrcamento,
+  ];
+
+  return {
+    contas: accountsWithBalance,
+    eventos,
+    projection: construirProjecao({
+      hoje,
+      fim,
+      margem,
+      contas: accountsWithBalance,
+      eventos,
+      incluirEstimativas: comEstimativas ? incluirEstimativas : false,
+    }),
+  };
+}
+
 export function getForecastData(
   workspaceId: string,
   userId: string,
@@ -603,40 +646,23 @@ export function getForecastData(
   const cached = cache.get(key);
   if (cached && cached.expires > Date.now()) return cached.data;
 
-  const rows = loadForecastTransactions(workspaceId, fim);
-  const accountsWithBalance = currentBalances(workspaceId, contas, rows, hoje);
-  const eventosReais = rows
-    .map((row) => realEvent(row, hoje))
-    .filter((event): event is ForecastEvent => Boolean(event));
-  const { eventos: eventosRecorrencia, cardMovements } =
-    virtualRecurrenceEvents(workspaceId, hoje, fim);
-  const eventosFatura = cardInvoiceEvents(workspaceId, hoje, fim, cardMovements);
-  const eventosOrcamento = budgetEvents(workspaceId, hoje, fim);
-
-  const projection = construirProjecao({
+  const completo = buildProjectionForAccounts(
+    workspaceId,
+    contas,
     hoje,
     fim,
-    margem: prefs.margem,
-    contas: accountsWithBalance,
-    eventos: [
-      ...eventosReais,
-      ...eventosRecorrencia,
-      ...eventosFatura,
-      ...eventosOrcamento,
-    ],
-    incluirEstimativas: prefs.incluirEstimativas,
-  });
+    prefs.margem,
+    prefs.incluirEstimativas,
+    true,
+  );
+  const accountsWithBalance = completo.contas;
+  const projection = completo.projection;
   const projectionCerto = construirProjecao({
     hoje,
     fim,
     margem: prefs.margem,
     contas: accountsWithBalance,
-    eventos: [
-      ...eventosReais,
-      ...eventosRecorrencia,
-      ...eventosFatura,
-      ...eventosOrcamento,
-    ],
+    eventos: completo.eventos,
     incluirEstimativas: false,
   });
 
@@ -941,16 +967,122 @@ export function simulateForecast(
   return { data, simulation, maxParcela };
 }
 
+export type ForecastBannerData = ForecastAlert & {
+  /** O saldo de hoje já está abaixo da margem (não é previsão futura). */
+  saldoAtualNegativo: boolean;
+  /** O usuário restringiu as contas: o total exibido não é o escopo total. */
+  escopoRestrito: boolean;
+  saldoAtual: number;
+};
+
 export function getForecastBanner(
   workspaceId: string,
   userId: string,
   month: string,
-): ForecastAlert | null {
-  const data = getForecastData(workspaceId, userId);
-  return (
-    data.alertas.find(
-      (alert) =>
-        alert.inicio.slice(0, 7) <= month && alert.fim.slice(0, 7) >= month,
-    ) ?? null
+): ForecastBannerData | null {
+  const prefsData = getForecastData(workspaceId, userId);
+  const disponiveis = prefsData.contasDisponiveis.filter(
+    (account) => !account.arquivada,
   );
+  const escopoRestrito = prefsData.prefs.contas.length < disponiveis.length;
+  // O alerta é sempre calculado no escopo total. Se o usuário restringiu a
+  // previsão, o aviso de escopo continua visível, mas não acusa um falso
+  // negativo causado por deixar investimentos de fora.
+  const data = escopoRestrito
+    ? getForecastData(workspaceId, userId, {
+        contas: disponiveis.map((account) => account.id),
+      })
+    : prefsData;
+  const alert = data.alertas.find(
+    (item) =>
+      item.inicio.slice(0, 7) <= month && item.fim.slice(0, 7) >= month,
+  );
+  if (!alert) return null;
+
+  return {
+    ...alert,
+    saldoAtualNegativo: data.projection.saldoInicial < data.prefs.margem,
+    escopoRestrito,
+    saldoAtual: data.projection.saldoInicial,
+  };
+}
+
+export type MonthProjection = {
+  mes: string;
+  /** Último dia do mês selecionado — nunca um horizonte fixo. */
+  fim: string;
+  hoje: string;
+  /** Meses passados usam o fechamento realizado, sem eventos futuros. */
+  modo: "realizado" | "previsto";
+  /** Saldo no fim do mês, no escopo total (operacional + investimentos). */
+  saldo: number;
+  saldoInicial: number;
+  causas: ForecastCause[];
+};
+
+/**
+ * "Previsto até fim do mês X" no escopo total.
+ * - mês passado: saldo realizado no último dia (pagos com data <= fim);
+ * - mês atual/futuro: projeção com corte no último dia do mês.
+ */
+export function getMonthProjection(
+  workspaceId: string,
+  month: string,
+): MonthProjection {
+  const hoje = todayISO();
+  const range = monthRange(month);
+  const available = eligibleAccounts(workspaceId).filter(
+    (account) => !account.arquivada,
+  );
+
+  if (range.end < hoje) {
+    const total = listAccountsWithBalances(workspaceId, {
+      referenceDate: range.end,
+    })
+      .filter((account) => !account.deletedAt && !account.arquivada)
+      .reduce((sum, account) => sum + account.saldoAtual, 0);
+    return {
+      mes: month,
+      fim: range.end,
+      hoje,
+      modo: "realizado",
+      saldo: total,
+      saldoInicial: total,
+      causas: [],
+    };
+  }
+
+  const { projection } = buildProjectionForAccounts(
+    workspaceId,
+    available,
+    hoje,
+    range.end,
+    0,
+    true,
+    true,
+  );
+  const inicio = range.start > hoje ? range.start : hoje;
+  const eventos = projection.eventos.filter(
+    (event) => event.data >= inicio && event.data <= range.end,
+  );
+  const causas =
+    eventos.length > 0
+      ? causasDoPeriodo(projection, {
+          inicio,
+          fim: range.end,
+          menorSaldo: projection.pontos.at(-1)?.saldo ?? projection.saldoInicial,
+          menorData: range.end,
+          semRecuperacao: false,
+          eventos,
+        })
+      : [];
+  return {
+    mes: month,
+    fim: range.end,
+    hoje,
+    modo: "previsto",
+    saldo: projection.pontos.at(-1)?.saldo ?? projection.saldoInicial,
+    saldoInicial: projection.saldoInicial,
+    causas,
+  };
 }

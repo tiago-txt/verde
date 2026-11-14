@@ -34,6 +34,9 @@ export function ForecastView({ data }: { data: ForecastData }) {
   const comNegativo = data.projection.pontos.some(
     (point) => point.saldo < data.prefs.margem,
   );
+  const escopoRestrito =
+    data.prefs.contas.length <
+    data.contasDisponiveis.filter((conta) => !conta.arquivada).length;
 
   useEffect(() => {
     if (!data.contas.some((conta) => conta.id === accountId)) {
@@ -50,6 +53,13 @@ export function ForecastView({ data }: { data: ForecastData }) {
   return (
     <div className="space-y-4">
       <section className="rounded-xl border border-border bg-card p-3 sm:p-4">
+        {escopoRestrito && (
+          <p className="mb-3 rounded-md border border-warning/40 bg-warning/5 px-2 py-1.5 text-xs text-muted-foreground">
+            Escopo restrito: esta previsão não inclui todas as contas. As contas
+            não selecionadas ficam fora do total e podem fazer o valor diferir
+            do saldo total da Visão geral.
+          </p>
+        )}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <Tabs
             value={view}

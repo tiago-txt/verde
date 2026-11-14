@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AlertTriangle, X } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/format";
-import type { ForecastAlert } from "@/lib/db/queries/forecast";
+import type { ForecastBannerData } from "@/lib/db/queries/forecast";
 
 export function ForecastBanner({
   userId,
@@ -13,7 +13,7 @@ export function ForecastBanner({
 }: {
   userId: string;
   month: string;
-  alert: ForecastAlert;
+  alert: ForecastBannerData;
 }) {
   const key = `verde:forecast-banner:${userId}:${month}`;
   const [dismissed, setDismissed] = useState(true);
@@ -52,18 +52,45 @@ export function ForecastBanner({
       </span>
       <div className="min-w-0 flex-1">
         <p className="font-medium text-on-surface">
-          Este mês tem período de saldo negativo na previsão.
+          {alert.saldoAtualNegativo
+            ? "Saldo atual já negativo"
+            : "Este mês tem período de saldo negativo na previsão."}
         </p>
         <p className="mt-0.5 text-muted-foreground">
-          Mínimo de{" "}
+          {alert.saldoAtualNegativo ? (
+            <>
+              Saldo total hoje:{" "}
+              <span className="tabular font-semibold text-clay">
+                {formatCurrency(alert.saldoAtual)}
+              </span>
+              . Mínimo de{" "}
+            </>
+          ) : (
+            <>Mínimo de </>
+          )}
           <span className="tabular font-semibold text-clay">
             {formatCurrency(alert.menorSaldo)}
           </span>{" "}
           em {formatDate(alert.menorData)}.{" "}
+          {alert.causas[0] && (
+            <>
+              Causa principal:{" "}
+              <span className="font-medium text-on-surface">
+                {alert.causas[0].label}
+              </span>{" "}
+              ({formatCurrency(alert.causas[0].valor)}).{" "}
+            </>
+          )}
           <Link href="/previsao" className="font-semibold text-primary hover:underline">
             Ver previsão
           </Link>
         </p>
+        {alert.escopoRestrito && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            A tela de Previsão está com escopo restrito. Este alerta usa o
+            escopo total e pode diferir da previsão configurada.
+          </p>
+        )}
       </div>
       <button
         type="button"

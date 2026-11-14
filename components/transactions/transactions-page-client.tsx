@@ -99,7 +99,7 @@ import type {
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import type { CardInvoiceEvent, CardInvoiceDetail } from "@/lib/db/queries/cards";
 import { ForecastBanner } from "@/components/forecast/forecast-banner";
-import type { ForecastAlert } from "@/lib/db/queries/forecast";
+import type { ForecastBannerData } from "@/lib/db/queries/forecast";
 import {
   addMonths,
   currentMonth,
@@ -118,6 +118,7 @@ import { groupTransactionsByDay } from "@/lib/finance/day-labels";
 import { aplicarEventosAoResumo } from "@/lib/finance/budgets";
 import { aplicarFaturasAoResumo } from "@/lib/finance/cards";
 import { summarizeTransactions } from "@/lib/finance/summary";
+import type { CardBasis, ResultSummary } from "@/lib/finance/result";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -192,7 +193,10 @@ type TransactionsPageClientProps = {
   overdueIds: string[];
   initialNew: boolean;
   userId: string;
-  forecastAlert: ForecastAlert | null;
+  forecastAlert: ForecastBannerData | null;
+  cardBasis: CardBasis;
+  result: ResultSummary;
+  dayBalanceMode: "realizado" | "previsto";
 };
 
 type TransactionDayGroup = {
@@ -216,6 +220,9 @@ export function TransactionsPageClient({
   initialNew,
   userId,
   forecastAlert,
+  cardBasis,
+  result,
+  dayBalanceMode,
 }: TransactionsPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -1253,7 +1260,7 @@ export function TransactionsPageClient({
                           isMobile ? "text-sm" : "text-xs",
                           balance < 0 ? "text-clay" : "text-on-surface",
                         )}
-                        title="Saldo previsto acumulado das contas até este dia"
+                        title={`Saldo ${dayBalanceMode === "realizado" ? "realizado" : "previsto"} acumulado das contas até este dia`}
                       >
                         <Wallet
                           className="hidden h-3.5 w-3.5 text-amber sm:inline"
@@ -1267,7 +1274,9 @@ export function TransactionsPageClient({
                               : "hidden text-outline sm:inline",
                           )}
                         >
-                          Saldo do dia
+                          {dayBalanceMode === "realizado"
+                            ? "Saldo realizado"
+                            : "Saldo previsto"}
                         </span>
                         {formatCurrency(balance)}
                       </span>
@@ -1340,6 +1349,8 @@ export function TransactionsPageClient({
       <TransactionsSummaryFooter
         summary={summary}
         openingBalance={openingBalance}
+        basis={cardBasis}
+        result={result}
       />
 
       {createOpen && (

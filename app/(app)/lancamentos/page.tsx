@@ -12,9 +12,12 @@ import {
 import { getBudgetEventsForMonth, getBudgetEventsForDayBalances } from "@/lib/db/queries/budgets";
 import { getForecastBanner } from "@/lib/db/queries/forecast";
 import { listCardInvoiceEventsForMonth, listCardInvoiceEventsForDayBalances } from "@/lib/db/queries/cards";
-import { todayISO } from "@/lib/dates";
+import { getCardBasis } from "@/lib/db/queries/finance-preferences";
+import { listResultRows } from "@/lib/db/queries/reports";
+import { monthRange, todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
 import { parseTransactionFilters } from "@/lib/finance/filters";
+import { summarizeResult } from "@/lib/finance/result";
 
 export const metadata: Metadata = { title: "Lançamentos" };
 
@@ -42,7 +45,22 @@ export default async function LancamentosPage({
   const cardInvoiceEvents = customRange
     ? []
     : listCardInvoiceEventsForMonth(workspaceId, filters.mes, filters);
-  const monthBalances = getMonthBalances(workspaceId, filters.mes);
+  const monthBalances = getMonthBalances(workspaceId, filters.mes, "previsto");
+  const realizedBalances = getMonthBalances(
+    workspaceId,
+    filters.mes,
+    "realizado",
+  );
+  // Mesma base de resultado em todas as telas (preferência do usuário).
+  const cardBasis = getCardBasis(workspaceId, user.id);
+  const monthWindow = monthRange(filters.mes);
+  const resultRange = customRange
+    ? { from: filters.de as string, to: filters.ate as string }
+    : { from: monthWindow.start, to: monthWindow.end };
+  const result = summarizeResult(
+    listResultRows(workspaceId, resultRange),
+    cardBasis,
+  );
   const dayBalances = customRange
     ? {}
     : aplicarEventosAoSalsoDia(
@@ -79,12 +97,15 @@ export default async function LancamentosPage({
       formData={formData}
       detail={detail}
       dayBalances={dayBalances}
-      openingBalance={monthBalances.opening}
+      openingBalance={realizedBalances.opening}
       today={today}
       overdueIds={overdueIds}
       initialNew={params.novo === "1"}
       userId={user.id}
       forecastAlert={forecastAlert}
+      cardBasis={cardBasis}
+      result={result}
+      dayBalanceMode={monthBalances.modo}
     />
   );
 }

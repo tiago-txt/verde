@@ -1,9 +1,10 @@
 import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { scopedDb } from "@/lib/db/scoped";
 import { accounts, transactions, type Account } from "@/lib/db/schema";
-import { currentMonth } from "@/lib/dates";
+import { currentMonth, todayISO } from "@/lib/dates";
 import {
   computeAccountBalances,
+  computeAccountBalancesAsOf,
   type BalanceTransaction,
 } from "@/lib/finance/balance";
 import { getBudgetAccountDeltasForMonth } from "./budgets";
@@ -14,9 +15,15 @@ export type AccountWithBalance = Account & {
   saldoPrevisto: number;
 };
 
+/**
+ * Saldos por conta. `referenceDate` limita o saldo atual a lançamentos pagos
+ * com data <= a referência (transações futuras não entram, mesmo pagas).
+ */
 export function listAccountsWithBalances(
   workspaceId: string,
+  options: { referenceDate?: string } = {},
 ): AccountWithBalance[] {
+  const referenceDate = options.referenceDate ?? todayISO();
   const { db, ws } = scopedDb(workspaceId);
 
   const accountRows = db
@@ -30,6 +37,7 @@ export function listAccountsWithBalances(
     .select({
       tipo: transactions.tipo,
       valor: transactions.valor,
+      data: transactions.data,
       pago: transactions.pago,
       contaId: transactions.contaId,
       contaDestinoId: transactions.contaDestinoId,
@@ -42,10 +50,10 @@ export function listAccountsWithBalances(
     .where(and(ws(transactions.workspaceId), isNull(transactions.deletedAt)))
     .all();
 
-  const atual = computeAccountBalances(
+  const atual = computeAccountBalancesAsOf(
     accountRows,
-    transactionRows as BalanceTransaction[],
-    "atual",
+    transactionRows as (BalanceTransaction & { data: string })[],
+    referenceDate,
   );
   const previsto = computeAccountBalances(
     accountRows,

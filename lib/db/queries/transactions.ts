@@ -643,18 +643,24 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
 /**
  * Saldo total das contas ao final de cada dia do mês, junto do saldo
  * anterior (tudo o que veio antes do primeiro dia do mês).
- * Query agregada única (sem N+1), sempre sem filtros.
+ *
+ * `modo = "realizado"` usa só lançamentos pagos até hoje; `"previsto"`
+ * inclui os não pagos e eventos futuros. O consumidor deve rotular a série.
  */
 export function getMonthBalances(
   workspaceId: string,
   monthKey: string,
+  modo: "realizado" | "previsto" = "previsto",
 ): {
+  modo: "realizado" | "previsto";
   opening: number;
   byDay: Record<string, number>;
 } {
   const { db, ws } = scopedDb(workspaceId);
   const { end } = monthRange(monthKey);
   const start = `${monthKey}-01`;
+  const hoje = todayISO();
+  const limite = modo === "realizado" && hoje < end ? hoje : end;
 
   const initialTotal =
     db
@@ -676,7 +682,8 @@ export function getMonthBalances(
         ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         isNull(transactions.cartaoId),
-        lte(transactions.data, end),
+        lte(transactions.data, limite),
+        ...(modo === "realizado" ? [eq(transactions.pago, true)] : []),
       ),
     )
     .groupBy(transactions.data)
@@ -692,14 +699,15 @@ export function getMonthBalances(
     eachDayOfMonth(monthKey),
   );
 
-  return { opening, byDay: Object.fromEntries(balances) };
+  return { modo, opening, byDay: Object.fromEntries(balances) };
 }
 
 export function getDayBalances(
   workspaceId: string,
   monthKey: string,
+  modo: "realizado" | "previsto" = "previsto",
 ): Record<string, number> {
-  return getMonthBalances(workspaceId, monthKey).byDay;
+  return getMonthBalances(workspaceId, monthKey, modo).byDay;
 }
 
 /**

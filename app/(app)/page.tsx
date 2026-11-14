@@ -19,7 +19,8 @@ import { ForecastMiniCard } from "@/components/forecast/forecast-mini-card";
 import { EntityTile } from "@/components/entity-tile";
 import { requireUser } from "@/lib/auth/current-user";
 import { listBudgetCycleDetails } from "@/lib/db/queries/budgets";
-import { getForecastData } from "@/lib/db/queries/forecast";
+import { getForecastData, getMonthProjection } from "@/lib/db/queries/forecast";
+import { getCardBasis } from "@/lib/db/queries/finance-preferences";
 import {
   getDashboardBalance,
   getDashboardCards,
@@ -28,9 +29,11 @@ import {
 } from "@/lib/db/queries/dashboard";
 import { monthRange, isValidMonthKey, currentMonth, todayISO } from "@/lib/dates";
 import { monthRatio } from "@/lib/finance/month-ratio";
+import { CARD_BASIS_HELP, CARD_BASIS_LABELS } from "@/lib/finance/result";
 import { cn } from "@/lib/utils";
 import { reportTransactionsHref, type ReportFilters } from "@/lib/finance/report-filters";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
+import { NumberSource } from "@/components/dashboard/number-source";
 
 export const metadata = { title: "Visão geral" };
 
@@ -51,6 +54,7 @@ export default async function DashboardPage({
   const month = monthFromParams(params);
   const firstName = user.nome.split(/\s+/)[0] ?? user.nome;
   const workspaceId = user.workspaceId;
+  const cardBasis = getCardBasis(workspaceId, user.id);
 
   return (
     <div className="space-y-4">
@@ -88,7 +92,11 @@ export default async function DashboardPage({
         <div className="order-2 lg:col-span-8">
           <Suspense fallback={<DashboardSkeleton lines={4} />}>
             <BlockBoundary label="o resumo do mês">
-              <MonthBlock month={month} workspaceId={workspaceId} />
+              <MonthBlock
+                month={month}
+                workspaceId={workspaceId}
+                cardBasis={cardBasis}
+              />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -104,7 +112,11 @@ export default async function DashboardPage({
         <div className="order-4 lg:col-span-7">
           <Suspense fallback={<DashboardSkeleton lines={7} />}>
             <BlockBoundary label="o gráfico de categorias">
-              <CategoryBlock month={month} workspaceId={workspaceId} />
+              <CategoryBlock
+                month={month}
+                workspaceId={workspaceId}
+                cardBasis={cardBasis}
+              />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -128,7 +140,11 @@ export default async function DashboardPage({
         <div className="order-7 lg:col-span-5">
           <Suspense fallback={<DashboardSkeleton lines={6} />}>
             <BlockBoundary label="a evolução mensal">
-              <EvolutionBlock month={month} workspaceId={workspaceId} />
+              <EvolutionBlock
+                month={month}
+                workspaceId={workspaceId}
+                cardBasis={cardBasis}
+              />
             </BlockBoundary>
           </Suspense>
         </div>
@@ -154,43 +170,86 @@ async function BalanceBlock({
   month: string;
 }) {
   const data = await getDashboardBalance(workspaceId);
-  const previsto = data.accounts
-    .filter(
-      (account) =>
-        !account.deletedAt &&
-        account.tipo !== "investimento" &&
-        !account.arquivada,
-    )
-    .reduce((sum, account) => sum + account.saldoPrevisto, 0);
+  const projection = getMonthProjection(workspaceId, month);
 
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
         <CardTitle className="flex items-center gap-2 text-sm">
           <EntityTile kind="conta" entity={{ nome: "Contas" }} size="xs" />
-          Saldo atual
+          Saldo total em contas
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="tabular truncate text-[28px] font-semibold leading-[34px]">
-          {formatCurrency(data.operational)}
-        </p>
+        <div>
+          <p className="tabular truncate text-[28px] font-semibold leading-[34px]">
+            {formatCurrency(data.total)}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Contas operacionais + investimentos, em {formatDate(data.asOf)}.
+          </p>
+        </div>
         <dl className="space-y-1 text-xs text-muted-foreground">
           <div className="flex justify-between gap-2">
-            <dt>Previsto até fim de {formatMonthTitle(month)}</dt>
-            <dd className="tabular">{formatCurrency(previsto)}</dd>
+            <dt>
+              {projection.modo === "realizado" ? "Fechamento" : "Previsto"} até
+              fim de {formatMonthTitle(month)} (escopo total)
+            </dt>
+            <dd className="tabular text-on-surface">
+              {formatCurrency(projection.saldo)}
+            </dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt>Investimentos (separado)</dt>
+            <dt>Operacional</dt>
+            <dd className="tabular">{formatCurrency(data.operational)}</dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Investimentos</dt>
             <dd className="tabular">{formatCurrency(data.investments)}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt>Faturas em aberto</dt>
+            <dt>Fatura atual / em aberto</dt>
             <dd className="tabular text-amber">
-              {formatCurrency(data.cardDebt)}
+              {formatCurrency(data.currentInvoiceDebt)}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Parcelas futuras (compras feitas)</dt>
+            <dd className="tabular text-amber">
+              {formatCurrency(data.futureInstallmentsDebt)}
+            </dd>
+          </div>
+          <div className="flex justify-between gap-2">
+            <dt>Compras futuras (fora da dívida)</dt>
+            <dd className="tabular">{formatCurrency(data.futureCardDebt)}</dd>
+          </div>
+          <div className="flex justify-between gap-2 border-t border-border/70 pt-1">
+            <dt className="font-medium text-on-surface">Patrimônio líquido</dt>
+            <dd className="tabular font-semibold text-on-surface">
+              {formatCurrency(data.netWorth)}
             </dd>
           </div>
         </dl>
+        <NumberSource
+          title="De onde vem o saldo total?"
+          description="Escopo total: contas operacionais + investimentos. Compras no cartão não entram no saldo das contas."
+          total={data.total}
+          items={[
+            {
+              label: "Contas operacionais",
+              value: data.operational,
+              href: "/contas",
+            },
+            {
+              label: "Contas de investimento",
+              value: data.investments,
+              href: "/contas",
+            },
+          ]}
+          formula={`Saldo inicial + lançamentos pagos até ${formatDate(data.asOf)} (compras no cartão ficam de fora).`}
+          note={`${projection.modo === "realizado" ? "Fechamento" : "Previsão"} até ${formatDate(projection.fim)}: ${formatCurrency(projection.saldo)}. Patrimônio líquido = saldo total − dívida atual do cartão (${formatCurrency(data.currentCardDebt)}), que inclui parcelas futuras de compras já feitas.`}
+          triggerClassName="w-full justify-start"
+        />
         <Button asChild variant="outline" size="sm" className="h-11 w-full max-sm:h-12 sm:h-9">
           <Link href="/contas">
             Ver contas
@@ -235,18 +294,40 @@ function Variation({
 async function MonthBlock({
   month,
   workspaceId,
+  cardBasis,
 }: {
   month: string;
   workspaceId: string;
+  cardBasis: "caixa" | "competencia";
 }) {
-  const data = await getDashboardMonth(workspaceId, month);
-  const { current, previous, expenseVariation, incomeVariation } = data;
-  const ratio = monthRatio(current.receitas, current.despesas);
+  const data = await getDashboardMonth(workspaceId, month, cardBasis);
+  const { expenseVariation, incomeVariation, result } = data;
+  const ratio = monthRatio(result.receitas, result.despesas);
 
   return (
     <Card className="flex h-full flex-col">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Receitas × despesas</CardTitle>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="text-sm">
+          Receitas × despesas
+          <span className="ml-2 rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+            {CARD_BASIS_LABELS[cardBasis]}
+          </span>
+        </CardTitle>
+        <NumberSource
+          title="De onde vem o resultado do mês?"
+          description={`Base ${CARD_BASIS_LABELS[cardBasis].toLowerCase()}: ${CARD_BASIS_HELP[cardBasis]}`}
+          total={result.receitas - result.despesas}
+          items={[
+            ...result.breakdown.receita,
+            ...result.breakdown.despesa.map((item) => ({
+              ...item,
+              value: -item.value,
+            })),
+          ]}
+          formula="Receitas − despesas do mês, sem contar transferências entre contas próprias."
+          note="Gastos por categoria usam sempre a competência (data da compra) e são exibidos separadamente."
+          triggerClassName="px-0"
+        />
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-3">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -254,7 +335,7 @@ async function MonthBlock({
             <span className="absolute inset-x-0 top-0 h-1 bg-emerald" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Receitas</p>
             <p className="tabular truncate text-lg font-semibold text-primary">
-              {formatCurrency(current.receitas)}
+              {formatCurrency(result.receitas)}
             </p>
             <Variation value={incomeVariation} />
           </div>
@@ -262,22 +343,22 @@ async function MonthBlock({
             <span className="absolute inset-x-0 top-0 h-1 bg-clay" aria-hidden="true" />
             <p className="text-xs text-muted-foreground">Despesas</p>
             <p className="tabular truncate text-lg font-semibold text-clay">
-              {formatCurrency(current.despesas)}
+              {formatCurrency(result.despesas)}
             </p>
             <Variation value={expenseVariation} invert />
           </div>
           <div className="relative col-span-1 min-w-0 overflow-hidden rounded-lg border border-grout bg-forest-container/60 p-3 max-sm:rounded-none max-sm:border-0 max-sm:bg-transparent max-sm:p-0 sm:col-span-1">
             <span className="absolute inset-x-0 top-0 h-1 bg-primary" aria-hidden="true" />
-            <p className="text-xs text-muted-foreground">Saldo do mês</p>
+            <p className="text-xs text-muted-foreground">Resultado do mês</p>
             <p
               className={`tabular truncate text-lg font-semibold ${
-                current.saldo >= 0 ? "text-primary" : "text-clay"
+                result.saldo >= 0 ? "text-primary" : "text-clay"
               }`}
             >
-              {formatCurrency(current.saldo)}
+              {formatCurrency(result.saldo)}
             </p>
             <p className="truncate text-xs text-muted-foreground">
-              anterior: {formatCurrency(previous.saldo)}
+              mês anterior: {formatCurrency(data.previousResult.saldo)}
             </p>
           </div>
         </div>
@@ -343,7 +424,7 @@ async function MonthBlock({
           </p>
         </div>
 
-        {current.receitas === 0 && current.despesas === 0 && (
+        {result.receitas === 0 && result.despesas === 0 && (
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             Nenhum movimento neste mês.
             <Link href="/lancamentos?novo=1" className="font-medium text-primary hover:underline">
@@ -377,11 +458,13 @@ function dashboardReportFilters(month: string): ReportFilters {
 async function CategoryBlock({
   month,
   workspaceId,
+  cardBasis,
 }: {
   month: string;
   workspaceId: string;
+  cardBasis: "caixa" | "competencia";
 }) {
-  const data = await getDashboardMonth(workspaceId, month);
+  const data = await getDashboardMonth(workspaceId, month, cardBasis);
   const base = dashboardReportFilters(month);
   const categories = data.categories.map((category) => ({
     ...category,
@@ -393,13 +476,33 @@ async function CategoryBlock({
 
   return (
     <Card className="h-full">
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm">Gastos por categoria</CardTitle>
-        <Button asChild variant="ghost" size="sm" className="h-9 max-sm:min-h-12">
-          <Link href={`/relatorios?periodo=mes&mes=${month}&tipo=despesa&aba=categoria`}>
-            Relatório
-          </Link>
-        </Button>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-2">
+        <CardTitle className="text-sm">
+          Gastos por categoria
+          <span className="ml-2 rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+            por competência
+          </span>
+        </CardTitle>
+        <div className="flex items-center gap-1">
+          <NumberSource
+            title="De onde vêm os gastos por categoria?"
+            description="Gastos por categoria são sempre por competência: a compra no cartão conta na data da compra."
+            total={data.categoryReport.total}
+            items={categories.map((category) => ({
+              label: category.nome,
+              value: category.total,
+              href: category.href,
+            }))}
+            formula="Soma das despesas de conta e compras no cartão na data da compra; estornos no cartão abatem."
+            note="Não mistura pagamento de fatura com a compra: o pagamento é transferência e não entra aqui."
+            triggerClassName="px-0"
+          />
+          <Button asChild variant="ghost" size="sm" className="h-9 max-sm:min-h-12">
+            <Link href={`/relatorios?periodo=mes&mes=${month}&tipo=despesa&aba=categoria`}>
+              Relatório
+            </Link>
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <CategoryDonut categories={categories} total={data.categoryReport.total} />
@@ -411,16 +514,36 @@ async function CategoryBlock({
 async function EvolutionBlock({
   month,
   workspaceId,
+  cardBasis,
 }: {
   month: string;
   workspaceId: string;
+  cardBasis: "caixa" | "competencia";
 }) {
-  const data = await getDashboardMonth(workspaceId, month);
+  const data = await getDashboardMonth(workspaceId, month, cardBasis);
 
   return (
     <Card className="h-full">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Evolução mensal</CardTitle>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-sm">
+          Evolução mensal
+          <span className="ml-2 rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
+            {CARD_BASIS_LABELS[cardBasis]}
+          </span>
+        </CardTitle>
+        <NumberSource
+          title="De onde vem a evolução mensal?"
+          description={`Resultado de cada mês na base ${CARD_BASIS_LABELS[cardBasis].toLowerCase()}.`}
+          total={data.series6.reduce((sum, point) => sum + point.saldo, 0)}
+          items={data.series6.map((point) => ({
+            label: formatMonthTitle(point.mes),
+            value: point.saldo,
+            hint: `${formatCurrency(point.receitas)} − ${formatCurrency(point.despesas)}`,
+            href: `/?mes=${point.mes}`,
+          }))}
+          formula="Soma do resultado dos últimos 6 meses: receitas − despesas."
+          triggerClassName="px-0"
+        />
       </CardHeader>
       <CardContent>
         <EvolutionChart series6={data.series6} series12={data.series12} />
@@ -523,7 +646,7 @@ async function CardsBlock({ workspaceId }: { workspaceId: string }) {
                   gasto={card.limiteUsado}
                   limite={card.limite}
                   size="sm"
-                  label={`Limite usado do cartão ${card.nome}`}
+                  label={`Limite usado do cartão ${card.nome} (inclui parcelas futuras)`}
                 />
                 <p className={`text-xs ${toneText}`}>
                   {ratio >= 0.8
@@ -569,3 +692,4 @@ async function BudgetsBlock({
     />
   );
 }
+
