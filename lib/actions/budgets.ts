@@ -303,7 +303,18 @@ export async function createBudgetAction(
 
   const data = parsed.data;
   const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
-  if (categoryCheck.error) return fail(categoryCheck.error);  const linkError = validateBudgetLinks(
+  if (categoryCheck.error) return fail(categoryCheck.error);
+  if (data.sobraPolicy === "realocar") {
+    if (!data.sobraDestinoBudgetId) {
+      return fail("Escolha o orçamento de destino da sobra.");
+    }
+    const destination = loadBudgetSeries(workspaceId, {
+      incluirArquivados: true,
+    }).find((row) => row.id === data.sobraDestinoBudgetId);
+    if (!destination || destination.arquivado) {
+      return fail("Orçamento de destino inválido.");
+    }
+  }  const linkError = validateBudgetLinks(
     workspaceId,
     data.contaId ?? null,
     data.cartaoId ?? null,
@@ -335,6 +346,10 @@ export async function createBudgetAction(
           antecedenciaCiclos: data.antecedenciaCiclos,
           origens: data.origens,
           sobraPolicy: data.sobraPolicy ?? "liberar",
+          sobraDestinoBudgetId:
+            data.sobraPolicy === "realocar"
+              ? (data.sobraDestinoBudgetId ?? null)
+              : null,
           cartaoId: data.cartaoId ?? null,
           contaId,
           dataInicio: data.dataInicio,
@@ -383,6 +398,21 @@ export async function updateBudgetAction(
     (row) => row.id === data.id,
   );
   if (!series) return fail("Orçamento não encontrado.");
+
+  if (data.sobraPolicy === "realocar") {
+    if (!data.sobraDestinoBudgetId) {
+      return fail("Escolha o orçamento de destino da sobra.");
+    }
+    if (data.sobraDestinoBudgetId === series.id) {
+      return fail("Escolha um orçamento de destino diferente.");
+    }
+    const destination = loadBudgetSeries(workspaceId, {
+      incluirArquivados: true,
+    }).find((row) => row.id === data.sobraDestinoBudgetId);
+    if (!destination || destination.arquivado) {
+      return fail("Orçamento de destino inválido.");
+    }
+  }
 
   const categoryCheck = validateCategories(workspaceId, data.categoriaIds);
   if (categoryCheck.error) return fail(categoryCheck.error);
@@ -444,7 +474,14 @@ export async function updateBudgetAction(
     db.transaction((tx) => {
       if (data.sobraPolicy !== undefined) {
         tx.update(budgets)
-          .set({ sobraPolicy: data.sobraPolicy, updatedAt: now })
+          .set({
+            sobraPolicy: data.sobraPolicy,
+            sobraDestinoBudgetId:
+              data.sobraPolicy === "realocar"
+                ? (data.sobraDestinoBudgetId ?? null)
+                : null,
+            updatedAt: now,
+          })
           .where(and(eq(budgets.id, series.id), ws(budgets.workspaceId)))
           .run();
       }

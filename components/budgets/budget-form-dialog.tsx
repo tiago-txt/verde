@@ -58,6 +58,7 @@ function defaultValues(
       antecedenciaCiclos: budget.antecedenciaCiclos === 1 ? 1 : 0,
       origens: budget.origens,
       sobraPolicy: budget.sobraPolicy,
+      sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
       cartaoId: budget.cartaoId,
       categoriaIds: budget.categories.map((category) => category.id),
       contaId: budget.contaId,
@@ -75,6 +76,7 @@ function defaultValues(
     antecedenciaCiclos: 0,
     origens: "todas",
     sobraPolicy: "liberar",
+    sobraDestinoBudgetId: null,
     cartaoId: null,
     categoriaIds: [],
     contaId: formData.defaultAccountId,
@@ -96,6 +98,12 @@ function relevantChange(
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
   if (budget.origens !== values.origens) return true;
   if ((budget.sobraPolicy ?? "liberar") !== (values.sobraPolicy ?? "liberar")) {
+    return true;
+  }
+  if (
+    (budget.sobraDestinoBudgetId ?? null) !==
+    (values.sobraDestinoBudgetId ?? null)
+  ) {
     return true;
   }
 
@@ -128,6 +136,14 @@ export function BudgetFormDialog({
   const icone = watch("icone");
   const antecedencia = watch("antecedenciaCiclos");
   const diaFechamento = watch("diaFechamento");
+  const sobraPolicy = watch("sobraPolicy");
+  const destinations = useMemo(
+    () =>
+      formData.activeBudgets.filter(
+        (item) => item.budgetId !== budget?.id,
+      ),
+    [formData.activeBudgets, budget?.id],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -505,14 +521,60 @@ export function BudgetFormDialog({
                   >
                     <option value="liberar">Liberar (não rolar)</option>
                     <option value="rolar">Rolar para o próximo ciclo</option>
+                    <option value="realocar">
+                      Realocar para outro orçamento
+                    </option>
                   </NativeSelect>
                 )}
               />
               <p className="text-xs text-muted-foreground">
-                {watch("sobraPolicy") === "rolar"
+                {sobraPolicy === "rolar"
                   ? "A sobra não gasta aumenta o limite do próximo ciclo."
-                  : "A sobra não gasta volta para o saldo livre."}
+                  : sobraPolicy === "realocar"
+                    ? "A sobra não gasta vai para o orçamento escolhido no próximo ciclo."
+                    : "A sobra não gasta volta para o saldo livre."}
               </p>
+
+              {sobraPolicy === "realocar" && (
+                <div className="space-y-1 pt-1">
+                  <Label
+                    htmlFor="budget-sobra-destino"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Orçamento de destino
+                  </Label>
+                  <Controller
+                    control={control}
+                    name="sobraDestinoBudgetId"
+                    render={({ field }) => (
+                      <NativeSelect
+                        id="budget-sobra-destino"
+                        value={field.value ?? ""}
+                        onChange={(event) =>
+                          field.onChange(event.target.value || null)
+                        }
+                      >
+                        <option value="">Escolha o orçamento</option>
+                        {destinations.map((item) => (
+                          <option key={item.budgetId} value={item.budgetId}>
+                            {item.budgetNome}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                    )}
+                  />
+                  {destinations.length === 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      Crie outro orçamento ativo para poder realocar.
+                    </p>
+                  )}
+                  <FieldError
+                    message={
+                      formState.errors.sobraDestinoBudgetId?.message
+                    }
+                  />
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

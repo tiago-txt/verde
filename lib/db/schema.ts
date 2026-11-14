@@ -7,6 +7,7 @@ import {
   sqliteTable,
   text,
   uniqueIndex,
+  type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
 
 const id = () =>
@@ -69,7 +70,7 @@ export const BUDGET_ORIGINS = ["todas", "cartao", "contas"] as const;
 export type BudgetOrigin = (typeof BUDGET_ORIGINS)[number];
 
 /** Destino da sobra não gasta no fim do ciclo. */
-export const BUDGET_SOBRA_POLICIES = ["rolar", "liberar"] as const;
+export const BUDGET_SOBRA_POLICIES = ["rolar", "liberar", "realocar"] as const;
 export type BudgetSobraPolicy = (typeof BUDGET_SOBRA_POLICIES)[number];
 
 export const BUDGET_EXCEPTION_TYPES = ["excluido", "ajustado"] as const;
@@ -475,6 +476,11 @@ export const budgets = sqliteTable(
     sobraPolicy: text("sobra_policy", { enum: BUDGET_SOBRA_POLICIES })
       .notNull()
       .default("liberar"),
+    /** Destino quando `sobraPolicy` é `realocar`. */
+    sobraDestinoBudgetId: text("sobra_destino_budget_id").references(
+      (): AnySQLiteColumn => budgets.id,
+      { onDelete: "set null" },
+    ),
     cor: text("cor").notNull().default("#34d399"),
     icone: text("icone").notNull().default("Target"),
     arquivado: integer("arquivado", { mode: "boolean" }).notNull().default(false),

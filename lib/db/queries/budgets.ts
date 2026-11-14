@@ -71,7 +71,8 @@ export type BudgetWithCategories = {
   diaFechamento: number;
   antecedenciaCiclos: number;
   origens: BudgetOrigin;
-  sobraPolicy: "rolar" | "liberar";
+  sobraPolicy: "rolar" | "liberar" | "realocar";
+  sobraDestinoBudgetId: string | null;
   contaId: string | null;
   cartaoId: string | null;
   dataInicio: string;
@@ -130,7 +131,17 @@ export type BudgetEventView = {
     valor: number;
     ciclo: string;
     rolada?: boolean;
+    realocadaPara?: { budgetId: string; nome: string } | null;
   } | null;
+  /** Sobras recebidas de outros orçamentos neste ciclo. */
+  sobraRecebida?: Array<{
+    budgetId: string;
+    nome: string;
+    valor: number;
+    ciclo: string;
+  }>;
+  /** Destino da sobra deste ciclo (evento de sobra). */
+  sobraDestino?: { budgetId: string; nome: string } | null;
   /** Compatibilidade com o formato puro de eventos. */
   tipo: BudgetEventKind;
   ciclo: string;
@@ -196,6 +207,15 @@ type SpendingResult = {
   info: BudgetCycleInfo;
   categoriaIds: Set<string>;
   transactions: BudgetSpendingItem[];
+  /** Para onde a sobra deste ciclo foi realocada. */
+  sobraTransferida?: { budgetId: string; nome: string } | null;
+  /** Sobras recebidas de outros orçamentos neste ciclo. */
+  sobraRecebida?: Array<{
+    budgetId: string;
+    nome: string;
+    valor: number;
+    ciclo: string;
+  }>;
 };
 
 function pairKey(budgetId: string, ciclo: string): string {
@@ -212,6 +232,7 @@ function cycleConfigFromBudget(budget: BudgetWithCategories) {
     arquivado: budget.arquivado,
     origens: budget.origens,
     sobraPolicy: budget.sobraPolicy,
+    sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
   };
 }
 
@@ -372,6 +393,7 @@ export function loadBudgetSeries(
       dataFim: budget.dataFim,
       arquivado: budget.arquivado,
       sobraPolicy: budget.sobraPolicy,
+      sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
       versions,
       exceptions: exceptionsByBudget.get(budget.id) ?? [],
       cor: budget.cor,
@@ -483,9 +505,44 @@ function expandRolloverPairs(
   const byKey = new Map(
     pairs.map((pair) => [pairKey(pair.budget.id, pair.ciclo), pair]),
   );
-  for (const pair of pairs) {
+  const seriesList = [...context.seriesByBudgetId.values()];
+  const hasRealocacao = seriesList.some(
+    (series) => series.sobraPolicy === "realocar",
+  );
+
+  // Com realocação, o destino (ou a origem) pode não estar no recorte inicial
+  // de ciclos. Inclui todos os orçamentos ativos nos ciclos pedidos.
+  if (hasRealocacao) {
+    const requestedCycles = new Set(pairs.map((pair) => pair.ciclo));
+    for (const ciclo of requestedCycles) {
+      for (const series of seriesList) {
+        const key = pairKey(series.id, ciclo);
+        if (byKey.has(key)) continue;
+        const resolved = toResolvedBudget(
+          series,
+          ciclo,
+          context.categoriesById,
+        );
+        if (resolved) byKey.set(key, { budget: resolved, ciclo });
+      }
+    }
+  }
+
+  const destinationIds = new Set(
+    seriesList
+      .map((series) => series.sobraDestinoBudgetId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  for (const pair of byKey.values()) {
     const series = context.seriesByBudgetId.get(pair.budget.budgetId);
-    if (!series || (series.sobraPolicy ?? "liberar") !== "rolar") continue;
+    if (!series) continue;
+    const policy = series.sobraPolicy ?? "liberar";
+    const expandsHistory =
+      policy === "rolar" ||
+      policy === "realocar" ||
+      destinationIds.has(series.id);
+    if (!expandsHistory) continue;
     const start = series.dataInicio || pair.ciclo;
     const cap = addMonths(pair.ciclo, -36);
     const from = start > cap ? start : cap;
@@ -500,30 +557,56 @@ function expandRolloverPairs(
   return [...byKey.values()];
 }
 
-/** Soma a sobra do ciclo anterior ao limite dos ciclos seguintes. */
-function applyRollover(
+/**
+ * Aplica rolagem e realocação da sobra em ordem cronológica. A sobra de um
+ * ciclo pode:
+ * - `rolar`: aumentar o limite do próprio ciclo seguinte;
+ * - `liberar`: voltar para o saldo livre;
+ * - `realocar`: entrar no limite do orçamento de destino no ciclo seguinte.
+ */
+function applySobraPolicy(
   pairs: SpendingPair[],
   spending: Map<string, SpendingResult>,
+  context?: SpendingContext,
 ): void {
-  const byBudget = new Map<string, SpendingPair[]>();
+  const byCycle = new Map<string, SpendingPair[]>();
+  const allBudgetIds = new Set<string>();
   for (const pair of pairs) {
-    const list = byBudget.get(pair.budget.budgetId) ?? [];
+    const list = byCycle.get(pair.ciclo) ?? [];
     list.push(pair);
-    byBudget.set(pair.budget.budgetId, list);
+    byCycle.set(pair.ciclo, list);
+    allBudgetIds.add(pair.budget.budgetId);
   }
 
-  for (const list of byBudget.values()) {
-    const policy = list[0]?.budget.sobraPolicy ?? "liberar";
-    list.sort((a, b) => a.ciclo.localeCompare(b.ciclo));
-    let previousRestante = 0;
+  const cycles = [...byCycle.keys()].sort();
+  const restanteByBudget = new Map<string, number>();
 
-    for (const pair of list) {
-      const entry = spending.get(pairKey(pair.budget.budgetId, pair.ciclo));
+  for (const cycle of cycles) {
+    const cyclePairs = byCycle.get(cycle) ?? [];
+    const activeIds = new Set(
+      cyclePairs.map((pair) => pair.budget.budgetId),
+    );
+
+    // Um orçamento inativo no ciclo não carrega sobra para o ciclo seguinte.
+    for (const budgetId of allBudgetIds) {
+      if (!activeIds.has(budgetId)) restanteByBudget.delete(budgetId);
+    }
+
+    for (const pair of cyclePairs) {
+      const entry = spending.get(pairKey(pair.budget.budgetId, cycle));
       if (!entry) continue;
       const info = entry.info;
       const baseLimit = info.limite;
-      const rolled = policy === "rolar" ? previousRestante : 0;
-      info.limite = Math.max(0, baseLimit + rolled);
+      const policy = pair.budget.sobraPolicy ?? "liberar";
+      const ownRollover =
+        policy === "rolar"
+          ? (restanteByBudget.get(pair.budget.budgetId) ?? 0)
+          : 0;
+      const incoming = (entry.sobraRecebida ?? []).reduce(
+        (sum, item) => sum + item.valor,
+        0,
+      );
+      info.limite = Math.max(0, baseLimit + ownRollover + incoming);
       info.restante = Math.max(0, info.limite - info.gasto);
       info.estouro = Math.max(0, info.gasto - info.limite);
       info.proporcao =
@@ -534,7 +617,54 @@ function applyRollover(
           : info.gasto > 0
             ? 100
             : 0;
-      previousRestante = info.restante;
+      restanteByBudget.set(pair.budget.budgetId, info.restante);
+    }
+
+    const nextCycle = addMonths(cycle, 1);
+    const nextActive = new Set(
+      (byCycle.get(nextCycle) ?? []).map((pair) => pair.budget.budgetId),
+    );
+
+    for (const pair of cyclePairs) {
+      const policy = pair.budget.sobraPolicy ?? "liberar";
+      if (policy !== "realocar") continue;
+      const destinationId = pair.budget.sobraDestinoBudgetId;
+      if (
+        !destinationId ||
+        destinationId === pair.budget.budgetId ||
+        !nextActive.has(destinationId)
+      ) {
+        continue;
+      }
+      const amount = restanteByBudget.get(pair.budget.budgetId) ?? 0;
+      if (amount <= 0) continue;
+
+      const sourceEntry = spending.get(
+        pairKey(pair.budget.budgetId, cycle),
+      );
+      if (sourceEntry) {
+        sourceEntry.sobraTransferida = {
+          budgetId: destinationId,
+          nome:
+            context?.seriesByBudgetId.get(destinationId)?.nome ??
+            "orçamento",
+        };
+      }
+
+      const destinationEntry = spending.get(
+        pairKey(destinationId, nextCycle),
+      );
+      if (destinationEntry) {
+        destinationEntry.sobraRecebida = [
+          ...(destinationEntry.sobraRecebida ?? []),
+          {
+            budgetId: pair.budget.budgetId,
+            nome: pair.budget.nome,
+            valor: amount,
+            ciclo: cycle,
+          },
+        ];
+      }
     }
   }
 }
@@ -736,7 +866,7 @@ function loadSpending(
     });
   }
 
-  applyRollover(allPairs, result);
+  applySobraPolicy(allPairs, result, context);
   return result;
 }
 
@@ -927,6 +1057,9 @@ export function getBudgetEventsForMonth(
           event.tipo === "sobra" && event.data < today ? "apurada" : null,
         resumo: summary,
         transactions: data.transactions,
+        sobraRecebida: data.sobraRecebida,
+        sobraDestino:
+          event.tipo === "sobra" ? (data.sobraTransferida ?? null) : null,
       };
 
       events.push(view);
@@ -969,6 +1102,7 @@ function mergeSobrasNasProvisoes(
           valor: event.valor,
           ciclo: event.ciclo,
           rolada: provision.resumo.sobraPolicy === "rolar",
+          realocadaPara: event.sobraDestino ?? null,
         };
         continue;
       }

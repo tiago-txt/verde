@@ -32,6 +32,7 @@ export type BudgetCycleConfig = {
   origens?: BudgetOrigin;
   /** Destino da sobra no fim do ciclo. */
   sobraPolicy?: BudgetSobraPolicy;
+  sobraDestinoBudgetId?: string | null;
   /** Modo indicador: acompanha gasto sem gerar reserva/liberação. */
   modoIndicador?: boolean;
 };
@@ -101,9 +102,10 @@ export type BudgetSeriesInput = {
   dataInicio: string;
   dataFim: string | null;
   arquivado: boolean;
+  sobraPolicy?: BudgetSobraPolicy;
+  sobraDestinoBudgetId?: string | null;
   versions: BudgetVersionInput[];
   exceptions: BudgetCycleExceptionInput[];
-  sobraPolicy?: BudgetSobraPolicy;
 };
 
 export type ResolvedBudgetCycle = BudgetVersionData & {
@@ -113,6 +115,7 @@ export type ResolvedBudgetCycle = BudgetVersionData & {
   dataFim: string | null;
   arquivado: boolean;
   sobraPolicy: BudgetSobraPolicy;
+  sobraDestinoBudgetId: string | null;
   exception: "excluido" | "ajustado" | null;
 };
 
@@ -168,6 +171,7 @@ export function resolverCiclo(
     dataFim: series.dataFim,
     arquivado: series.arquivado,
     sobraPolicy: series.sobraPolicy ?? "liberar",
+    sobraDestinoBudgetId: series.sobraDestinoBudgetId ?? null,
     exception: exception?.tipo ?? null,
   };
 }

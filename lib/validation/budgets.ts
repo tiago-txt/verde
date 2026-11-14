@@ -27,6 +27,7 @@ const budgetFields = z.object({
   }),
   origens: z.enum(BUDGET_ORIGINS).default("todas"),
   sobraPolicy: z.enum(BUDGET_SOBRA_POLICIES).optional(),
+  sobraDestinoBudgetId: idSchema.nullable().optional(),
   categoriaIds: z
     .array(idSchema)
     .min(1, "Escolha pelo menos uma categoria")
@@ -56,7 +57,39 @@ function refinePeriod(
   }
 }
 
-export const createBudgetSchema = budgetFields.superRefine(refinePeriod);
+function refineSobra(
+  value: {
+    sobraPolicy?: "rolar" | "liberar" | "realocar";
+    sobraDestinoBudgetId?: string | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if (
+    value.sobraPolicy === "realocar" &&
+    !value.sobraDestinoBudgetId
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["sobraDestinoBudgetId"],
+      message: "Escolha o orçamento de destino",
+    });
+  }
+}
+
+function refineBudget(
+  value: {
+    dataInicio: string;
+    dataFim: string | null;
+    sobraPolicy?: "rolar" | "liberar" | "realocar";
+    sobraDestinoBudgetId?: string | null;
+  },
+  ctx: z.RefinementCtx,
+): void {
+  refinePeriod(value, ctx);
+  refineSobra(value, ctx);
+}
+
+export const createBudgetSchema = budgetFields.superRefine(refineBudget);
 
 export const updateBudgetSchema = budgetFields
   .extend({
@@ -64,7 +97,7 @@ export const updateBudgetSchema = budgetFields
     scope: z.enum(["single", "future", "all"]),
     ciclo: monthKeySchema,
   })
-  .superRefine(refinePeriod);
+  .superRefine(refineBudget);
 
 export const budgetOverrideSchema = z.object({
   budgetId: idSchema,

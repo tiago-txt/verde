@@ -390,7 +390,7 @@ describe("categorias no formulário de orçamento", () => {
         event.tipoEvento === "provisao" &&
         event.resumo.nome === "Alimentação",
     );
-    expect(provision?.sobraAnterior).toEqual({
+    expect(provision?.sobraAnterior).toMatchObject({
       valor: 30_000,
       ciclo: previous,
       rolada: false,
@@ -481,7 +481,7 @@ describe("categorias no formulário de orçamento", () => {
     expect(provision?.resumo.limite).toBe(80_000);
     expect(provision?.valor).toBe(80_000);
     expect(provision?.resumo.restante).toBe(80_000);
-    expect(provision?.sobraAnterior).toEqual({
+    expect(provision?.sobraAnterior).toMatchObject({
       valor: 30_000,
       ciclo: previous,
       rolada: true,
@@ -493,6 +493,134 @@ describe("categorias no formulário de orçamento", () => {
           event.resumo.nome === "Alimentação",
       ),
     ).toBe(false);
+  });
+
+  it("realoca a sobra para outro orçamento no ciclo seguinte", async () => {
+    const mercado = categoryIdByName("Mercado");
+    const lazer = categoryIdByName("Lazer");
+    const accountId = crypto.randomUUID();
+    testDb.db
+      .insert(accounts)
+      .values({
+        id: accountId,
+        workspaceId: user.workspaceId,
+        nome: "Conta da realocação",
+        tipo: "corrente",
+      })
+      .run();
+
+    setCurrent(user);
+    const current = currentMonth();
+    const previous = addMonths(current, -1);
+
+    const destination = await createBudgetAction({
+      nome: "Lazer",
+      valorPadrao: 100_000,
+      diaFechamento: 1,
+      antecedenciaCiclos: 0,
+      origens: "todas",
+      categoriaIds: [lazer],
+      contaId: accountId,
+      cartaoId: null,
+      cor: "#34d399",
+      icone: "Target",
+      dataInicio: current,
+      dataFim: null,
+    });
+    if (!destination.ok) throw new Error(destination.error);
+    const destinationRow = testDb.db
+      .select()
+      .from(budgets)
+      .where(eq(budgets.nome, "Lazer"))
+      .get();
+    if (!destinationRow) throw new Error("destino");
+
+    const source = await createBudgetAction({
+      nome: "Alimentação",
+      valorPadrao: 50_000,
+      diaFechamento: 1,
+      antecedenciaCiclos: 0,
+      origens: "todas",
+      sobraPolicy: "realocar",
+      sobraDestinoBudgetId: destinationRow.id,
+      categoriaIds: [mercado],
+      contaId: accountId,
+      cartaoId: null,
+      cor: "#34d399",
+      icone: "Target",
+      dataInicio: previous,
+      dataFim: null,
+    });
+    if (!source.ok) throw new Error(source.error);
+
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "despesa",
+        descricao: "Compra do ciclo anterior",
+        valor: 20_000,
+        data: `${previous}-10`,
+        pago: true,
+        contaId: accountId,
+        categoriaId: mercado,
+      })
+      .run();
+
+    const filters = {
+      mes: current,
+      tipo: null,
+      contas: [],
+      categorias: [],
+      tags: [],
+      status: "todos" as const,
+      q: null,
+      dias: 31,
+      detalhe: null,
+      cartoes: [],
+      comprasCartao: true,
+      de: null,
+      ate: null,
+    };
+    const merged = getBudgetEventsForMonth(
+      user.workspaceId,
+      current,
+      filters,
+      { mergeSobras: true },
+    );
+
+    const sourceProvision = merged.find(
+      (event) =>
+        event.tipoEvento === "provisao" &&
+        event.resumo.nome === "Alimentação",
+    );
+    expect(sourceProvision?.resumo.limite).toBe(50_000);
+    expect(sourceProvision?.valor).toBe(50_000);
+    expect(sourceProvision?.sobraAnterior).toMatchObject({
+      valor: 30_000,
+      ciclo: previous,
+      rolada: false,
+      realocadaPara: {
+        budgetId: destinationRow.id,
+        nome: "Lazer",
+      },
+    });
+
+    const destinationProvision = merged.find(
+      (event) =>
+        event.tipoEvento === "provisao" && event.resumo.nome === "Lazer",
+    );
+    expect(destinationProvision?.resumo.limite).toBe(130_000);
+    expect(destinationProvision?.valor).toBe(130_000);
+    expect(destinationProvision?.sobraRecebida).toEqual([
+      {
+        budgetId: sourceProvision?.resumo.budgetId ?? "",
+        nome: "Alimentação",
+        valor: 30_000,
+        ciclo: previous,
+      },
+    ]);
   });
 
   it("o próprio orçamento não bloqueia suas categorias", async () => {    const mercado = categoryIdByName("Mercado");

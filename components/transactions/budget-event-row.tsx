@@ -166,14 +166,32 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         {event.sobraAnterior && (
           <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
             <span>
-              Sobra de {formatMonthShort(event.sobraAnterior.ciclo)}
-              {event.sobraAnterior.rolada ? " incluída:" : " livre:"}
+              {event.sobraAnterior.realocadaPara
+                ? `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} realocada para ${event.sobraAnterior.realocadaPara.nome}:`
+                : `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)}${
+                    event.sobraAnterior.rolada ? " incluída:" : " livre:"
+                  }`}
             </span>
             <span className="tabular font-medium text-primary">
               +{formatCurrency(event.sobraAnterior.valor)}
             </span>
           </span>
         )}
+
+        {event.sobraRecebida?.map((item) => (
+          <span
+            key={`${item.budgetId}:${item.ciclo}`}
+            className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+          >
+            <span>
+              Inclui{" "}
+              <span className="tabular font-medium text-primary">
+                +{formatCurrency(item.valor)}
+              </span>{" "}
+              de {item.nome} ({formatMonthShort(item.ciclo)})
+            </span>
+          </span>
+        ))}
       </span>
 
       {isMobile ? (
