@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
-import { formatCurrency, formatMonthTitle } from "@/lib/format";
+import { formatCurrency, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
@@ -74,13 +74,47 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
       ? "Sobra do Orçamento Anterior"
       : "Sobra do orçamento anterior";
 
+  const valueTone = isOverspent
+    ? "text-clay"
+    : isConsumed
+      ? "text-amber"
+      : isProvision
+        ? "text-on-surface"
+        : "text-primary";
+  const valueText = isAlert
+    ? formatCurrency(0)
+    : `${isProvision ? "" : "+"}${formatCurrency(event.valor)}`;
+  const accentClass = isOverspent
+    ? "border-l-destructive/70"
+    : isConsumed
+      ? "border-l-amber/70"
+      : isProvision
+        ? "border-l-info/60"
+        : "border-l-success/70";
+  const subline = isOverspent ? (
+    <span>
+      Estourado em{" "}
+      <span className="tabular text-clay">
+        {formatCurrency(summary.estouro)}
+      </span>
+    </span>
+  ) : isConsumed ? (
+    <span className="text-amber">Limite consumido</span>
+  ) : isProvision ? (
+    <span>Disponível para gastar</span>
+  ) : (
+    <span>referente a {sobraReference}</span>
+  );
+
   return (
     <button
       type="button"
       onClick={() => onOpen(event)}
-      aria-label={`${summary.nome}, ${descriptor}, status ${statusMeta.label}, ${formatCurrency(
-        isAlert ? 0 : event.valor,
-      )}`}
+      aria-label={`${summary.nome}, ${descriptor}, status ${statusMeta.label}, ${valueText}${
+        event.sobraAnterior
+          ? `, sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} ${formatCurrency(event.sobraAnterior.valor)}`
+          : ""
+      }`}
       className={cn(
         "group relative flex min-h-[72px] w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
         isMobile
@@ -94,11 +128,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         className={cn(
           "absolute inset-y-0 left-0 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
           isMobile && "hidden",
-          isAlert
-            ? "border-l-destructive/70"
-            : isProvision
-              ? "border-l-primary/70"
-              : "border-l-success/70",
+          accentClass,
         )}
       />
 
@@ -124,52 +154,25 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           </span>
         </span>
 
-        {isMobile ? (
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0 text-[13px] text-muted-foreground">
-            {isOverspent ? (
-              <span>
-                Estourado em{" "}
-                <span className="tabular text-clay">
-                  {formatCurrency(summary.estouro)}
-                </span>
-              </span>
-            ) : isProvision ? (
-              <span>
-                {summary.restante > 0 ? "Restam" : "Consumido"}{" "}
-                {summary.restante > 0 && (
-                  <span className="tabular">
-                    {formatCurrency(summary.restante)}
-                  </span>
-                )}
-              </span>
-            ) : (
-              <span>referente a {sobraReference}</span>
-            )}
-          </span>
-        ) : (
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            {isOverspent ? (
-              <span>
-                Estourado em{" "}
-                <span className="tabular text-clay">
-                  {formatCurrency(summary.estouro)}
-                </span>
-              </span>
-            ) : isProvision ? (
-              <span>
-                {summary.restante > 0 ? "Restam" : "Consumido"}{" "}
-                {summary.restante > 0 && (
-                  <span className="tabular">
-                    {formatCurrency(summary.restante)}
-                  </span>
-                )}
-              </span>
-            ) : (
-              <span>referente a {sobraReference}</span>
-            )}
+        <span
+          className={cn(
+            "mt-0.5 flex flex-wrap items-center text-[13px] text-muted-foreground",
+            "gap-x-1 gap-y-0",
+          )}
+        >
+          {subline}
+        </span>
+
+        {event.sobraAnterior && (
+          <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+            <span>
+              Sobra de {formatMonthShort(event.sobraAnterior.ciclo)}:
+            </span>
+            <span className="tabular font-medium text-primary">
+              +{formatCurrency(event.sobraAnterior.valor)}
+            </span>
           </span>
         )}
-
       </span>
 
       {isMobile ? (
@@ -177,12 +180,10 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           <span
             className={cn(
               "tabular text-base font-semibold",
-              isAlert ? "text-clay" : isProvision ? "text-clay" : "text-primary",
+              valueTone,
             )}
           >
-            {isAlert
-              ? formatCurrency(0)
-              : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
+            {valueText}
           </span>
           <span
             className={cn(
@@ -199,16 +200,10 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           <span
             className={cn(
               "row-value row-amount",
-              isAlert
-                ? "text-clay"
-                : isProvision
-                  ? "text-clay"
-                  : "text-primary",
+              valueTone,
             )}
           >
-            {isAlert
-              ? formatCurrency(0)
-              : `${isProvision ? "−" : "+"}${formatCurrency(event.valor)}`}
+            {valueText}
           </span>
           <span
             className={cn(

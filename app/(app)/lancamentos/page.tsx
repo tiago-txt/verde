@@ -36,7 +36,9 @@ export default async function LancamentosPage({
   const customRange = Boolean(filters.de && filters.ate);
   const budgetEvents = customRange
     ? []
-    : getBudgetEventsForMonth(workspaceId, filters.mes, filters);
+    : getBudgetEventsForMonth(workspaceId, filters.mes, filters, {
+        mergeSobras: true,
+      });
   const cardInvoiceEvents = customRange
     ? []
     : listCardInvoiceEventsForMonth(workspaceId, filters.mes, filters);

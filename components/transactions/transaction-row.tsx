@@ -7,7 +7,6 @@ import {
   Repeat,
   StickyNote,
   Tag,
-  Target,
   ThumbsDown,
   ThumbsUp,
   Trash2,
@@ -362,16 +361,6 @@ export const TransactionRow = memo(function TransactionRow({
                 <Repeat
                   className="h-3.5 w-3.5 shrink-0 text-primary"
                   aria-label="Lançamento recorrente"
-                />
-              )}
-              {budgetCycle && (
-                <Target
-                  className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                  aria-label={
-                    transaction.orcamentoNome
-                      ? `Orçamento ${transaction.orcamentoNome}`
-                      : "Lançamento vinculado a orçamento"
-                  }
                 />
               )}
               {transaction.parcelaGrupoId && (
@@ -764,16 +753,6 @@ export const TransactionRow = memo(function TransactionRow({
               <Badge variant="outline" className="px-1.5 py-0 text-xs">
                 Fatura {formatMonthShort(cardInvoiceKey)}
               </Badge>
-            )}
-            {budgetCycle && (
-              <Target
-                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                aria-label={
-                  transaction.orcamentoNome
-                    ? `Orçamento ${transaction.orcamentoNome}`
-                    : "Lançamento vinculado a orçamento"
-                }
-              />
             )}
             {transaction.observacao && (
               <StickyNote

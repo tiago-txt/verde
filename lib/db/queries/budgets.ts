@@ -124,6 +124,8 @@ export type BudgetEventView = {
   status: "prevista" | "apurada" | null;
   resumo: BudgetCycleSummary;
   transactions: BudgetSpendingItem[];
+  /** Sobra do ciclo anterior embutida nesta linha (exibição unificada). */
+  sobraAnterior?: { valor: number; ciclo: string } | null;
   /** Compatibilidade com o formato puro de eventos. */
   tipo: BudgetEventKind;
   ciclo: string;
@@ -772,6 +774,7 @@ export function getBudgetEventsForMonth(
   workspaceId: string,
   monthKey: string,
   filters: TransactionFilters,
+  options?: { mergeSobras?: boolean },
 ): BudgetEventView[] {
   const series = loadBudgetSeries(workspaceId);
   const categoriesById = categoryInfoMap(workspaceId);
@@ -825,11 +828,49 @@ export function getBudgetEventsForMonth(
     }
   }
 
-  return events.sort(
+  const sorted = events.sort(
     (a, b) =>
       a.data.localeCompare(b.data) ||
       a.resumo.nome.localeCompare(b.resumo.nome),
   );
+  return options?.mergeSobras ? mergeSobrasNasProvisoes(sorted) : sorted;
+}
+
+/**
+ * Junta a sobra do ciclo anterior na linha da provisão do ciclo seguinte.
+ * As duas linhas caem na mesma data de fechamento/início do ciclo. O evento
+ * de sobra continua existindo para os saldos; some apenas da lista.
+ */
+function mergeSobrasNasProvisoes(
+  events: BudgetEventView[],
+): BudgetEventView[] {
+  const provisionByBudgetAndDate = new Map<string, BudgetEventView>();
+  for (const event of events) {
+    if (event.tipoEvento !== "provisao") continue;
+    provisionByBudgetAndDate.set(
+      `${event.resumo.budgetId}:${event.data}`,
+      event,
+    );
+  }
+
+  const merged: BudgetEventView[] = [];
+  for (const event of events) {
+    if (event.tipoEvento === "sobra") {
+      const provision = provisionByBudgetAndDate.get(
+        `${event.resumo.budgetId}:${event.data}`,
+      );
+      if (provision) {
+        provision.sobraAnterior = {
+          valor: event.valor,
+          ciclo: event.ciclo,
+        };
+        continue;
+      }
+    }
+    merged.push(event);
+  }
+
+  return merged;
 }
 
 export type ForecastBudgetEvent = {
