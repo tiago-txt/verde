@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatMonthTitle } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
@@ -65,13 +65,20 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
   const StatusIcon = statusMeta.icon;
   const isMobile = useIsMobile();
 
-  const title = isProvision ? "Orçamento" : "Sobra do orçamento";
+  const sobraReference = formatMonthTitle(
+    summary.inicio.slice(0, 7),
+  ).replace(/\s\d{2}(\d{2})$/, " $1");
+  const descriptor = isProvision
+    ? "Orçamento Atual"
+    : isMobile
+      ? "Sobra do Orçamento Anterior"
+      : "Sobra do orçamento anterior";
 
   return (
     <button
       type="button"
       onClick={() => onOpen(event)}
-      aria-label={`${title} ${summary.nome}, status ${statusMeta.label}, ${formatCurrency(
+      aria-label={`${summary.nome}, ${descriptor}, status ${statusMeta.label}, ${formatCurrency(
         isAlert ? 0 : event.valor,
       )}`}
       className={cn(
@@ -109,24 +116,19 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
       />
 
       <span className={cn("flex-1", isMobile ? "min-w-0" : "min-w-[10rem]")}>
-        {isMobile ? (
-          <span className="row-title block truncate">
-            {(isProvision ? "Orçamento" : "Sobra") + ` · ${summary.nome}`}
+        <span className="row-title block">
+          {summary.nome}
+          {isMobile ? " · " : " "}
+          <span className="text-xs font-normal text-muted-foreground">
+            {descriptor}
           </span>
-        ) : (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span className="row-title">{title}</span>
-            <span className="truncate text-xs text-muted-foreground">
-              {summary.nome}
-            </span>
-          </span>
-        )}
+        </span>
 
         {isMobile ? (
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1 gap-y-0 text-[13px] text-muted-foreground">
             {isOverspent ? (
               <span>
-                Estourou{" "}
+                Estourado em{" "}
                 <span className="tabular text-clay">
                   {formatCurrency(summary.estouro)}
                 </span>
@@ -141,50 +143,30 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
                 )}
               </span>
             ) : (
-              <span>
-                Sobra{" "}
-                <span className="tabular text-primary">
-                  {formatCurrency(event.valor)}
-                </span>
-              </span>
+              <span>referente a {sobraReference}</span>
             )}
-            <span aria-hidden="true">·</span>
-            <span className="shrink-0">
-              até {formatDate(summary.fim).slice(0, 5)}
-            </span>
           </span>
         ) : (
           <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
-            <span
-              className={cn("font-medium capitalize", statusMeta.tone)}
-            >
-              {statusMeta.label}
-            </span>
-            {isOverspent || (isProvision && !isConsumed) ? (
-              <>
-                <span aria-hidden="true">·</span>
-                {isOverspent ? (
-                  <span>
-                    Estourou{" "}
-                    <span className="tabular text-clay">
-                      {formatCurrency(summary.estouro)}
-                    </span>
-                  </span>
-                ) : (
-                  <span>
-                    Restam{" "}
-                    <span className="tabular">
-                      {formatCurrency(summary.restante)}
-                    </span>
+            {isOverspent ? (
+              <span>
+                Estourado em{" "}
+                <span className="tabular text-clay">
+                  {formatCurrency(summary.estouro)}
+                </span>
+              </span>
+            ) : isProvision ? (
+              <span>
+                {summary.restante > 0 ? "Restam" : "Consumido"}{" "}
+                {summary.restante > 0 && (
+                  <span className="tabular">
+                    {formatCurrency(summary.restante)}
                   </span>
                 )}
-              </>
-            ) : null}
-            <span aria-hidden="true">·</span>
-            <span>
-              ciclo {formatDate(summary.inicio).slice(0, 5)}–
-              {formatDate(summary.fim).slice(0, 5)}
-            </span>
+              </span>
+            ) : (
+              <span>referente a {sobraReference}</span>
+            )}
           </span>
         )}
 

@@ -42,7 +42,6 @@ export function CardInvoiceRow({
     paga: { label: "paga", tone: "text-primary", icon: CheckCircle2 },
     vencida: { label: "vencida", tone: "text-clay", icon: AlertTriangle },
   }[projectionStatus];
-  const StatusIcon = statusMeta.icon;
   const pagador =
     event.pagamentos.find((item) => Boolean(item.contaNome)) ?? null;
   const outrosPagadores = pagador
@@ -143,14 +142,36 @@ export function CardInvoiceRow({
               ) : (
                 <span className="truncate">{mobileStatusLabel}</span>
               )
-            ) : event.restante > 0 ? (
-              <span className="truncate">
-                restam{" "}
-                <span className="tabular">
-                  {formatCurrency(event.restante)}
-                </span>
-              </span>
-            ) : null}
+            ) : (
+              <>
+                <EntityTile
+                  kind="cartao"
+                  entity={{
+                    id: event.cartaoId,
+                    nome: event.cartaoNome,
+                    cor: event.cartaoCor,
+                    icone: event.cartaoIcone,
+                  }}
+                  size="xxs"
+                  plain
+                  className="shrink-0"
+                />
+                <span className="truncate">{event.cartaoNome}</span>
+                {event.pago > 0 && event.restante > 0 && (
+                  <>
+                    <span aria-hidden="true" className="shrink-0">
+                      ·
+                    </span>
+                    <span className="truncate">
+                      restam{" "}
+                      <span className="tabular">
+                        {formatCurrency(event.restante)}
+                      </span>
+                    </span>
+                  </>
+                )}
+              </>
+            )}
           </span>
         </span>
 
@@ -191,7 +212,13 @@ export function CardInvoiceRow({
         aria-hidden="true"
         className={cn(
           "absolute inset-y-0 left-0 z-10 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
-          isPaid ? "border-l-success/70" : "border-l-info/70",
+          isPaid
+            ? "border-l-success/70"
+            : isOverdue
+              ? "border-l-clay/70"
+              : event.status === "parcial"
+                ? "border-l-amber/70"
+                : "border-l-info/70",
         )}
       />
 
@@ -297,21 +324,24 @@ export function CardInvoiceRow({
               </>
             ) : (
               <>
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1 font-medium capitalize",
-                    statusMeta.tone,
-                  )}
-                >
-                  <StatusIcon className="h-3 w-3" aria-hidden="true" />
-                  {statusMeta.label}
+                <span className="inline-flex min-w-0 items-center gap-1">
+                  <EntityTile
+                    kind="cartao"
+                    entity={{
+                      id: event.cartaoId,
+                      nome: event.cartaoNome,
+                      cor: event.cartaoCor,
+                      icone: event.cartaoIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0"
+                  />
+                  <span className="truncate">{event.cartaoNome}</span>
                 </span>
                 <span aria-hidden="true">·</span>
-                <span>
-                  pago{" "}
-                  <span className="tabular">{formatCurrency(event.pago)}</span>
-                </span>
-                {event.restante > 0 && (
+                <span>vence {formatDate(event.vencimento)}</span>
+                {event.pago > 0 && event.restante > 0 && (
                   <>
                     <span aria-hidden="true">·</span>
                     <span>
@@ -320,12 +350,6 @@ export function CardInvoiceRow({
                         {formatCurrency(event.restante)}
                       </span>
                     </span>
-                  </>
-                )}
-                {!isPaid && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>vence {formatDate(event.vencimento)}</span>
                   </>
                 )}
                 <span aria-hidden="true">·</span>
