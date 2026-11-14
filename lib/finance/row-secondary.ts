@@ -1,5 +1,5 @@
 export const SECONDARY_INFO_OPTIONS = [
-  "conta-categoria",
+  "categoria-conta",
   "categoria",
   "conta",
   "nenhuma",
@@ -7,20 +7,20 @@ export const SECONDARY_INFO_OPTIONS = [
 
 export type SecondaryInfo = (typeof SECONDARY_INFO_OPTIONS)[number];
 
-export const DEFAULT_SECONDARY_INFO: SecondaryInfo = "conta-categoria";
+export const DEFAULT_SECONDARY_INFO: SecondaryInfo = "categoria-conta";
 
 export const SECONDARY_INFO_STORAGE_KEY = "verde-secondary-info";
 
 export const SECONDARY_INFO_LABELS: Record<SecondaryInfo, string> = {
-  "conta-categoria": "Conta · Categoria",
+  "categoria-conta": "Categoria · Conta",
   categoria: "Só categoria",
   conta: "Só conta",
   nenhuma: "Nenhuma",
 };
 
-/** Valor antigo, quando a linha mobile mostrava categoria antes da conta. */
+/** Valor antigo, quando a linha mostrava conta antes da categoria. */
 const LEGACY_OPTIONS: Record<string, SecondaryInfo> = {
-  "categoria-conta": "conta-categoria",
+  "conta-categoria": "categoria-conta",
 };
 
 export function isSecondaryInfo(value: unknown): value is SecondaryInfo {
@@ -62,5 +62,5 @@ export function secondaryLine(
   if (option === "nenhuma") return "";
   if (option === "categoria") return categoria ?? "";
   if (option === "conta") return conta ?? "";
-  return [conta, categoria].filter(Boolean).join(" · ");
+  return [categoria, conta].filter(Boolean).join(" · ");
 }

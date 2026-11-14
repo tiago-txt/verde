@@ -135,9 +135,9 @@ export const TransactionRow = memo(function TransactionRow({
   }[rowStatus];
 
   const showAccount =
-    secondaryInfo === "conta-categoria" || secondaryInfo === "conta";
+    secondaryInfo === "categoria-conta" || secondaryInfo === "conta";
   const showCategory =
-    secondaryInfo === "conta-categoria" || secondaryInfo === "categoria";
+    secondaryInfo === "categoria-conta" || secondaryInfo === "categoria";
   const accountName = isCardPurchase
     ? transaction.cartaoNome
     : transaction.contaNome;
@@ -428,6 +428,18 @@ export const TransactionRow = memo(function TransactionRow({
                   </>
                 ) : (
                   <span className="inline-flex min-w-0 items-center gap-1.5">
+                    {showCategory && transaction.categoriaNome && (
+                      <>
+                        <span className="truncate">
+                          {transaction.categoriaNome}
+                        </span>
+                        {showAccount && accountName && (
+                          <span aria-hidden="true" className="shrink-0">
+                            ·
+                          </span>
+                        )}
+                      </>
+                    )}
                     {showAccount && accountName && (
                       <>
                         <EntityTile
@@ -452,17 +464,7 @@ export const TransactionRow = memo(function TransactionRow({
                           className="shrink-0"
                         />
                         <span className="truncate">{accountName}</span>
-                        {showCategory && transaction.categoriaNome && (
-                          <span aria-hidden="true" className="shrink-0">
-                            ·
-                          </span>
-                        )}
                       </>
-                    )}
-                    {showCategory && transaction.categoriaNome && (
-                      <span className="truncate">
-                        {transaction.categoriaNome}
-                      </span>
                     )}
                   </span>
                 )}
@@ -484,7 +486,7 @@ export const TransactionRow = memo(function TransactionRow({
                       }}
                       size="xxs"
                       plain
-                      className="shrink-0"
+                      className="shrink-0 rounded-[6px]"
                     />
                     <span className="truncate">
                       {transaction.orcamentoNome ?? "Orçamento"}{" "}
@@ -799,6 +801,14 @@ export const TransactionRow = memo(function TransactionRow({
               </>
             ) : isCardPurchase ? (
               <>
+                {transaction.categoriaNome && (
+                  <>
+                    <span className="truncate">
+                      {transaction.categoriaNome}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                  </>
+                )}
                 <AccountBadge
                   id={transaction.cartaoId}
                   nome={transaction.cartaoNome}
@@ -806,9 +816,6 @@ export const TransactionRow = memo(function TransactionRow({
                   cor={transaction.cartaoCor}
                   kind="cartao"
                 />
-                {transaction.categoriaNome && (
-                  <span className="truncate">· {transaction.categoriaNome}</span>
-                )}
                 {transaction.orcamentoViaFatura && (
                   <span className="truncate">
                     · via fatura de{" "}
@@ -818,14 +825,19 @@ export const TransactionRow = memo(function TransactionRow({
               </>
             ) : (
               <>
+                {transaction.categoriaNome && (
+                  <>
+                    <span className="truncate">
+                      {transaction.categoriaNome}
+                    </span>
+                    <span aria-hidden="true">·</span>
+                  </>
+                )}
                 <AccountBadge
                   nome={transaction.contaNome}
                   icone={transaction.contaIcone}
                   cor={transaction.contaCor}
                 />
-                {transaction.categoriaNome && (
-                  <span className="truncate">· {transaction.categoriaNome}</span>
-                )}
               </>
             )}
             {invoiceCycle && (
@@ -851,7 +863,7 @@ export const TransactionRow = memo(function TransactionRow({
                     }}
                     size="xxs"
                     plain
-                    className="shrink-0"
+                    className="shrink-0 rounded-[6px]"
                   />
                   <span className="truncate">
                     {transaction.orcamentoNome ?? "Orçamento"}{" "}

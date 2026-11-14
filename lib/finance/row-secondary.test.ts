@@ -7,14 +7,14 @@ import {
 } from "./row-secondary";
 
 describe("texto da linha secundária", () => {
-  it("usa conta e categoria por padrão", () => {
-    expect(DEFAULT_SECONDARY_INFO).toBe("conta-categoria");
+  it("usa categoria e conta por padrão", () => {
+    expect(DEFAULT_SECONDARY_INFO).toBe("categoria-conta");
     expect(
-      secondaryLine("conta-categoria", {
+      secondaryLine("categoria-conta", {
         categoria: "Mercado",
         conta: "Itaú",
       }),
-    ).toBe("Itaú · Mercado");
+    ).toBe("Mercado · Itaú");
   });
 
   it("respeita cada opção", () => {
@@ -25,11 +25,11 @@ describe("texto da linha secundária", () => {
   });
 
   it("omite partes vazias sem deixar separador solto", () => {
-    expect(secondaryLine("conta-categoria", { categoria: "Mercado" })).toBe(
+    expect(secondaryLine("categoria-conta", { categoria: "Mercado" })).toBe(
       "Mercado",
     );
-    expect(secondaryLine("conta-categoria", { conta: "Itaú" })).toBe("Itaú");
-    expect(secondaryLine("conta-categoria", {})).toBe("");
+    expect(secondaryLine("categoria-conta", { conta: "Itaú" })).toBe("Itaú");
+    expect(secondaryLine("categoria-conta", {})).toBe("");
   });
 
   it("transferência mostra origem e destino", () => {
@@ -47,7 +47,7 @@ describe("texto da linha secundária", () => {
     expect(isSecondaryInfo("conta")).toBe(true);
     expect(isSecondaryInfo("outro")).toBe(false);
     expect(isSecondaryInfo(null)).toBe(false);
-    expect(normalizeSecondaryInfo("categoria-conta")).toBe("conta-categoria");
+    expect(normalizeSecondaryInfo("conta-categoria")).toBe("categoria-conta");
     expect(normalizeSecondaryInfo("conta")).toBe("conta");
     expect(normalizeSecondaryInfo("outro")).toBeNull();
   });
