@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
@@ -11,6 +11,7 @@ import { todayISO } from "@/lib/dates";
 import { addDaysISO } from "@/lib/dates";
 import {
   calcularLimiteUsado,
+  chaveDaFatura,
   datasDaFatura,
   faturaDaCompra,
   faturaPassaFiltros,
@@ -22,6 +23,8 @@ import {
   type CardInvoiceFilters,
   type CardInvoiceSummary,
 } from "@/lib/finance/cards";
+
+export { chaveDaFatura } from "@/lib/finance/cards";
 
 export type CardAccountInfo = {
   id: string;
@@ -123,6 +126,7 @@ type MovementRow = {
   tipo: "despesa" | "receita" | "transferencia";
   valor: number;
   data: string;
+  faturaChaveOverride: string | null;
 };
 
 type PaymentRow = {
@@ -156,6 +160,7 @@ function loadLedger(workspaceId: string): {
       tipo: transactions.tipo,
       valor: transactions.valor,
       data: transactions.data,
+      faturaChaveOverride: transactions.faturaChaveOverride,
     })
     .from(transactions)
     .where(
@@ -238,7 +243,7 @@ function invoicesForCard(
   for (const movement of [...movements, ...extraMovements]) {
     if (movement.cartaoId !== card.id) continue;
     if (movement.tipo === "transferencia") continue;
-    const key = faturaDaCompra(movement.data, config);
+    const key = chaveDaFatura(movement, config);
     const target = bucket(key);
     target.total +=
       movement.tipo === "despesa" ? movement.valor : -movement.valor;
@@ -381,7 +386,7 @@ export function getCardDebtSnapshot(
         data: movement.data,
         tipo: movement.tipo as "despesa" | "receita",
         valor: movement.valor,
-        faturaChave: faturaDaCompra(movement.data, config),
+        faturaChave: chaveDaFatura(movement, config),
       }));
     const paidByInvoice = new Map<string, number>();
     let unlinkedPaid = 0;
@@ -594,8 +599,14 @@ export function getCardInvoiceDetail(
         ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         eq(transactions.cartaoId, card.card.id),
-        gte(transactions.data, interval.inicio),
-        lte(transactions.data, intervalEnd),
+        or(
+          eq(transactions.faturaChaveOverride, chave),
+          and(
+            isNull(transactions.faturaChaveOverride),
+            gte(transactions.data, interval.inicio),
+            lte(transactions.data, intervalEnd),
+          ),
+        ),
       ),
     )
     .orderBy(asc(transactions.data), asc(transactions.createdAt))

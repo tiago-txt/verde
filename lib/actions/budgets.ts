@@ -949,6 +949,7 @@ export async function getBudgetHintAction(input: {
               tipo: transaction.tipo,
               data: transaction.data,
               cartaoId: transaction.cartaoId,
+              faturaChaveOverride: transaction.faturaChaveOverride,
               orcamentoDeslocamento: transaction.orcamentoDeslocamento,
             },
             resolved.diaFechamento,

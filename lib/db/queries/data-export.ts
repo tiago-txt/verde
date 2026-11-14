@@ -7,6 +7,7 @@ import {
   budgets,
   categories,
   creditCards,
+  importBatches,
   recurrences,
   tags,
   transactionTags,
@@ -178,12 +179,90 @@ export type LatestImportBatch = {
   batchId: string;
   createdAt: Date | number;
   count: number;
+  fileName?: string | null;
 };
+
+export type ImportBatchInfo = {
+  id: string;
+  fileName: string;
+  fileHash: string;
+  createdAt: Date | number;
+  counts: Record<string, unknown>;
+};
+
+/** Busca um lote já importado com o mesmo arquivo (hash SHA-256). */
+export function findImportBatchByHash(
+  workspaceId: string,
+  fileHash: string,
+): ImportBatchInfo | null {
+  const { db, ws } = scopedDb(workspaceId);
+  const row = db
+    .select({
+      id: importBatches.id,
+      fileName: importBatches.fileName,
+      fileHash: importBatches.fileHash,
+      createdAt: importBatches.createdAt,
+      counts: importBatches.counts,
+    })
+    .from(importBatches)
+    .where(
+      and(
+        ws(importBatches.workspaceId),
+        eq(importBatches.fileHash, fileHash.toLowerCase()),
+      ),
+    )
+    .orderBy(desc(importBatches.createdAt))
+    .limit(1)
+    .get();
+  if (!row) return null;
+  return {
+    id: row.id,
+    fileName: row.fileName,
+    fileHash: row.fileHash,
+    createdAt: row.createdAt,
+    counts: (row.counts ?? {}) as Record<string, unknown>,
+  };
+}
 
 export function getLatestImportBatch(
   workspaceId: string,
 ): LatestImportBatch | null {
   const { db, ws } = scopedDb(workspaceId);
+  const batch = db
+    .select({
+      id: importBatches.id,
+      fileName: importBatches.fileName,
+      createdAt: importBatches.createdAt,
+      counts: importBatches.counts,
+    })
+    .from(importBatches)
+    .where(ws(importBatches.workspaceId))
+    .orderBy(desc(importBatches.createdAt))
+    .limit(1)
+    .get();
+
+  if (batch) {
+    const liveCount = db
+      .select({ count: transactions.id })
+      .from(transactions)
+      .where(
+        and(
+          ws(transactions.workspaceId),
+          eq(transactions.importBatchId, batch.id),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .all().length;
+    if (liveCount > 0) {
+      return {
+        batchId: batch.id,
+        createdAt: batch.createdAt,
+        count: liveCount,
+        fileName: batch.fileName,
+      };
+    }
+  }
+
   const row = db
     .select({
       batchId: transactions.importBatchId,
@@ -215,5 +294,10 @@ export function getLatestImportBatch(
     )
     .all().length;
 
-  return { batchId: row.batchId, createdAt: row.createdAt, count };
+  return {
+    batchId: row.batchId,
+    createdAt: row.createdAt,
+    count,
+    fileName: null,
+  };
 }

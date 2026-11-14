@@ -429,6 +429,7 @@ type VirtualCardMovement = {
   tipo: "despesa" | "receita" | "transferencia";
   valor: number;
   data: string;
+  faturaChaveOverride: string | null;
 };
 
 function virtualRecurrenceEvents(
@@ -468,6 +469,7 @@ function virtualRecurrenceEvents(
           tipo: template.tipo,
           valor: template.valor,
           data,
+          faturaChaveOverride: null,
         });
         continue;
       }

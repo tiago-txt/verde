@@ -2,8 +2,8 @@ import { addMonths } from "@/lib/dates";
 import type { TransactionType } from "@/lib/db/schema";
 import { cicloDaData } from "./budgets";
 import {
+  chaveDaFatura,
   datasDaFatura,
-  faturaDaCompra,
   type CardCycleConfig,
 } from "./cards";
 import type { CardClosingBehavior } from "@/lib/db/schema";
@@ -13,6 +13,7 @@ export type CompetenceTransaction = {
   tipo: TransactionType;
   data: string;
   cartaoId: string | null;
+  faturaChaveOverride?: string | null;
   orcamentoDeslocamento?: number | null;
 };
 
@@ -61,11 +62,7 @@ export function dataCompetencia(
   card?: CompetenceCard | null,
 ): string {
   if (transaction.cartaoId && transaction.tipo !== "transferencia" && card) {
-    const chave = faturaDaCompra(
-      transaction.data,
-      card,
-      card.fechamentoCompra,
-    );
+    const chave = chaveDaFatura(transaction, card);
     return datasDaFatura(chave, card).vencimento;
   }
   return transaction.data;
@@ -95,7 +92,7 @@ export function faturaDaTransacao(
   if (!transaction.cartaoId || transaction.tipo === "transferencia" || !card) {
     return null;
   }
-  const chave = faturaDaCompra(transaction.data, card, card.fechamentoCompra);
+  const chave = chaveDaFatura(transaction, card);
   return {
     chave,
     vencimento: datasDaFatura(chave, card).vencimento,

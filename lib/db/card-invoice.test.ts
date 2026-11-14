@@ -15,6 +15,7 @@ import { createTransactionAction } from "@/lib/actions/transactions";
 import { deleteTransactionAction } from "@/lib/actions/transactions";
 import {
   getCardInvoiceAccountDeltas,
+  getCardInvoiceDetail,
   listCardInvoiceEventsForMonth,
 } from "./queries/cards";
 import type { CardInvoiceFilters } from "@/lib/finance/cards";
@@ -414,5 +415,64 @@ describe("fatura como evento único", () => {
       FILTERS,
     );
     expect(events).toHaveLength(0);
+  });
+
+  it("compra com faturaChaveOverride aparece exatamente na fatura informada", async () => {
+    const fixture = await setupInvoice();
+    const now = new Date();
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "despesa",
+        descricao: "Compra com fatura explícita",
+        valor: 7_500,
+        data: "2026-10-05",
+        pago: false,
+        cartaoId: fixture.cardId,
+        faturaChaveOverride: "2027-02",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    // A fatura calculada da compra é fixture.faturaChave (2026-12); o override
+    // manda esta compra para 2027-02.
+    const calculated = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    ).find((event) => event.cartaoId === fixture.cardId);
+    expect(calculated?.total ?? 0).toBe(20_000);
+
+    const overridden = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      "2027-02",
+      FILTERS,
+    ).find((event) => event.cartaoId === fixture.cardId);
+    expect(overridden).toMatchObject({ total: 7_500, restante: 7_500 });
+
+    const detail = getCardInvoiceDetail(
+      user.workspaceId,
+      fixture.cardId,
+      "2027-02",
+    );
+    expect(
+      detail?.purchases.some(
+        (item) => item.descricao === "Compra com fatura explícita",
+      ),
+    ).toBe(true);
+
+    const calculatedDetail = getCardInvoiceDetail(
+      user.workspaceId,
+      fixture.cardId,
+      fixture.faturaChave,
+    );
+    expect(
+      calculatedDetail?.purchases.some(
+        (item) => item.descricao === "Compra com fatura explícita",
+      ),
+    ).toBe(false);
   });
 });

@@ -128,6 +128,17 @@ export function fechamentoDaFatura(
   return datasDaFatura(chave, card).fechamento;
 }
 
+/**
+ * Fatura de uma compra: a coluna explícita importada (override) vence a
+ * fatura calculada pela data e pelo fechamento do cartão.
+ */
+export function chaveDaFatura(
+  movement: { data: string; faturaChaveOverride?: string | null },
+  card: CardCycleConfig,
+): string {
+  return movement.faturaChaveOverride ?? faturaDaCompra(movement.data, card);
+}
+
 export function totalDaFatura(movimentos: CardMovement[]): number {
   return movimentos.reduce(
     (total, movimento) =>

@@ -39,6 +39,19 @@ describe("competência do orçamento", () => {
     expect(cicloCompetencia(transaction, 1, nu)).toBe("2027-02");
   });
 
+  it("fatura explícita (override) vence a fatura calculada", () => {
+    const transaction = {
+      ...despesa("2026-11-12", "card-1"),
+      faturaChaveOverride: "2027-03",
+    };
+    expect(dataCompetencia(transaction, nu)).toBe("2027-03-10");
+    expect(cicloCompetencia(transaction, 1, nu)).toBe("2027-03");
+    expect(faturaDaTransacao(transaction, nu)).toEqual({
+      chave: "2027-03",
+      vencimento: "2027-03-10",
+    });
+  });
+
   it("opção 'nesta fatura' muda o vencimento e o ciclo consumido", () => {
     const transaction = despesa("2026-12-15", "card-1");
     const atual = { ...nu, fechamentoCompra: "fatura_atual" as const };

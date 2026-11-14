@@ -130,6 +130,19 @@ describe("migration 0007 (workspaces)", () => {
       expect(row.total, table).toBe(count(table));
     }
 
+    const transactionColumns = testDb.sqlite
+      .prepare("pragma table_info(transactions)")
+      .all() as { name: string }[];
+    expect(
+      transactionColumns.some(
+        (column) => column.name === "fatura_chave_override",
+      ),
+    ).toBe(true);
+    const tables = testDb.sqlite
+      .prepare("select name from sqlite_master where type = 'table'")
+      .all() as { name: string }[];
+    expect(tables.some((table) => table.name === "import_batches")).toBe(true);
+
     const admin = testDb.sqlite
       .prepare("select role, ativo, is_admin, must_change_password from users where id = 'user-admin'")
       .get() as {

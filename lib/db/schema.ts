@@ -350,6 +350,11 @@ export const transactions = sqliteTable(
     }),
     /** Fatura paga por esta transferência (YYYY-MM do vencimento). */
     faturaChave: text("fatura_chave"),
+    /**
+     * Fatura explícita de uma compra importada (YYYY-MM). Quando presente,
+     * prevalece sobre a fatura calculada pela data e pelo fechamento.
+     */
+    faturaChaveOverride: text("fatura_chave_override"),
     categoriaId: text("categoria_id").references(() => categories.id, {
       onDelete: "set null",
     }),
@@ -400,6 +405,11 @@ export const transactions = sqliteTable(
     index("transactions_cartao_data_idx").on(table.cartaoId, table.data),
     index("transactions_cartao_destino_idx").on(table.cartaoDestinoId),
     index("transactions_fatura_chave_idx").on(table.faturaChave),
+    index("transactions_fatura_override_idx").on(
+      table.workspaceId,
+      table.cartaoId,
+      table.faturaChaveOverride,
+    ),
     index("transactions_categoria_idx").on(table.categoriaId),
     index("transactions_recorrencia_idx").on(table.recorrenciaId),
     index("transactions_parcela_grupo_idx").on(table.parcelaGrupoId),
@@ -423,6 +433,50 @@ export const transactions = sqliteTable(
     check(
       "transactions_orcamento_deslocamento_check",
       sql`${table.orcamentoDeslocamento} between -2 and 2`,
+    ),
+  ],
+);
+
+/** Resumo persistido de uma importação, usado para histórico e bloqueio por hash. */
+export type ImportBatchCounts = {
+  total: number;
+  imported: number;
+  ignored: number;
+  duplicates: number;
+  invalid: number;
+  byKind?: { conta: number; cartao: number };
+  byType?: {
+    despesa: number;
+    receita: number;
+    transferencia: number;
+  };
+};
+
+export const importBatches = sqliteTable(
+  "import_batches",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    fileName: text("file_name").notNull(),
+    /** SHA-256 do arquivo original, calculado no cliente. */
+    fileHash: text("file_hash").notNull(),
+    importedById: text("imported_by_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    counts: text("counts", { mode: "json" })
+      .$type<ImportBatchCounts>()
+      .notNull(),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .notNull()
+      .$defaultFn(() => new Date()),
+  },
+  (table) => [
+    index("import_batches_workspace_idx").on(table.workspaceId),
+    index("import_batches_workspace_hash_idx").on(
+      table.workspaceId,
+      table.fileHash,
     ),
   ],
 );
@@ -692,6 +746,8 @@ export type Category = typeof categories.$inferSelect;
 export type NewCategory = typeof categories.$inferInsert;
 export type Transaction = typeof transactions.$inferSelect;
 export type NewTransaction = typeof transactions.$inferInsert;
+export type ImportBatch = typeof importBatches.$inferSelect;
+export type NewImportBatch = typeof importBatches.$inferInsert;
 export type Recurrence = typeof recurrences.$inferSelect;
 export type NewRecurrence = typeof recurrences.$inferInsert;
 export type Tag = typeof tags.$inferSelect;

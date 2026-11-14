@@ -22,7 +22,7 @@ import {
 } from "@/lib/db/schema";
 import { addDaysISO, todayISO } from "@/lib/dates";
 import { expandirCategorias } from "@/lib/finance/budgets";
-import { faturaDaCompra } from "@/lib/finance/cards";
+import { chaveDaFatura } from "@/lib/finance/cards";
 import type { ReportFilters } from "@/lib/finance/report-filters";
 import {
   buildCategoryReport,
@@ -184,6 +184,7 @@ export function listReportRows(
       cartaoDiaFechamento: card.diaFechamento,
       cartaoDiaVencimento: card.diaVencimento,
       cartaoFechamentoCompra: card.fechamentoCompra,
+      faturaChaveOverride: transactions.faturaChaveOverride,
     })
     .from(transactions)
     .leftJoin(categories, eq(transactions.categoriaId, categories.id))
@@ -199,7 +200,7 @@ export function listReportRows(
   return rows.map((row) => {
     const faturaChave =
       row.cartaoId && row.cartaoDiaFechamento && row.cartaoDiaVencimento
-        ? faturaDaCompra(row.data, {
+        ? chaveDaFatura(row, {
             diaFechamento: row.cartaoDiaFechamento,
             diaVencimento: row.cartaoDiaVencimento,
             fechamentoCompra:

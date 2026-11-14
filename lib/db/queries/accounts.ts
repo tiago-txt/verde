@@ -101,6 +101,35 @@ export function listAllAccounts(workspaceId: string) {
     .all();
 }
 
+/** Conta quantos lançamentos ativos cada conta tem (usado na importação). */
+export function listAccountTransactionCounts(
+  workspaceId: string,
+): Map<string, number> {
+  const { db, ws } = scopedDb(workspaceId);
+  const rows = db
+    .select({
+      contaId: transactions.contaId,
+      count: sql<number>`count(*)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        sql`${transactions.contaId} is not null`,
+      ),
+    )
+    .groupBy(transactions.contaId)
+    .all();
+  return new Map(
+    rows
+      .filter((row): row is { contaId: string; count: number } =>
+        Boolean(row.contaId),
+      )
+      .map((row) => [row.contaId, row.count]),
+  );
+}
+
 export function getAccountById(workspaceId: string, id: string) {
   const { db, ws } = scopedDb(workspaceId);
   return db

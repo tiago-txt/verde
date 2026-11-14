@@ -83,6 +83,7 @@ export type TransactionListItem = {
   cartaoDestinoDiaVencimento: number | null;
   cartaoDestinoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
   faturaChave: string | null;
+  faturaChaveOverride: string | null;
   cartaoDiaFechamento: number | null;
   cartaoDiaVencimento: number | null;
   cartaoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
@@ -172,6 +173,7 @@ function selectTransactionFields() {
     cartaoDestinoDiaVencimento: cartaoDestino.diaVencimento,
     cartaoDestinoFechamentoCompra: cartaoDestino.fechamentoCompra,
     faturaChave: transactions.faturaChave,
+    faturaChaveOverride: transactions.faturaChaveOverride,
     cartaoDiaFechamento: cartao.diaFechamento,
     cartaoDiaVencimento: cartao.diaVencimento,
     cartaoFechamentoCompra: cartao.fechamentoCompra,
@@ -244,6 +246,7 @@ type BudgetChipRow = {
   data: string;
   categoriaId: string | null;
   cartaoId: string | null;
+  faturaChaveOverride: string | null;
   cartaoDiaFechamento: number | null;
   cartaoDiaVencimento: number | null;
   cartaoFechamentoCompra: "proxima_fatura" | "fatura_atual" | null;
@@ -289,6 +292,7 @@ function resolveBudgetChips(
       tipo: row.tipo,
       data: row.data,
       cartaoId: row.cartaoId,
+      faturaChaveOverride: row.faturaChaveOverride,
       orcamentoDeslocamento: row.orcamentoDeslocamento,
     };
     const monthKey = row.data.slice(0, 7);

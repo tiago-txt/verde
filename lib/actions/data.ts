@@ -889,6 +889,8 @@ export async function importJsonAction(input: {
             cartaoDestinoId:
               cardMap.get(text(row.cartaoDestinoId)) ?? null,
             faturaChave: text(row.faturaChave) || null,
+            faturaChaveOverride:
+              text(row.faturaChaveOverride) || null,
             categoriaId: categoryMap.get(text(row.categoriaId)) ?? null,
             observacao: text(row.observacao) || null,
             recorrenciaId: recurrenceMap.get(text(row.recorrenciaId)) ?? null,

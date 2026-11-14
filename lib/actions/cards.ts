@@ -12,8 +12,8 @@ import { countCardTransactions } from "@/lib/db/queries/cards";
 import { listAllAccounts } from "@/lib/db/queries/accounts";
 import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import {
+  chaveDaFatura,
   datasDaFatura,
-  faturaDaCompra,
   type CardCycleConfig,
 } from "@/lib/finance/cards";
 import { formatCurrency } from "@/lib/format";
@@ -160,6 +160,7 @@ function refreshOpenCardSnapshots(
     .select({
       id: transactions.id,
       data: transactions.data,
+      faturaChaveOverride: transactions.faturaChaveOverride,
       cartaoFechamento: transactions.cartaoFechamento,
       cartaoVencimento: transactions.cartaoVencimento,
       cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
@@ -185,7 +186,7 @@ function refreshOpenCardSnapshots(
               row.cartaoFechamentoCompra ?? oldConfig.fechamentoCompra,
           }
         : oldConfig;
-    const chave = faturaDaCompra(row.data, snapshot);
+    const chave = chaveDaFatura(row, snapshot);
     const fechamento = datasDaFatura(chave, snapshot).fechamento;
 
     if (fechamento >= hoje) {
