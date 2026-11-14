@@ -515,10 +515,6 @@ export function TransactionsPageClient({
 
   function handleEdit(transaction: TransactionListItem) {
     setFlash(null);
-    if (transaction.recorrenciaId || transaction.parcelaGrupoId) {
-      setScopeAction({ mode: "edit", transaction });
-      return;
-    }
     setEditing({ transaction, scope: "single" });
   }
 
@@ -549,13 +545,8 @@ export function TransactionsPageClient({
 
   async function handleScopeSelect(scope: Scope) {
     if (!scopeAction) return;
-    const { mode, transaction } = scopeAction;
+    const { transaction } = scopeAction;
     setScopeAction(null);
-
-    if (mode === "edit") {
-      setEditing({ transaction, scope });
-      return;
-    }
 
     const result = await deleteTransactionAction({
       id: transaction.id,
@@ -1459,7 +1450,7 @@ export function TransactionsPageClient({
         onOpenChange={(open) => {
           if (!open) setScopeAction(null);
         }}
-        mode={scopeAction?.mode ?? "edit"}
+        mode="delete"
         transaction={scopeAction?.transaction ?? null}
         onSelect={(scope) => void handleScopeSelect(scope)}
       />

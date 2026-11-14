@@ -1,6 +1,6 @@
 "use client";
 
-import { Repeat, Trash2, Pencil } from "lucide-react";
+import { CalendarDays, Repeat, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -68,7 +68,7 @@ export function ScopeDialog({
             className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
             onClick={() => onSelect("single")}
           >
-            <Pencil className="h-4 w-4" />
+            <CalendarDays className="h-4 w-4" />
             <span>
               <span className="block font-medium">{singleLabel}</span>
               <span className="block text-xs font-normal text-muted-foreground">
@@ -94,20 +94,22 @@ export function ScopeDialog({
             </span>
           </Button>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
-            onClick={() => onSelect("all")}
-          >
-            <Trash2 className="h-4 w-4" />
-            <span>
-              <span className="block font-medium">{allLabel}</span>
-              <span className="block text-xs font-normal text-muted-foreground">
-                Inclui ocorrências passadas.
+          {mode === "delete" && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              onClick={() => onSelect("all")}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>
+                <span className="block font-medium">{allLabel}</span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  Inclui ocorrências passadas.
+                </span>
               </span>
-            </span>
-          </Button>
+            </Button>
+          )}
         </div>
 
         <DialogFooter>

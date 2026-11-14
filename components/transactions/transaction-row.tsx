@@ -736,10 +736,6 @@ export const TransactionRow = memo(function TransactionRow({
               >
                 {transaction.descricao}
               </span>
-              <Pencil
-                className="h-3.5 w-3.5 shrink-0 text-primary opacity-0 transition-opacity group-hover/name:opacity-100 group-focus-visible/name:opacity-100"
-                aria-hidden="true"
-              />
             </button>
             {transaction.recorrenciaId && (
               <Repeat

@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { EntityTile } from "@/components/entity-tile";
 import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
 import { addDaysISO } from "@/lib/dates";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { invoiceProjectionStatus } from "@/lib/design/row-status";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
@@ -91,8 +91,13 @@ export function CardInvoiceRow({
         />
 
         <span className="min-w-0 flex-1">
-          <span className="row-title block truncate">
-            Fatura {event.cartaoNome}
+          <span className="row-title block">
+            {event.cartaoNome}{" "}
+            <span className="text-xs font-normal text-muted-foreground">
+              {isPaid
+                ? "Pagamento de Fatura"
+                : `Fatura ${formatMonthTitle(event.inicio.slice(0, 7))}`}
+            </span>
           </span>
           <span className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-[13px] text-muted-foreground">
             {isPaid ? (
@@ -243,9 +248,12 @@ export function CardInvoiceRow({
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="row-title">
-              {isPaid
-                ? `Pagamento de Fatura · ${event.cartaoNome}`
-                : `Fatura ${event.cartaoNome}`}
+              {event.cartaoNome}{" "}
+              <span className="text-xs font-normal text-muted-foreground">
+                {isPaid
+                  ? "Pagamento de Fatura"
+                  : `Fatura ${formatMonthTitle(event.inicio.slice(0, 7))}`}
+              </span>
             </span>
             {pagador && !isPaid && (
               <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-grout bg-surface-lowest px-2 py-0.5 text-xs text-muted-foreground">

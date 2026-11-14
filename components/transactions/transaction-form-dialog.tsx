@@ -79,6 +79,7 @@ import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { keypadDisplay } from "@/lib/finance/numeric-keypad";
 import { NumericKeypad } from "./numeric-keypad";
+import { ScopeDialog } from "./scope-dialog";
 import {
   createTransactionSchema,
   type TransactionFormValues,
@@ -98,12 +99,6 @@ const TYPE_BADGE: Record<
   despesa: "destructive",
   receita: "success",
   transferencia: "secondary",
-};
-
-const SCOPE_LABELS: Record<Scope, string> = {
-  single: "só este",
-  future: "este e os próximos",
-  all: "todos",
 };
 
 const REPETITION_LABELS = {
@@ -285,6 +280,11 @@ export function TransactionFormDialog({
 }: TransactionFormDialogProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
+  const [scopePromptOpen, setScopePromptOpen] = useState(false);
+  const [pendingSave, setPendingSave] = useState<{
+    values: TransactionFormValues;
+    keepOpen: boolean;
+  } | null>(null);
   const [descriptionOpen, setDescriptionOpen] = useState(false);
   const [accountTouched, setAccountTouched] = useState(false);
   const [activeChip, setActiveChip] = useState<
@@ -594,20 +594,17 @@ export function TransactionFormDialog({
     setDescriptionOpen(false);
   }
 
-  async function persist(values: TransactionFormValues, keepOpen: boolean) {
-    setServerError(null);
-
-    if (formData.accounts.length === 0) {
-      setServerError("Cadastre uma conta antes de criar lançamentos.");
-      return;
-    }
-
+  async function save(
+    values: TransactionFormValues,
+    keepOpen: boolean,
+    saveScope: Scope,
+  ) {
     const result =
       mode === "edit" && transaction
         ? await updateTransactionAction({
             ...values,
             id: transaction.id,
-            scope,
+            scope: saveScope,
           })
         : await createTransactionAction(values);
 
@@ -654,6 +651,33 @@ export function TransactionFormDialog({
     skipConfirmRef.current = true;
     onOpenChange(false);
     onSaved();
+  }
+
+  async function persist(values: TransactionFormValues, keepOpen: boolean) {
+    setServerError(null);
+
+    if (formData.accounts.length === 0) {
+      setServerError("Cadastre uma conta antes de criar lançamentos.");
+      return;
+    }
+
+    // Em lançamentos recorrentes/parcelados o alcance é escolhido só na hora
+    // de salvar. "Todos" não é oferecido para evitar alterações em cascata.
+    if (mode === "edit" && transaction && isGrouped) {
+      setPendingSave({ values, keepOpen });
+      setScopePromptOpen(true);
+      return;
+    }
+
+    await save(values, keepOpen, scope);
+  }
+
+  function handleSaveScope(choice: Scope) {
+    const pending = pendingSave;
+    setScopePromptOpen(false);
+    setPendingSave(null);
+    if (!pending || choice === "all") return;
+    void save(pending.values, pending.keepOpen, choice);
   }
 
   const onSubmit = handleSubmit((values) => persist(values, false));
@@ -894,7 +918,7 @@ export function TransactionFormDialog({
                 </DialogTitle>
                 {mode === "edit" && isGrouped && (
                   <p className="text-xs opacity-80">
-                    Escopo: {SCOPE_LABELS[scope]}
+                    Alterações recorrentes pedem o alcance ao salvar.
                   </p>
                 )}
               </DialogHeader>
@@ -1996,6 +2020,19 @@ export function TransactionFormDialog({
           )}
         </form>
       </DialogContent>
+
+      {transaction && (
+        <ScopeDialog
+          open={scopePromptOpen}
+          onOpenChange={(next) => {
+            setScopePromptOpen(next);
+            if (!next) setPendingSave(null);
+          }}
+          mode="edit"
+          transaction={transaction}
+          onSelect={handleSaveScope}
+        />
+      )}
 
       <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>
         <DialogContent className="sm:max-w-md">
