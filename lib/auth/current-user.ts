@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { users, type User } from "@/lib/db/schema";
+import { getAdminNetworkAccess } from "./admin-access";
 import { SESSION_COOKIE, verifySessionToken } from "./jwt";
 
 /**
@@ -61,8 +62,20 @@ export async function getApiUser(): Promise<User | null> {
   return user;
 }
 
-export async function requireAdmin(): Promise<User> {
+/** Exige papel de administrador, mas ainda não valida a rede de origem. */
+export async function requireAdminRole(): Promise<User> {
   const user = await requireUser();
   if (user.role !== "admin") redirect("/");
+  return user;
+}
+
+/**
+ * Exige administrador **e** uma rede confiável. As funções administrativas
+ * (gerenciar usuários) só podem ser usadas localmente ou em IPs autorizados.
+ */
+export async function requireAdmin(): Promise<User> {
+  const user = await requireAdminRole();
+  const access = await getAdminNetworkAccess();
+  if (!access.allowed) redirect("/configuracoes");
   return user;
 }

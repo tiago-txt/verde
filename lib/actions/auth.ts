@@ -6,6 +6,11 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { endSession, startSession } from "@/lib/auth/session";
+import {
+  ADMIN_LOGIN_RESTRICTED_MESSAGE,
+  getAdminNetworkStatus,
+  getClientIp,
+} from "@/lib/auth/network";
 import { getDb } from "@/lib/db";
 import { users } from "@/lib/db/schema";
 
@@ -43,16 +48,6 @@ function registerFailure(key: string): void {
   entry.count += 1;
 }
 
-async function clientIp(): Promise<string> {
-  const headerStore = await headers();
-  const forwarded = headerStore.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
-  }
-  return headerStore.get("x-real-ip")?.trim() || "local";
-}
-
 function safeNextPath(next: string | undefined): string {
   if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
   return next;
@@ -73,7 +68,8 @@ export async function loginAction(
   }
 
   const { email, senha, next } = parsed.data;
-  const ip = await clientIp();
+  const headerStore = await headers();
+  const ip = getClientIp(headerStore) ?? "local";
   const emailKey = `email:${email}`;
   const ipKey = `ip:${ip}`;
 
@@ -97,6 +93,13 @@ export async function loginAction(
     registerFailure(emailKey);
     registerFailure(ipKey);
     return { error: "E-mail ou senha incorretos." };
+  }
+
+  // A senha está correta, mas contas admin só criam sessão na rede local ou
+  // em IPs/CIDRs autorizados. Sem isso, uma senha vazada daria poder para
+  // remover qualquer conta de qualquer lugar da internet.
+  if (user.role === "admin" && !getAdminNetworkStatus(headerStore).allowed) {
+    return { error: ADMIN_LOGIN_RESTRICTED_MESSAGE };
   }
 
   attempts.delete(emailKey);

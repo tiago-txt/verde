@@ -92,6 +92,8 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   senha temporária, redefinir senha, ativar/desativar e excluir (apaga o
   workspace inteiro). O último admin ativo e a própria conta são protegidos.
   O novo usuário nasce com categorias padrão (incluindo “Outros”) e tags.
+  O login de admin e o painel de usuários só funcionam na rede local ou em
+  IPs/CIDRs definidos em `ADMIN_TRUSTED_NETWORKS`.
 - **Perfil e segurança** (`/configuracoes/perfil`): editar nome/e-mail, trocar a
   própria senha e excluir a própria conta com confirmação. Primeiro login com
   senha temporária força a troca em `/trocar-senha`.
@@ -384,6 +386,7 @@ risco no seu servidor.
 | `ADMIN_PASSWORD` | 1º boot     | Senha do admin inicial (≥ 8 caracteres).                                   |
 | `ADMIN_NAME`     | não         | Nome exibido do admin (padrão: Administrador).                            |
 | `ALLOW_SIGNUP`   | não         | `true` habilita o cadastro público em `/cadastro` (padrão: `false`).      |
+| `ADMIN_TRUSTED_NETWORKS` | não | IPs/CIDRs que podem usar contas admin e a tela de Usuários. Padrão: loopback + redes privadas. `*` desativa a restrição. |
 | `PORT`           | não         | Porta HTTP do app/container (padrão: 3000).                                |
 | `TZ`             | não         | Fuso para “hoje”, faturas e recorrências (padrão: `America/Sao_Paulo`).    |
 | `COOKIE_SECURE`  | não         | Força o cookie `Secure`. Em geral o app detecta HTTPS via `x-forwarded-proto`. |
@@ -396,6 +399,33 @@ risco no seu servidor.
 > `ADMIN_EMAIL`/`ADMIN_PASSWORD` só são usados quando **não existe nenhum
 > usuário**. Depois disso, o admin gerencia os usuários em
 > **Configurações → Usuários**.
+
+### Acesso administrativo restrito por rede
+
+Como o administrador pode criar, desativar e **excluir contas**, o Verde aplica
+o mesmo espírito do Home Assistant: contas com papel `admin` só entram e só
+usam a tela de Usuários a partir da rede local ou de IPs autorizados.
+
+- **Padrão (variável vazia):** loopback (`127.0.0.1`, `::1`), redes privadas
+  (`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`), link-local
+  (`169.254.0.0/16`, `fe80::/10`) e IPv6 local (`fc00::/7`).
+- **Personalizar:** `ADMIN_TRUSTED_NETWORKS=192.168.1.0/24,100.64.0.0/10,203.0.113.10`
+  (aceita IP exato ou CIDR, separados por vírgula).
+- **Tailscale:** se o admin acessa pelo tailnet, inclua `100.64.0.0/10` ou o IP
+  específico da máquina.
+- **IPv6 na LAN:** se os dispositivos usam IPv6 global (e não só link-local/ULA),
+  inclua o prefixo da sua rede (ex.: `2804:1234:5678::/64`).
+- **Desativar:** `ADMIN_TRUSTED_NETWORKS=*` (não recomendado).
+
+O bloqueio vale para **novos logins de admin** e para todo o painel de usuários
+(criar/redefinir senha/ativar/excluir). Um admin já autenticado que saia da rede
+confiável continua usando o próprio workspace normalmente, mas não consegue
+gerenciar outras contas. Membros não são afetados.
+
+> O IP é lido de `X-Forwarded-For`/`X-Real-IP`. Mantenha o app atrás de um
+> reverse proxy (Nginx Proxy Manager, Caddy ou Tailscale) e não exponha a porta
+> do container diretamente na internet. Se o proxy não repassar o IP real, o
+> admin será bloqueado por segurança.
 
 ---
 
@@ -566,6 +596,8 @@ Decisões de segurança já aplicadas:
   por IP), com mensagem genérica;
 - admin vê apenas metadados de usuários; nunca dados financeiros de outro
   workspace;
+- login de admin e funções administrativas só funcionam na rede local ou em
+  IPs/CIDRs de `ADMIN_TRUSTED_NETWORKS` (padrão: loopback + redes privadas);
 - preferências de interface (tema e sidebar) ficam no `localStorage`; a sidebar
   é namespaced por `userId` e o logout limpa tema, sidebar, `sessionStorage` e
   caches do service worker. As preferências da previsão (horizonte, margem,

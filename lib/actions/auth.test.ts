@@ -70,6 +70,7 @@ vi.mock("next/headers", () => ({
 let testDb: TestDatabase;
 let admin: TestUser;
 let member: TestUser;
+let ipSeed = 0;
 
 function setCurrent(user: TestUser | null) {
   state.user = user
@@ -97,14 +98,17 @@ beforeEach(() => {
     email: "membro@verde.local",
     role: "membro",
   });
-  state.ip = crypto.randomUUID();
+  ipSeed += 1;
+  state.ip = `10.0.0.${ipSeed}`;
   state.session = null;
   delete process.env.ALLOW_SIGNUP;
+  delete process.env.ADMIN_TRUSTED_NETWORKS;
   setCurrent(admin);
 });
 
 afterEach(() => {
   state.user = null;
+  delete process.env.ADMIN_TRUSTED_NETWORKS;
   resetTestDatabase();
 });
 
@@ -151,6 +155,51 @@ describe("autenticação multiusuário", () => {
 
     const result = await loginAction({}, loginForm(member.email, "senha12345"));
     expect(result.error).toBe("E-mail ou senha incorretos.");
+  });
+
+  it("bloqueia login de administrador fora da rede confiável", async () => {
+    state.ip = "203.0.113.9";
+
+    const result = await loginAction({}, loginForm(admin.email, "senha12345"));
+
+    expect(result.error).toContain("administrador");
+    expect(result.error).toContain("rede local");
+    expect(state.session).toBeNull();
+  });
+
+  it("permite administrador em IP liberado por ADMIN_TRUSTED_NETWORKS", async () => {
+    state.ip = "203.0.113.9";
+    process.env.ADMIN_TRUSTED_NETWORKS = "203.0.113.0/24";
+
+    let redirectError: unknown = null;
+    try {
+      await loginAction({}, loginForm(admin.email, "senha12345"));
+    } catch (error) {
+      redirectError = error;
+    }
+
+    expect(redirectError).toBeTruthy();
+    expect(state.session).toMatchObject({
+      userId: admin.id,
+      role: "admin",
+    });
+  });
+
+  it("não restringe o login de membros pela rede", async () => {
+    state.ip = "203.0.113.9";
+
+    let redirectError: unknown = null;
+    try {
+      await loginAction({}, loginForm(member.email, "senha12345"));
+    } catch (error) {
+      redirectError = error;
+    }
+
+    expect(redirectError).toBeTruthy();
+    expect(state.session).toMatchObject({
+      userId: member.id,
+      role: "membro",
+    });
   });
 
   it("limita tentativas por e-mail e por IP", async () => {

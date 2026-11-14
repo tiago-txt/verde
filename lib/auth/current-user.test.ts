@@ -11,7 +11,10 @@ import {
 import { users } from "@/lib/db/schema";
 import { createSessionToken } from "./jwt";
 
-const state = vi.hoisted(() => ({ token: null as string | null }));
+const state = vi.hoisted(() => ({
+  token: null as string | null,
+  ip: "192.168.1.10",
+}));
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({
@@ -19,6 +22,7 @@ vi.mock("next/headers", () => ({
     set: () => {},
     delete: () => {},
   }),
+  headers: async () => new Headers({ "x-forwarded-for": state.ip }),
 }));
 
 let testDb: TestDatabase;
@@ -51,10 +55,13 @@ beforeEach(() => {
     ativo: false,
   });
   state.token = null;
+  state.ip = "192.168.1.10";
+  delete process.env.ADMIN_TRUSTED_NETWORKS;
 });
 
 afterEach(() => {
   state.token = null;
+  delete process.env.ADMIN_TRUSTED_NETWORKS;
   resetTestDatabase();
 });
 
@@ -95,5 +102,25 @@ describe("sessão e usuário atual", () => {
     state.token = await tokenFor(active, inactive.workspaceId);
     const { getCurrentUser } = await import("./current-user");
     expect(await getCurrentUser()).toBeNull();
+  });
+
+  it("libera admin na rede local e bloqueia fora dela", async () => {
+    state.token = await tokenFor(active);
+
+    const { requireAdmin } = await import("./current-user");
+    await expect(requireAdmin()).resolves.toMatchObject({ id: active.id });
+
+    state.ip = "203.0.113.9";
+    vi.resetModules();
+    const fresh = await import("./current-user");
+
+    let redirectError: { digest?: string } | null = null;
+    try {
+      await fresh.requireAdmin();
+    } catch (error) {
+      redirectError = error as { digest?: string };
+    }
+
+    expect(redirectError?.digest ?? "").toContain("/configuracoes");
   });
 });

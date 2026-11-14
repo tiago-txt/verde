@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Database, Tags, Users, Wallet, CreditCard, UserRound } from "lucide-react";
+import { Database, Tags, Users, Wallet, CreditCard, UserRound, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,6 +17,7 @@ import { SecondaryInfoToggle } from "@/components/settings/secondary-info-toggle
 import { FinancePreferences } from "@/components/settings/finance-preferences";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireUser } from "@/lib/auth/current-user";
+import { getAdminNetworkAccess } from "@/lib/auth/admin-access";
 import { getFinancePreferences } from "@/lib/db/queries/finance-preferences";
 import { formatDateTime, getInitials } from "@/lib/format";
 
@@ -24,6 +25,10 @@ export const metadata: Metadata = { title: "Configurações" };
 
 export default async function ConfiguracoesPage() {
   const user = await requireUser();
+  const adminAccess =
+    user.role === "admin" ? await getAdminNetworkAccess() : null;
+  const restricted = adminAccess !== null && !adminAccess.allowed;
+
   const preferences = getFinancePreferences(user.workspaceId, user.id);
 
   return (
@@ -32,6 +37,26 @@ export default async function ConfiguracoesPage() {
         title="Configurações"
         description="Sua conta, aparência e informações do servidor."
       />
+
+      {restricted && adminAccess && (
+        <div
+          role="status"
+          className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <div className="space-y-1">
+            <p className="font-medium">Administração restrita à rede local</p>
+            <p className="text-muted-foreground">
+              Você está conectado por{" "}
+              <code className="rounded bg-muted px-1">
+                {adminAccess.ip ?? "um IP não identificado"}
+              </code>
+              . Criar, desativar e excluir usuários só funciona na rede local ou
+              em IPs autorizados. O restante do Verde continua disponível.
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         <Button asChild variant="outline" className="h-12 justify-start">
@@ -171,11 +196,13 @@ export default async function ConfiguracoesPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              {user.role === "admin"
-                ? "Crie usuários, redefina senhas e ative/desative contas. Você não vê os dados financeiros de outros usuários."
-                : "Novos usuários são criados pelo administrador do Verde."}
+              {user.role !== "admin"
+                ? "Novos usuários são criados pelo administrador do Verde."
+                : adminAccess?.allowed
+                  ? "Crie usuários, redefina senhas e ative/desative contas. Você não vê os dados financeiros de outros usuários."
+                  : "As funções de administrador só ficam disponíveis na rede local ou em IPs autorizados."}
             </p>
-            {user.role === "admin" && (
+            {user.role === "admin" && adminAccess?.allowed && (
               <Button asChild variant="outline" className="mt-3">
                 <Link href="/configuracoes/usuarios">
                   <Users className="h-4 w-4" />
