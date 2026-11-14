@@ -12,7 +12,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import type { MonthSummaryWithBudgets } from "@/lib/finance/budgets";
-import { buildFooterSummary } from "@/lib/finance/summary-display";
+import {
+  buildFooterBreakdown,
+  buildFooterSummary,
+  type FooterBreakdownItem,
+} from "@/lib/finance/summary-display";
 import {
   CARD_BASIS_HELP,
   CARD_BASIS_LABELS,
@@ -109,51 +113,47 @@ function StatementRow({
 }
 
 function Statement({
-  result,
-  basis,
-  openingBalance,
-  projected,
+  values,
   onOpen,
 }: {
-  result: ResultSummary;
-  basis: CardBasis;
-  openingBalance: number;
-  projected: number;
+  values: ReturnType<typeof buildFooterSummary>;
   onOpen: (kind: "despesa" | "receita") => void;
 }) {
-  const accumulated = openingBalance + result.saldo;
   return (
     <dl className="space-y-1">
-      <StatementRow
-        label="saldo anterior em contas (total)"
-        value={openingBalance}
-      />
+      <StatementRow label="saldo anterior" value={values.saldoAnterior} />
       <div className="border-t border-border/70" />
       <StatementRow
-        label={`receita (${CARD_BASIS_LABELS[basis].toLowerCase()})`}
-        value={result.receitas}
+        label="receita realizada"
+        value={values.entradas}
         tone="text-success"
+      />
+      <StatementRow
+        label="receita prevista"
+        value={values.entradasPrevistas}
         onOpen={() => onOpen("receita")}
       />
       <StatementRow
-        label={`despesa (${CARD_BASIS_LABELS[basis].toLowerCase()})`}
-        value={-result.despesas}
+        label="despesa realizada"
+        value={-values.saidas}
         tone="text-destructive"
+      />
+      <StatementRow
+        label="despesa prevista"
+        value={-values.saidasPrevistas}
         onOpen={() => onOpen("despesa")}
       />
       <div className="border-t border-border/70" />
       <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 pt-0.5">
         <span className="flex items-baseline gap-2">
-          <span className="text-xs text-muted-foreground">
-            resultado do mês
-          </span>
+          <span className="text-xs text-muted-foreground">saldo</span>
           <span
             className={cn(
               "tabular text-sm font-semibold",
-              closingTone(result.saldo),
+              closingTone(values.saldo),
             )}
           >
-            {plainNumber.format(result.saldo / 100)}
+            {plainNumber.format(values.saldo / 100)}
           </span>
         </span>
         <span className="flex items-baseline gap-2">
@@ -161,16 +161,13 @@ function Statement({
           <span
             className={cn(
               "tabular text-sm font-semibold",
-              closingTone(projected),
+              closingTone(values.previsto),
             )}
           >
-            {plainNumber.format(projected / 100)}
+            {plainNumber.format(values.previsto / 100)}
           </span>
         </span>
       </div>
-      <p className="pt-1 text-xs text-muted-foreground">
-        Resultado acumulado: {plainNumber.format(accumulated / 100)}.
-      </p>
     </dl>
   );
 }
@@ -186,32 +183,56 @@ export function TransactionsSummaryFooter({
   const [breakdownKind, setBreakdownKind] = useState<
     "despesa" | "receita" | null
   >(null);
-  const values = buildFooterSummary(summary, openingBalance);
-  // Competência já reconhece as compras do mês; não soma a fatura virtual.
-  const reservations = summary.provisoesOrcamento ?? 0;
-  const releases = summary.sobrasOrcamento ?? 0;
-  const previsto =
+
+  // Caixa usa o resumo original (realizado + previsto com faturas/orçamento).
+  // Competência usa o resultado por competência, sem somar a fatura virtual.
+  const effectiveSummary =
     basis === "caixa"
-      ? values.previsto
-      : openingBalance + result.saldo - reservations + releases;
-  const items = breakdownKind ? result.breakdown[breakdownKind] : [];
+      ? summary
+      : {
+          ...summary,
+          entradasPagas: result.receitas,
+          saidasPagas: result.despesas,
+          entradasPrevistas: result.receitas,
+          saidasPrevistas: result.despesas,
+          saldoRealizado: result.saldo,
+          saldoPrevisto: result.saldo,
+          faturasCartao: 0,
+          pagamentosFatura: 0,
+          provisoesOrcamento: 0,
+          sobrasOrcamento: 0,
+        };
+
+  const values = buildFooterSummary(effectiveSummary, openingBalance);
+  const legacyBreakdown = buildFooterBreakdown(effectiveSummary);
+  const resultBreakdown = result.breakdown;
+  const items: FooterBreakdownItem[] =
+    basis === "caixa"
+      ? breakdownKind
+        ? legacyBreakdown[breakdownKind]
+        : []
+      : breakdownKind
+        ? resultBreakdown[breakdownKind]
+        : [];
   const breakdownTotal = items.reduce((sum, item) => sum + item.value, 0);
   const shownTotal =
-    breakdownKind === "despesa" ? result.despesas : result.receitas;
+    breakdownKind === "despesa"
+      ? values.saidasPrevistas
+      : values.entradasPrevistas;
 
   const totals = (
     <>
       <Value
-        label="Resultado do mês"
-        value={result.saldo}
-        tone={closingTone(result.saldo)}
+        label="Saldo"
+        value={values.saldo}
+        tone={closingTone(values.saldo)}
         strong
         align="right"
       />
       <Value
         label="Previsto"
-        value={previsto}
-        tone={closingTone(previsto)}
+        value={values.previsto}
+        tone={closingTone(values.previsto)}
         strong
         align="right"
       />
@@ -224,13 +245,13 @@ export function TransactionsSummaryFooter({
         {expanded && (
           <div className="mx-auto max-w-7xl px-8 pt-3">
             <div className="ml-auto w-full max-w-sm border-b border-border pb-3">
-              <Statement
-                result={result}
-                basis={basis}
-                openingBalance={openingBalance}
-                projected={previsto}
-                onOpen={setBreakdownKind}
-              />
+              <p className="mb-2 text-xs text-muted-foreground">
+                Base do resultado:{" "}
+                <span className="font-medium text-foreground">
+                  {CARD_BASIS_LABELS[basis]}
+                </span>
+              </p>
+              <Statement values={values} onOpen={setBreakdownKind} />
             </div>
           </div>
         )}
@@ -260,15 +281,15 @@ export function TransactionsSummaryFooter({
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
             <div className="min-w-0 text-right">
               <p className="text-xs leading-tight text-muted-foreground">
-                Resultado do mês
+                Saldo
               </p>
               <p
                 className={cn(
                   "tabular truncate text-sm font-semibold leading-tight tracking-tight min-[380px]:text-base",
-                  closingTone(result.saldo),
+                  closingTone(values.saldo),
                 )}
               >
-                {formatCurrency(result.saldo)}
+                {formatCurrency(values.saldo)}
               </p>
             </div>
             <div className="min-w-0 text-right">
@@ -278,10 +299,10 @@ export function TransactionsSummaryFooter({
               <p
                 className={cn(
                   "tabular truncate text-sm font-semibold leading-tight tracking-tight min-[380px]:text-base",
-                  closingTone(previsto),
+                  closingTone(values.previsto),
                 )}
               >
-                {formatCurrency(previsto)}
+                {formatCurrency(values.previsto)}
               </p>
             </div>
           </div>
@@ -303,15 +324,13 @@ export function TransactionsSummaryFooter({
           <DialogHeader>
             <DialogTitle>Resumo do mês</DialogTitle>
             <DialogDescription>
-              Resultado na base {CARD_BASIS_LABELS[basis].toLowerCase()}.{" "}
+              Saldo, receitas e despesas usados no rodapé. Base do resultado:{" "}
+              {CARD_BASIS_LABELS[basis].toLowerCase()}.{" "}
               {CARD_BASIS_HELP[basis]}
             </DialogDescription>
           </DialogHeader>
           <Statement
-            result={result}
-            basis={basis}
-            openingBalance={openingBalance}
-            projected={previsto}
+            values={values}
             onOpen={(kind) => {
               setSummaryOpen(false);
               setBreakdownKind(kind);
@@ -331,8 +350,8 @@ export function TransactionsSummaryFooter({
             <DialogTitle>De onde vem este número</DialogTitle>
             <DialogDescription>
               {breakdownKind === "despesa"
-                ? `Composição da despesa do mês (${CARD_BASIS_LABELS[basis].toLowerCase()}).`
-                : `Composição da receita do mês (${CARD_BASIS_LABELS[basis].toLowerCase()}).`}
+                ? "Composição da despesa prevista do mês."
+                : "Composição da receita prevista do mês."}
             </DialogDescription>
           </DialogHeader>
 
