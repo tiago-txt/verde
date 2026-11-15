@@ -222,7 +222,7 @@ type PreparedContext = {
   input: SpreadsheetImportRequestInput;
   accountById: Map<string, { id: string; nome: string }>;
   accountByName: Map<string, { id: string; nome: string }>;
-  cardById: Map<string, { id: string; nome: string; diaFechamento: number; diaVencimento: number; fechamentoCompra: "proxima_fatura" | "fatura_atual" }>;
+  cardById: Map<string, { id: string; nome: string; diaFechamento: number; diaVencimento: number; fechamentoCompra: "proxima_fatura" | "fatura_atual"; apelidos: string[] }>;
   cardByName: Map<string, string>;
   categoryById: Map<string, { id: string; nome: string; tipo: "despesa" | "receita" }>;
   categoryByKey: Map<string, { id: string; nome: string; tipo: "despesa" | "receita" }>;
@@ -254,6 +254,7 @@ function prepareContext(
       diaFechamento: creditCards.diaFechamento,
       diaVencimento: creditCards.diaVencimento,
       fechamentoCompra: creditCards.fechamentoCompra,
+      apelidos: creditCards.apelidos,
     })
     .from(creditCards)
     .where(and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt)))
@@ -289,6 +290,15 @@ function prepareContext(
     .groupBy(transactions.contaId)
     .all();
 
+  const cardByName = new Map<string, string>();
+  for (const row of cardRows) {
+    cardByName.set(normalizeEntityName(row.nome), row.id);
+    for (const alias of row.apelidos ?? []) {
+      const key = normalizeEntityName(alias);
+      if (key && !cardByName.has(key)) cardByName.set(key, row.id);
+    }
+  }
+
   return {
     db,
     workspaceId,
@@ -298,9 +308,7 @@ function prepareContext(
       accountRows.map((row) => [normalizeEntityName(row.nome), row]),
     ),
     cardById: new Map(cardRows.map((row) => [row.id, row])),
-    cardByName: new Map(
-      cardRows.map((row) => [normalizeEntityName(row.nome), row.id]),
-    ),
+    cardByName,
     categoryById: new Map(categoryRows.map((row) => [row.id, row])),
     categoryByKey: new Map(
       categoryRows.map((row) => [
@@ -1687,6 +1695,7 @@ export async function importSpreadsheetImportAction(
             cor: "#818cf8",
             icone: "CreditCard",
             arquivado: creation.arquivado,
+            apelidos: [],
             createdAt: now,
             updatedAt: now,
           })

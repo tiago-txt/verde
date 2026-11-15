@@ -600,4 +600,59 @@ describe("importação de planilha", () => {
     // Não cria pagamentos/transferências artificiais.
     expect(countTransactions()).toBe(9);
   });
+
+  it("reutiliza cartão existente por alias em vez de criar fantasma", async () => {
+    const now = new Date();
+    const amazonId = crypto.randomUUID();
+    testDb.db
+      .insert(creditCards)
+      .values({
+        id: amazonId,
+        workspaceId: user.workspaceId,
+        nome: "Amazon Prime",
+        bandeira: "visa",
+        limite: 0,
+        diaFechamento: 5,
+        diaVencimento: 15,
+        fechamentoCompra: "proxima_fatura",
+        contaPagamentoId: null,
+        cor: "#818cf8",
+        icone: "CreditCard",
+        arquivado: true,
+        apelidos: ["Carbono"],
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
+
+    const result = await importSpreadsheetImportAction(buildRequest());
+    if (!result.ok) throw new Error(result.error);
+
+    const carbono = testDb.db
+      .select()
+      .from(creditCards)
+      .where(
+        and(
+          eq(creditCards.workspaceId, user.workspaceId),
+          eq(creditCards.nome, "Carbono"),
+        ),
+      )
+      .get();
+    expect(carbono).toBeUndefined();
+
+    const payment = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(
+            transactions.descricao,
+            "Pagamento de fatura - Carbono - Agosto de 2022",
+          ),
+        ),
+      )
+      .get();
+    expect(payment?.cartaoDestinoId).toBe(amazonId);
+  });
 });

@@ -31,6 +31,8 @@ describe("rodapé de resumo", () => {
       entradasPrevistas: 600_000,
       saidasPrevistas: 325_000,
       totalPrevisto: 275_000,
+      pendenciasAnterioresDespesas: 0,
+      pendenciasAnterioresReceitas: 0,
       saldoAnterior: 0,
       saldo: 300_000,
       previsto: 275_000,
@@ -84,6 +86,7 @@ describe("rodapé de resumo", () => {
     expect(breakdown.despesa.map((item) => item.id)).toEqual([
       "despesas-pagas",
       "despesas-a-pagar",
+      "pendencias-anteriores-despesas",
       "pagamentos-fatura",
       "faturas-restantes",
       "reservas",
@@ -102,6 +105,28 @@ describe("rodapé de resumo", () => {
     expect(total).toBe(footer.entradasPrevistas);
     expect(breakdown.receita.find((item) => item.id === "liberacoes")?.value).toBe(
       -7_000,
+    );
+  });
+
+  it("pendências de meses anteriores entram no previsto e no detalhamento", () => {
+    const summary = {
+      ...base,
+      pendenciasAnterioresDespesas: 33_200,
+      pendenciasAnterioresReceitas: 0,
+    };
+    const footer = buildFooterSummary(summary, 38_200);
+    expect(footer.pendenciasAnterioresDespesas).toBe(33_200);
+    expect(footer.totalPrevisto).toBe(300_000 - 33_200);
+    expect(footer.previsto).toBe(38_200 + 300_000 - 33_200);
+
+    const breakdown = buildFooterBreakdown(summary);
+    expect(
+      breakdown.despesa.find(
+        (item) => item.id === "pendencias-anteriores-despesas",
+      )?.value,
+    ).toBe(33_200);
+    expect(breakdown.despesa.reduce((sum, item) => sum + item.value, 0)).toBe(
+      footer.saidasPrevistas + 33_200,
     );
   });
 });

@@ -197,6 +197,11 @@ type TransactionsPageClientProps = {
   cardBasis: CardBasis;
   result: ResultSummary;
   dayBalanceMode: "realizado" | "previsto";
+  pendenciasAnteriores: {
+    despesas: number;
+    receitas: number;
+    count: number;
+  };
 };
 
 type TransactionDayGroup = {
@@ -223,6 +228,7 @@ export function TransactionsPageClient({
   cardBasis,
   result,
   dayBalanceMode,
+  pendenciasAnteriores,
 }: TransactionsPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -412,13 +418,23 @@ export function TransactionsPageClient({
   const summary = useMemo(
     () =>
       aplicarFaturasAoResumo(
-        aplicarEventosAoResumo(
-          summarizeTransactions(optimisticTransactions),
-          budgetEvents,
-        ),
+        {
+          ...aplicarEventosAoResumo(
+            summarizeTransactions(optimisticTransactions),
+            budgetEvents,
+          ),
+          pendenciasAnterioresDespesas: pendenciasAnteriores.despesas,
+          pendenciasAnterioresReceitas: pendenciasAnteriores.receitas,
+        },
         cardInvoiceEvents,
       ),
-    [optimisticTransactions, budgetEvents, cardInvoiceEvents],
+    [
+      optimisticTransactions,
+      budgetEvents,
+      cardInvoiceEvents,
+      pendenciasAnteriores.despesas,
+      pendenciasAnteriores.receitas,
+    ],
   );
   const hasMoreDays = groups.length > filters.dias;
   const activeFilters = hasActiveFilters(filters);

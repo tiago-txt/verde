@@ -253,6 +253,11 @@ export const creditCards = sqliteTable(
      * do histórico/limite. Não cria pagamentos nem altera saldos de contas.
      */
     faturasPagasAte: text("faturas_pagas_ate"),
+    /** Nomes antigos usados para reconhecer o cartão em importações. */
+    apelidos: text("apelidos", { mode: "json" })
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     contaPagamentoId: text("conta_pagamento_id").references(() => accounts.id, {
       onDelete: "set null",
     }),

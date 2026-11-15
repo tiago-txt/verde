@@ -7,6 +7,8 @@ export type FooterSummary = {
   entradasPrevistas: number;
   saidasPrevistas: number;
   totalPrevisto: number;
+  pendenciasAnterioresDespesas: number;
+  pendenciasAnterioresReceitas: number;
   /** Saldo de tudo o que veio antes do mês (conta + lançamentos). */
   saldoAnterior: number;
   /** Fechamento realizado: saldo anterior + receitas pagas − saídas pagas. */
@@ -20,6 +22,8 @@ type SummaryWithBreakdown = MonthSummary & {
   sobrasOrcamento?: number;
   faturasCartao?: number;
   pagamentosFatura?: number;
+  pendenciasAnterioresDespesas?: number;
+  pendenciasAnterioresReceitas?: number;
 };
 
 export type FooterBreakdownItem = {
@@ -47,7 +51,15 @@ export function buildFooterSummary(
   const sobras = summary.sobrasOrcamento ?? 0;
   const entradasPrevistas = summary.entradasPrevistas - sobras;
   const saidasPrevistas = summary.saidasPrevistas - sobras;
-  const totalPrevisto = entradasPrevistas - saidasPrevistas;
+  const pendenciasAnterioresDespesas =
+    summary.pendenciasAnterioresDespesas ?? 0;
+  const pendenciasAnterioresReceitas =
+    summary.pendenciasAnterioresReceitas ?? 0;
+  const totalPrevisto =
+    entradasPrevistas -
+    saidasPrevistas -
+    pendenciasAnterioresDespesas +
+    pendenciasAnterioresReceitas;
 
   return {
     entradas: summary.entradasPagas,
@@ -56,6 +68,8 @@ export function buildFooterSummary(
     entradasPrevistas,
     saidasPrevistas,
     totalPrevisto,
+    pendenciasAnterioresDespesas,
+    pendenciasAnterioresReceitas,
     saldoAnterior,
     saldo: saldoAnterior + summary.saldoRealizado,
     previsto: saldoAnterior + totalPrevisto,
@@ -95,6 +109,12 @@ export function buildFooterBreakdown(
         href: "/lancamentos?status=nao_pagos",
       },
       {
+        id: "pendencias-anteriores-despesas",
+        label: "Em aberto de meses anteriores",
+        value: summary.pendenciasAnterioresDespesas ?? 0,
+        href: "/lancamentos?status=nao_pagos",
+      },
+      {
         id: "pagamentos-fatura",
         label: "Pagamentos de fatura",
         value: pagamentosFatura,
@@ -130,6 +150,12 @@ export function buildFooterBreakdown(
         id: "receitas-a-receber",
         label: "Receitas a receber",
         value: summary.entradasPrevistas - summary.entradasPagas,
+        href: "/lancamentos?status=nao_pagos",
+      },
+      {
+        id: "pendencias-anteriores-receitas",
+        label: "Em aberto de meses anteriores",
+        value: summary.pendenciasAnterioresReceitas ?? 0,
         href: "/lancamentos?status=nao_pagos",
       },
       {

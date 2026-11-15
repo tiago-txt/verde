@@ -30,6 +30,8 @@ type TransactionsSummaryFooterProps = {
   summary: MonthSummaryWithBudgets & {
     faturasCartao?: number;
     pagamentosFatura?: number;
+    pendenciasAnterioresDespesas?: number;
+    pendenciasAnterioresReceitas?: number;
   };
   openingBalance?: number;
   basis: CardBasis;
@@ -201,6 +203,8 @@ export function TransactionsSummaryFooter({
           pagamentosFatura: 0,
           provisoesOrcamento: 0,
           sobrasOrcamento: 0,
+          pendenciasAnterioresDespesas: 0,
+          pendenciasAnterioresReceitas: 0,
         };
 
   const values = buildFooterSummary(effectiveSummary, openingBalance);
@@ -386,6 +390,13 @@ export function TransactionsSummaryFooter({
             A soma dos componentes é {formatCurrency(breakdownTotal)} e o valor
             exibido no rodapé é {formatCurrency(shownTotal)}.
           </p>
+          {(breakdownKind === "despesa"
+            ? values.pendenciasAnterioresDespesas
+            : values.pendenciasAnterioresReceitas) > 0 && (
+            <p className="text-xs text-muted-foreground">
+              A diferença inclui “Em aberto de meses anteriores”.
+            </p>
+          )}
         </DialogContent>
       </Dialog>
     </>

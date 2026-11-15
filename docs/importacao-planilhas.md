@@ -88,8 +88,22 @@ cálculo do limite e do histórico.
 
 Essa opção **não cria pagamentos e não altera o saldo das contas**. Ela apenas
 marca as faturas históricas como quitadas para não inflarem o limite usado. É
-possível remover a marcação depois. Para juntar um cartão histórico ao cartão
-correto, use **Incorporar em outro cartão**.
+possível remover a marcação depois.
+
+## Separar histórico de cartão
+
+Quando um cartão foi renomeado e continuou como outro cartão, use
+**Cartões → Separar histórico por fatura**. O corte é pela fatura, não pela
+data da compra: compras de fevereiro com fatura de março ficam no cartão novo.
+O cartão antigo fica arquivado por padrão e pode ser desarquivado depois.
+
+## Pendências de meses anteriores
+
+Despesas e receitas de conta em aberto de meses anteriores entram no
+**previsto** do mês atual enquanto não forem pagas. O rodapé principal mantém
+os valores do mês, e a composição aparece no popover de informações de
+“despesa prevista”/“receita prevista” em **Em aberto de meses anteriores**.
+Compras de cartão e pagamentos de fatura não entram nessa lista.
 
 ## Começar de novo
 

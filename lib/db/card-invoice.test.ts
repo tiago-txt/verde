@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   createTestDatabase,
   createWorkspaceUser,
@@ -14,6 +14,8 @@ import { createCardAction, payInvoiceAction } from "@/lib/actions/cards";
 import {
   markHistoricalInvoicesPaidAction,
   mergeCardsAction,
+  previewCardSplitAction,
+  splitCardHistoryAction,
 } from "@/lib/actions/cards";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { deleteTransactionAction } from "@/lib/actions/transactions";
@@ -24,9 +26,9 @@ import {
   listCards,
 } from "./queries/cards";
 import type { CardInvoiceFilters } from "@/lib/finance/cards";
-import { getMonthBalances, listMonthTransactions } from "./queries/transactions";
+import { getMonthBalances, getPendenciasAntesDoMes, listMonthTransactions } from "./queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
-import { todayISO } from "@/lib/dates";
+import { addMonths, todayISO } from "@/lib/dates";
 
 const state = vi.hoisted(() => ({ user: null as User | null }));
 
@@ -588,5 +590,303 @@ describe("fatura como evento único", () => {
       restante: 20_000,
       consideradaPaga: false,
     });
+  });
+
+  it("inclui lançamentos pagos com data futura no realizado e na abertura seguinte", async () => {
+    const fixture = await setupInvoice();
+    const futureMonth = addMonths(todayISO().slice(0, 7), 1);
+    const nextMonth = addMonths(futureMonth, 1);
+    const now = new Date();
+
+    testDb.db
+      .insert(transactions)
+      .values([
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "receita",
+          descricao: "Receita futura paga",
+          valor: 110_000,
+          data: `${futureMonth}-10`,
+          pago: true,
+          contaId: fixture.accountId,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa",
+          descricao: "Despesa futura paga",
+          valor: 65_000,
+          data: `${futureMonth}-11`,
+          pago: true,
+          contaId: fixture.accountId,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .run();
+
+    const nextOpening = getMonthBalances(
+      user.workspaceId,
+      nextMonth,
+      "realizado",
+    ).opening;
+    expect(nextOpening).toBe(100_000 + 110_000 - 65_000);
+
+    const monthBalances = getMonthBalances(
+      user.workspaceId,
+      futureMonth,
+      "realizado",
+    ).byDay;
+    expect(monthBalances[`${futureMonth}-10`]).toBe(100_000 + 110_000);
+    expect(monthBalances[`${futureMonth}-11`]).toBe(
+      100_000 + 110_000 - 65_000,
+    );
+  });
+
+  it("carrega despesas não pagas de meses anteriores como pendências", async () => {
+    const fixture = await setupInvoice();
+    const now = new Date();
+    testDb.db
+      .insert(transactions)
+      .values(
+        [15_000, 15_000, 3_200].map((valor, index) => ({
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa" as const,
+          descricao: `Investimento ${index + 1}`,
+          valor,
+          data: "2026-11-10",
+          pago: false,
+          contaId: fixture.accountId,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      )
+      .run();
+
+    expect(getPendenciasAntesDoMes(user.workspaceId, "2026-12")).toEqual({
+      despesas: 33_200,
+      receitas: 0,
+      count: 3,
+    });
+  });
+
+  it("separa o histórico por fatura, não pela data da compra", async () => {
+    setCurrent(user);
+    const account = await createAccountAction({
+      nome: "Conta split",
+      tipo: "corrente",
+      saldoInicial: 0,
+      cor: "#34d399",
+      icone: "Wallet",
+    });
+    if (!account.ok || !account.id) throw new Error("conta");
+
+    const now = new Date();
+    const sourceId = crypto.randomUUID();
+    const targetId = crypto.randomUUID();
+    testDb.db
+      .insert(creditCards)
+      .values([
+        {
+          id: sourceId,
+          workspaceId: user.workspaceId,
+          nome: "Amazon Prime",
+          bandeira: "visa",
+          limite: 500_000,
+          diaFechamento: 5,
+          diaVencimento: 15,
+          fechamentoCompra: "proxima_fatura",
+          contaPagamentoId: account.id,
+          cor: "#818cf8",
+          icone: "CreditCard",
+          arquivado: false,
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: targetId,
+          workspaceId: user.workspaceId,
+          nome: "Carbono",
+          bandeira: "outra",
+          limite: 0,
+          diaFechamento: 1,
+          diaVencimento: 10,
+          fechamentoCompra: "proxima_fatura",
+          contaPagamentoId: account.id,
+          cor: "#818cf8",
+          icone: "CreditCard",
+          arquivado: true,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .run();
+
+    testDb.db
+      .insert(transactions)
+      .values([
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa",
+          descricao: "Compra fatura fevereiro",
+          valor: 10_000,
+          data: "2025-02-04",
+          pago: false,
+          cartaoId: sourceId,
+          faturaChaveOverride: "2025-02",
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa",
+          descricao: "Keystone 3/10",
+          valor: 20_000,
+          data: "2025-02-09",
+          pago: false,
+          cartaoId: sourceId,
+          faturaChaveOverride: "2025-03",
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "despesa",
+          descricao: "Compra fatura abril",
+          valor: 30_000,
+          data: "2025-03-09",
+          pago: false,
+          cartaoId: sourceId,
+          faturaChaveOverride: "2025-04",
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "transferencia",
+          descricao: "Pagamento fevereiro",
+          valor: 10_000,
+          data: "2025-02-15",
+          pago: true,
+          contaId: account.id,
+          cartaoDestinoId: sourceId,
+          faturaChave: "2025-02",
+          createdAt: now,
+          updatedAt: now,
+        },
+        {
+          id: crypto.randomUUID(),
+          workspaceId: user.workspaceId,
+          tipo: "transferencia",
+          descricao: "Pagamento março",
+          valor: 20_000,
+          data: "2025-03-10",
+          pago: true,
+          contaId: account.id,
+          cartaoDestinoId: sourceId,
+          faturaChave: "2025-03",
+          createdAt: now,
+          updatedAt: now,
+        },
+      ])
+      .run();
+
+    const preview = await previewCardSplitAction({
+      sourceId,
+      cutoffInvoice: "2025-02",
+    });
+    expect(preview.ok).toBe(true);
+    if (!preview.ok) return;
+    expect(preview.preview).toMatchObject({
+      purchases: 1,
+      payments: 1,
+      oldInvoices: { from: "2025-02", to: "2025-02" },
+      newInvoices: { from: "2025-03", to: "2025-04" },
+    });
+
+    const result = await splitCardHistoryAction({
+      sourceId,
+      targetId,
+      cutoffInvoice: "2025-02",
+      keepTargetArchived: true,
+      copyCycleFromSource: true,
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.count).toBe(2);
+
+    const targetPurchases = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.cartaoId, targetId),
+        ),
+      )
+      .all();
+    expect(targetPurchases.map((row) => row.descricao)).toEqual([
+      "Compra fatura fevereiro",
+    ]);
+
+    const sourcePurchases = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.cartaoId, sourceId),
+        ),
+      )
+      .all();
+    expect(sourcePurchases.map((row) => row.descricao).sort()).toEqual([
+      "Compra fatura abril",
+      "Keystone 3/10",
+    ]);
+
+    const movedPayment = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.descricao, "Pagamento fevereiro"),
+        ),
+      )
+      .get();
+    expect(movedPayment?.cartaoDestinoId).toBe(targetId);
+
+    const target = testDb.db
+      .select()
+      .from(creditCards)
+      .where(eq(creditCards.id, targetId))
+      .get();
+    expect(target).toMatchObject({
+      arquivado: true,
+      diaFechamento: 5,
+      diaVencimento: 15,
+    });
+
+    const source = testDb.db
+      .select()
+      .from(creditCards)
+      .where(eq(creditCards.id, sourceId))
+      .get();
+    expect(source?.deletedAt).toBeNull();
+
+    const idempotent = await splitCardHistoryAction({
+      sourceId,
+      targetId,
+      cutoffInvoice: "2025-02",
+    });
+    expect(idempotent).toMatchObject({ ok: true, count: 0 });
   });
 });

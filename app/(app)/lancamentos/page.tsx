@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth/current-user";
 import {
   ensureRecurrencesForMonth,
   getMonthBalances,
+  getPendenciasAntesDoMes,
   getTransactionDetail,
   getTransactionFormData,
   listMonthTransactions,
@@ -37,6 +38,9 @@ export default async function LancamentosPage({
   const transactions = listMonthTransactions(workspaceId, filters);
   const formData = getTransactionFormData(workspaceId);
   const customRange = Boolean(filters.de && filters.ate);
+  const pendenciasAnteriores = customRange
+    ? { despesas: 0, receitas: 0, count: 0 }
+    : getPendenciasAntesDoMes(workspaceId, filters.mes);
   const budgetEvents = customRange
     ? []
     : getBudgetEventsForMonth(workspaceId, filters.mes, filters, {
@@ -106,6 +110,7 @@ export default async function LancamentosPage({
       cardBasis={cardBasis}
       result={result}
       dayBalanceMode={monthBalances.modo}
+      pendenciasAnteriores={pendenciasAnteriores}
     />
   );
 }

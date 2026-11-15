@@ -9,9 +9,11 @@ import {
   ArrowRightLeft,
   CheckCheck,
   CreditCard,
+  Loader2,
   MoreVertical,
   Pencil,
   Plus,
+  Split,
   Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +33,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Checkbox } from "@/components/ui/checkbox";
 import { EmptyState } from "@/components/empty-state";
+import { FormError } from "@/components/form-feedback";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -43,8 +47,11 @@ import {
   deleteCardAction,
   markHistoricalInvoicesPaidAction,
   mergeCardsAction,
+  previewCardSplitAction,
   setCardArchivedAction,
+  splitCardHistoryAction,
   updateCardAction,
+  type CardSplitPreview,
 } from "@/lib/actions/cards";
 import type { CardWithInvoice } from "@/lib/db/queries/cards";
 import type { CreditCard as CreditCardRow } from "@/lib/db/schema";
@@ -93,9 +100,21 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
   const [mergeTargetId, setMergeTargetId] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyUntil, setHistoryUntil] = useState(todayISO());
+  const [splitting, setSplitting] = useState<CardWithInvoice | null>(null);
+  const [splitCutoff, setSplitCutoff] = useState("");
+  const [splitTarget, setSplitTarget] = useState("");
+  const [splitNewName, setSplitNewName] = useState("");
+  const [splitKeepArchived, setSplitKeepArchived] = useState(true);
+  const [splitCopyCycle, setSplitCopyCycle] = useState(true);
+  const [splitPreview, setSplitPreview] = useState<CardSplitPreview | null>(
+    null,
+  );
+  const [splitError, setSplitError] = useState<string | null>(null);
+  const [splitPending, startSplitTransition] = useTransition();
 
   const visible = showArchived ? cards : cards.filter((card) => !card.arquivado);
   const mergeTargets = cards.filter((card) => card.id !== merging?.id);
+  const splitTargets = cards.filter((card) => card.id !== splitting?.id);
   const hasHistoryCutoff = cards.some((card) => card.faturasPagasAte);
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
@@ -122,6 +141,74 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
       router.refresh();
     }
     return { ok: result.ok, error: result.ok ? undefined : result.error };
+  }
+
+  function openSplit(card: CardWithInvoice) {
+    setSplitting(card);
+    setSplitCutoff("");
+    setSplitTarget("");
+    setSplitNewName("");
+    setSplitKeepArchived(true);
+    setSplitCopyCycle(true);
+    setSplitPreview(null);
+    setSplitError(null);
+  }
+
+  function runSplitPreview() {
+    if (!splitting || !splitCutoff) {
+      setSplitError("Escolha a última fatura do cartão antigo.");
+      return;
+    }
+    setSplitError(null);
+    setSplitPreview(null);
+    startSplitTransition(async () => {
+      const response = await previewCardSplitAction({
+        sourceId: splitting.id,
+        cutoffInvoice: splitCutoff,
+      });
+      if (!response.ok) {
+        setSplitError(response.error);
+        return;
+      }
+      setSplitPreview(response.preview);
+    });
+  }
+
+  function confirmSplit() {
+    if (!splitting || !splitCutoff || !splitPreview) {
+      setSplitError("Pré-visualize a separação antes de confirmar.");
+      return;
+    }
+    const targetId = splitTarget && splitTarget !== "new" ? splitTarget : null;
+    const newCardName =
+      splitTarget === "new" ? splitNewName.trim() : null;
+    if (!targetId && !newCardName) {
+      setSplitError("Escolha o cartão de destino ou informe um novo nome.");
+      return;
+    }
+
+    setSplitError(null);
+    startSplitTransition(async () => {
+      const response = await splitCardHistoryAction({
+        sourceId: splitting.id,
+        cutoffInvoice: splitCutoff,
+        targetId,
+        newCardName,
+        keepTargetArchived: splitKeepArchived,
+        copyCycleFromSource: splitCopyCycle,
+      });
+      if (!response.ok) {
+        setSplitError(response.error);
+        return;
+      }
+      setSplitting(null);
+      setSplitPreview(null);
+      toast({
+        description: `${response.count ?? 0} lançamento(s) separado(s).`,
+        tone: "success",
+      });
+      router.refresh();
+    });
   }
 
   return (
@@ -296,6 +383,10 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                       >
                         <ArrowRightLeft />
                         Incorporar em outro cartão
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => openSplit(card)}>
+                        <Split />
+                        Separar histórico por fatura
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
@@ -576,6 +667,171 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
               }}
             >
               Aplicar a todos os cartões
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(splitting)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setSplitting(null);
+            setSplitPreview(null);
+            setSplitError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Separar histórico por fatura</DialogTitle>
+            <DialogDescription>
+              Move compras e pagamentos de “{splitting?.nome}” cuja fatura seja
+              até o mês escolhido para outro cartão. O cartão de origem continua
+              com as faturas seguintes.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="split-cutoff">
+                Última fatura do cartão antigo
+              </Label>
+              <Input
+                id="split-cutoff"
+                type="month"
+                value={splitCutoff}
+                onChange={(event) => {
+                  setSplitCutoff(event.target.value);
+                  setSplitPreview(null);
+                }}
+                disabled={splitPending}
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label htmlFor="split-target">Cartão de destino</Label>
+              <NativeSelect
+                id="split-target"
+                value={splitTarget}
+                onChange={(event) => {
+                  const value = event.target.value;
+                  setSplitTarget(value);
+                  setSplitPreview(null);
+                  if (value === "new" && !splitNewName) {
+                    setSplitNewName(`${splitting?.nome ?? "Cartão"} antigo`);
+                  }
+                }}
+                disabled={splitPending}
+              >
+                <option value="">Selecione</option>
+                {splitTargets.map((card) => (
+                  <option key={card.id} value={card.id}>
+                    {card.nome}
+                    {card.arquivado ? " (arquivado)" : ""}
+                  </option>
+                ))}
+                <option value="new">Criar novo cartão</option>
+              </NativeSelect>
+            </div>
+
+            {splitTarget === "new" && (
+              <div className="space-y-1">
+                <Label htmlFor="split-new-name">Nome do cartão antigo</Label>
+                <Input
+                  id="split-new-name"
+                  value={splitNewName}
+                  onChange={(event) => {
+                    setSplitNewName(event.target.value);
+                    setSplitPreview(null);
+                  }}
+                  disabled={splitPending}
+                />
+              </div>
+            )}
+
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={splitKeepArchived}
+                onCheckedChange={(checked) =>
+                  setSplitKeepArchived(checked === true)
+                }
+                disabled={splitPending}
+              />
+              Manter cartão antigo arquivado
+            </label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+              <Checkbox
+                checked={splitCopyCycle}
+                onCheckedChange={(checked) =>
+                  setSplitCopyCycle(checked === true)
+                }
+                disabled={splitPending}
+              />
+              Copiar fechamento/vencimento do cartão de origem
+            </label>
+
+            <FormError message={splitError} />
+
+            {splitPreview && (
+              <div className="space-y-1 rounded-md border border-border p-3 text-xs text-muted-foreground">
+                <p>
+                  {splitPreview.purchases} compra(s) e{" "}
+                  {splitPreview.payments} pagamento(s) serão movidos.
+                </p>
+                <p>
+                  Faturas antigas:{" "}
+                  {splitPreview.oldInvoices.from
+                    ? `${formatMonthTitle(splitPreview.oldInvoices.from)} a ${formatMonthTitle(splitPreview.oldInvoices.to ?? splitPreview.oldInvoices.from)}`
+                    : "nenhuma"}
+                </p>
+                <p>
+                  Faturas que ficam na origem:{" "}
+                  {splitPreview.newInvoices.from
+                    ? `${formatMonthTitle(splitPreview.newInvoices.from)} a ${formatMonthTitle(splitPreview.newInvoices.to ?? splitPreview.newInvoices.from)}`
+                    : "nenhuma"}
+                </p>
+                {splitPreview.warnings.map((warning) => (
+                  <p key={warning} className="text-warning">
+                    {warning}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setSplitting(null);
+                setSplitPreview(null);
+                setSplitError(null);
+              }}
+              disabled={splitPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={runSplitPreview}
+              disabled={!splitCutoff || splitPending}
+            >
+              {splitPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Split className="h-4 w-4" />
+              )}
+              Pré-visualizar
+            </Button>
+            <Button
+              type="button"
+              onClick={confirmSplit}
+              disabled={!splitPreview || splitPending}
+            >
+              Separar
             </Button>
           </DialogFooter>
         </DialogContent>

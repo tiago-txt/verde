@@ -122,6 +122,21 @@ function text(value: unknown, fallback = ""): string {
   return typeof value === "string" ? value : fallback;
 }
 
+function stringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const item of value) {
+    if (typeof item !== "string") continue;
+    const name = item.trim();
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    seen.add(key);
+    result.push(name);
+  }
+  return result;
+}
+
 function numberValue(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
@@ -809,6 +824,7 @@ export async function importJsonAction(input: {
             icone: text(row.icone, "CreditCard"),
             arquivado: booleanValue(row.arquivado),
             faturasPagasAte: text(row.faturasPagasAte) || null,
+            apelidos: stringArray(row.apelidos),
             deletedAt: dateOrNull(row.deletedAt),
           })
           .run();

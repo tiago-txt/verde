@@ -1,0 +1,1 @@
+ALTER TABLE `credit_cards` ADD `apelidos` text DEFAULT '[]' NOT NULL;

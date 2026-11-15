@@ -9,6 +9,7 @@ import {
   isNotNull,
   isNull,
   like,
+  lt,
   lte,
   or,
   sql,
@@ -644,12 +645,59 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
   };
 }
 
+export type PendenciasAnteriores = {
+  despesas: number;
+  receitas: number;
+  count: number;
+};
+
+/**
+ * Despesas/receitas de conta em aberto de meses anteriores. Compras de cartão
+ * e pagamentos de fatura ficam de fora: esses são tratados pelas faturas.
+ */
+export function getPendenciasAntesDoMes(
+  workspaceId: string,
+  monthKey: string,
+): PendenciasAnteriores {
+  const { db, ws } = scopedDb(workspaceId);
+  const start = `${monthKey}-01`;
+
+  const row = db
+    .select({
+      despesas: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'despesa' then ${transactions.valor} else 0 end), 0)`,
+      receitas: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'receita' then ${transactions.valor} else 0 end), 0)`,
+      count: sql<number>`count(*)`,
+    })
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        eq(transactions.pago, false),
+        lt(transactions.data, start),
+        inArray(transactions.tipo, ["despesa", "receita"]),
+        isNotNull(transactions.contaId),
+        isNull(transactions.cartaoId),
+        isNull(transactions.cartaoDestinoId),
+        isNull(transactions.faturaChave),
+      ),
+    )
+    .get();
+
+  return {
+    despesas: Math.abs(row?.despesas ?? 0),
+    receitas: Math.abs(row?.receitas ?? 0),
+    count: row?.count ?? 0,
+  };
+}
+
 /**
  * Saldo total das contas ao final de cada dia do mês, junto do saldo
  * anterior (tudo o que veio antes do primeiro dia do mês).
  *
- * `modo = "realizado"` usa só lançamentos pagos até hoje; `"previsto"`
- * inclui os não pagos e eventos futuros. O consumidor deve rotular a série.
+ * `modo = "realizado"` usa lançamentos pagos (mesmo com data futura);
+ * `"previsto"` inclui os não pagos e eventos futuros. O consumidor deve
+ * rotular a série.
  */
 export function getMonthBalances(
   workspaceId: string,
@@ -663,9 +711,6 @@ export function getMonthBalances(
   const { db, ws } = scopedDb(workspaceId);
   const { end } = monthRange(monthKey);
   const start = `${monthKey}-01`;
-  const hoje = todayISO();
-  const limite = modo === "realizado" && hoje < end ? hoje : end;
-
   const initialTotal =
     db
       .select({
@@ -686,7 +731,7 @@ export function getMonthBalances(
         ws(transactions.workspaceId),
         isNull(transactions.deletedAt),
         isNull(transactions.cartaoId),
-        lte(transactions.data, limite),
+        lte(transactions.data, end),
         ...(modo === "realizado" ? [eq(transactions.pago, true)] : []),
       ),
     )
