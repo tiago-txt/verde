@@ -51,7 +51,7 @@ export function CardInvoiceRow({
   ].join(", ");
 
   return (
-    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 pl-2.5 pr-0 text-left transition-colors max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60">
+    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 border-l-2 !border-l-grout/70 pl-2 pr-0 text-left transition-colors max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60">
       <button
         type="button"
         onClick={() => onOpen(event)}

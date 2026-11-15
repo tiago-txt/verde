@@ -119,8 +119,16 @@ export const TransactionRow = memo(function TransactionRow({
       : transaction.tipo === "receita"
         ? "text-primary"
         : "text-clay";
-  // Filete neutro à esquerda. A leitura de entrada/saída fica no valor.
-  const typeIndicator = "border-l-grout/70";
+  // Faturas/pagamentos usam filete cinza; o restante segue o tipo.
+  const isInvoiceIndicator =
+    isInvoicePayment || Boolean(transaction.faturaChave);
+  const typeIndicator = isInvoiceIndicator
+    ? "!border-l-grout/70"
+    : isTransfer
+      ? "!border-l-info/70"
+      : transaction.tipo === "receita"
+        ? "!border-l-primary/70"
+        : "!border-l-clay/70";
 
   const rowStatus = transactionRowStatus({
     pago: paid,
