@@ -5,7 +5,8 @@ import { Search } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import { Input } from "@/components/ui/input";
 import { ICON_MAP } from "@/lib/icons";
-import { ICON_NAMES } from "@/lib/icon-names";
+import { ICON_GROUPS } from "@/lib/icon-groups";
+import { ICON_NAMES, type IconName } from "@/lib/icon-names";
 import {
   filterBankIcons,
   type BankIconDefinition,
@@ -44,6 +45,33 @@ export function IconPicker({
   const custom = ICON_NAMES.filter((name) =>
     name.toLowerCase().includes(query.trim().toLowerCase()),
   );
+
+  function renderCustomIcon(name: IconName) {
+    const Icon = ICON_MAP[name];
+    const selected = value === name;
+    return (
+      <button
+        key={name}
+        type="button"
+        onClick={() => onChange(name)}
+        disabled={disabled}
+        aria-label={name}
+        aria-pressed={selected}
+        title={name}
+        className={cn(
+          "flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-lg border px-1 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          selected
+            ? "border-primary/50 bg-primary/10 text-primary ring-1 ring-primary/30"
+            : "border-grout bg-surface-lowest text-muted-foreground hover:bg-forest-high hover:text-foreground",
+        )}
+      >
+        <Icon className="h-6 w-6" aria-hidden="true" />
+        <span className="line-clamp-1 text-xs font-medium leading-tight">
+          {name}
+        </span>
+      </button>
+    );
+  }
 
   return (
     <div className="space-y-2">
@@ -135,42 +163,34 @@ export function IconPicker({
           )}
         </div>
       ) : (
-        <div
-          className="grid max-h-64 grid-cols-4 gap-2 overflow-y-auto rounded-lg border border-grout bg-surface-low p-2 sm:grid-cols-6"
-          role="group"
-          aria-label="Ícones personalizados"
-        >
+        <div className="max-h-64 space-y-3 overflow-y-auto rounded-lg border border-grout bg-surface-low p-2">
           {custom.length === 0 ? (
-            <p className="col-span-full px-2 py-4 text-center text-xs text-muted-foreground">
+            <p className="px-2 py-4 text-center text-xs text-muted-foreground">
               Nenhum ícone encontrado.
             </p>
+          ) : query.trim() ? (
+            <div
+              className="grid grid-cols-4 gap-2 sm:grid-cols-6"
+              role="group"
+              aria-label="Ícones encontrados"
+            >
+              {custom.map((name) => renderCustomIcon(name))}
+            </div>
           ) : (
-            custom.map((name) => {
-              const Icon = ICON_MAP[name];
-              const selected = value === name;
-              return (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => onChange(name)}
-                  disabled={disabled}
-                  aria-label={name}
-                  aria-pressed={selected}
-                  title={name}
-                  className={cn(
-                    "flex min-h-20 flex-col items-center justify-center gap-1.5 rounded-lg border px-1 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    selected
-                      ? "border-primary/50 bg-primary/10 text-primary ring-1 ring-primary/30"
-                      : "border-grout bg-surface-lowest text-muted-foreground hover:bg-forest-high hover:text-foreground",
-                  )}
+            ICON_GROUPS.map((group) => (
+              <section key={group.id} className="space-y-1.5">
+                <h3 className="px-1 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-outline">
+                  {group.label}
+                </h3>
+                <div
+                  className="grid grid-cols-4 gap-2 sm:grid-cols-6"
+                  role="group"
+                  aria-label={group.label}
                 >
-                  <Icon className="h-6 w-6" aria-hidden="true" />
-                  <span className="line-clamp-1 text-xs font-medium leading-tight">
-                    {name}
-                  </span>
-                </button>
-              );
-            })
+                  {group.icons.map((name) => renderCustomIcon(name))}
+                </div>
+              </section>
+            ))
           )}
         </div>
       )}

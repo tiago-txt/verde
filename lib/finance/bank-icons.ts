@@ -134,6 +134,55 @@ export const BANK_ICONS: BankIconDefinition[] = [
     brandColor: "#00549F",
     logo: "/banks/banrisul.svg",
   },
+  {
+    id: "bank:recargapay",
+    name: "RecargaPay",
+    keywords: ["recarga pay", "recargapay", "recarga"],
+    brandColor: "#053E6E",
+    logo: "/banks/recargapay.svg",
+  },
+  {
+    id: "bank:amazonprime",
+    name: "Cartão Amazon Prime",
+    keywords: ["amazon", "amazon prime", "amazonprime", "prime"],
+    brandColor: "#0779FF",
+    logo: "/banks/amazonprime.svg",
+  },
+  {
+    id: "bank:santanderelite",
+    name: "Santander Elite",
+    keywords: ["elite", "santander elite", "santanderelite"],
+    brandColor: "#9A9A9D",
+    logo: "/banks/santanderelite.svg",
+  },
+  {
+    id: "bank:meliuz",
+    name: "Cartão Méliuz",
+    keywords: ["meliuz", "méliuz", "cartao meliuz"],
+    brandColor: "#FD9CBF",
+    logo: "/banks/meliuz.svg",
+  },
+  {
+    id: "bank:n26",
+    name: "N26",
+    keywords: ["n26", "numero 26"],
+    brandColor: "#FFFFFF",
+    logo: "/banks/n26.svg",
+  },
+  {
+    id: "bank:next",
+    name: "Next",
+    keywords: ["next", "next bank"],
+    brandColor: "#1E3C3C",
+    logo: "/banks/next.svg",
+  },
+  {
+    id: "bank:samsung",
+    name: "Cartão Samsung",
+    keywords: ["samsung", "samsung card", "cartao samsung"],
+    brandColor: "#000000",
+    logo: "/banks/samsung.svg",
+  },
 ];
 
 export const BANK_ICON_IDS = BANK_ICONS.map((bank) => bank.id);

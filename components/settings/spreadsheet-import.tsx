@@ -1504,58 +1504,75 @@ export function SpreadsheetImport({
                             </NativeSelect>
                           </td>
                           <td className="p-2">
-                            {origin.mode === "existing" ? (
-                              origin.kind === "conta" ? (
-                                <NativeSelect
-                                  value={origin.accountId}
-                                  onChange={(event) =>
-                                    setOrigins((current) => ({
-                                      ...current,
-                                      [sheet.name]: {
-                                        ...origin,
-                                        accountId: event.target.value,
-                                      },
-                                    }))
-                                  }
-                                  aria-label={`Conta da aba ${sheet.name}`}
-                                >
-                                  <option value="">Selecione</option>
-                                  {accountOptions.map((account) => (
-                                    <option key={account.id} value={account.id}>
-                                      {account.nome}
-                                    </option>
-                                  ))}
-                                </NativeSelect>
-                              ) : (
-                                <NativeSelect
-                                  value={origin.cardId}
-                                  onChange={(event) =>
-                                    setOrigins((current) => ({
-                                      ...current,
-                                      [sheet.name]: {
-                                        ...origin,
-                                        cardId: event.target.value,
-                                      },
-                                    }))
-                                  }
-                                  aria-label={`Cartão da aba ${sheet.name}`}
-                                >
-                                  <option value="">Selecione</option>
-                                  {cardOptions.map((card) => (
-                                    <option key={card.id} value={card.id}>
-                                      {card.nome}
-                                      {card.arquivado ? " (arquivado)" : ""}
-                                    </option>
-                                  ))}
-                                </NativeSelect>
-                              )
+                            {origin.kind === "conta" ? (
+                              <NativeSelect
+                                value={
+                                  origin.mode === "existing"
+                                    ? origin.accountId
+                                    : "new"
+                                }
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setOrigins((current) => ({
+                                    ...current,
+                                    [sheet.name]: {
+                                      ...origin,
+                                      mode: value === "new" ? "new" : "existing",
+                                      accountId: value === "new" ? "" : value,
+                                    },
+                                  }));
+                                }}
+                                aria-label={`Conta da aba ${sheet.name}`}
+                              >
+                                <option value="new">Criar nova conta</option>
+                                {origin.mode === "existing" &&
+                                  !origin.accountId && (
+                                    <option value="">Selecione…</option>
+                                  )}
+                                {accountOptions.map((account) => (
+                                  <option key={account.id} value={account.id}>
+                                    {account.nome}
+                                  </option>
+                                ))}
+                              </NativeSelect>
                             ) : (
-                              <span className="text-muted-foreground">
-                                {origin.kind === "conta"
-                                  ? "Nova conta"
-                                  : "Novo cartão"}
-                              </span>
+                              <NativeSelect
+                                value={
+                                  origin.mode === "existing"
+                                    ? origin.cardId
+                                    : "new"
+                                }
+                                onChange={(event) => {
+                                  const value = event.target.value;
+                                  setOrigins((current) => ({
+                                    ...current,
+                                    [sheet.name]: {
+                                      ...origin,
+                                      mode: value === "new" ? "new" : "existing",
+                                      cardId: value === "new" ? "" : value,
+                                    },
+                                  }));
+                                }}
+                                aria-label={`Cartão da aba ${sheet.name}`}
+                              >
+                                <option value="new">Criar novo cartão</option>
+                                {origin.mode === "existing" &&
+                                  !origin.cardId && (
+                                    <option value="">Selecione…</option>
+                                  )}
+                                {cardOptions.map((card) => (
+                                  <option key={card.id} value={card.id}>
+                                    {card.nome}
+                                    {card.arquivado ? " (arquivado)" : ""}
+                                  </option>
+                                ))}
+                              </NativeSelect>
                             )}
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {origin.mode === "existing"
+                                ? "Usando existente"
+                                : "Criando novo"}
+                            </p>
                           </td>
                           <td className="p-2">
                             {origin.mode === "new" && (
@@ -1633,6 +1650,12 @@ export function SpreadsheetImport({
                   </tbody>
                 </table>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Para vincular a uma conta ou cartão já cadastrado, escolha-o
+                diretamente na coluna <strong>Conta/Cartão</strong>. Se preferir
+                criar um novo, mantenha a opção de criação e ajuste o nome e as
+                datas.
+              </p>
             </section>
 
             <section className="space-y-2">
