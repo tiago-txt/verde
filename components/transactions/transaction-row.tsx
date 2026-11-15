@@ -116,6 +116,13 @@ export const TransactionRow = memo(function TransactionRow({
     : transaction.tipo === "receita"
       ? "text-primary"
       : "text-clay";
+  // Indicação extra de despesa/receita: filete sólido à esquerda.
+  // A fatura usa tracejado; aqui a leitura é por tipo do lançamento.
+  const typeIndicator = isTransfer
+    ? "border-l-info/70"
+    : transaction.tipo === "receita"
+      ? "border-l-primary/70"
+      : "border-l-clay/70";
 
   const rowStatus = transactionRowStatus({
     pago: paid,
@@ -285,7 +292,8 @@ export const TransactionRow = memo(function TransactionRow({
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "relative flex min-h-16 items-center gap-3 bg-background px-0 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[68px]",
+          "relative flex min-h-16 items-center gap-3 border-l-2 bg-background py-0 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[68px]",
+          typeIndicator,
           selected && "bg-primary/10",
           reveal === "left" && "translate-x-20",
           reveal === "right" && "-translate-x-36",

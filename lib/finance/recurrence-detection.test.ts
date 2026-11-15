@@ -3,7 +3,7 @@ import {
   detectRecurrences,
   detectRecurrencesFromSpreadsheet,
   inferRecurrenceFrequency,
-  nextRecurrenceOnOrAfter,
+  firstRecurrenceOnOrAfter,
   type RecurrenceDetectionRow,
 } from "./recurrence-detection";
 import type { CanonicalSpreadsheetRow } from "./spreadsheet-import";
@@ -68,11 +68,37 @@ describe("detector de recorrências", () => {
     ).toHaveLength(0);
   });
 
-  it("não mistura valores, descrições ou origens diferentes", () => {
+  it("detecta série com valores variáveis e usa o valor mais recente", () => {
+    const candidates = detectRecurrences([
+      row("1", "2026-01-10", { valorCentavos: 150_000 }),
+      row("2", "2026-02-10", { valorCentavos: 175_000 }),
+      row("3", "2026-03-10", { valorCentavos: 175_000 }),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      valorCentavos: 175_000,
+      valorMinimo: 150_000,
+      valorMaximo: 175_000,
+    });
+  });
+
+  it("aceita meses sem lançamento na série", () => {
+    const candidates = detectRecurrences([
+      row("1", "2026-01-10"),
+      row("2", "2026-02-10"),
+      row("3", "2026-04-10"),
+      row("4", "2026-05-10"),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.frequencia).toBe("mensal");
+    expect(candidates[0]?.ocorrencias).toBe(4);
+  });
+
+  it("não mistura descrições ou origens diferentes", () => {
     expect(
       detectRecurrences([
         row("1", "2026-01-10"),
-        row("2", "2026-02-10", { valorCentavos: 150_001 }),
+        row("2", "2026-02-10", { descricao: "Outro" }),
         row("3", "2026-03-10"),
       ]),
     ).toHaveLength(0);
@@ -80,7 +106,7 @@ describe("detector de recorrências", () => {
     expect(
       detectRecurrences([
         row("1", "2026-01-10"),
-        row("2", "2026-02-10", { descricao: "Outro" }),
+        row("2", "2026-02-10", { origemNome: "Outra conta" }),
         row("3", "2026-03-10"),
       ]),
     ).toHaveLength(0);
@@ -156,28 +182,31 @@ describe("detector de recorrências", () => {
   });
 });
 
-describe("início da série a partir de hoje", () => {
+describe("início da série a partir do mês atual", () => {
   it("avança a série antiga até a próxima ocorrência a partir da referência", () => {
-    expect(nextRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-10")).toBe(
+    expect(firstRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-10")).toBe(
       "2026-11-10",
     );
-    expect(nextRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-15")).toBe(
+    expect(firstRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-15")).toBe(
       "2026-12-10",
     );
-    expect(nextRecurrenceOnOrAfter("2026-01-05", "semanal", "2026-01-20")).toBe(
+    expect(firstRecurrenceOnOrAfter("2026-01-05", "semanal", "2026-01-20")).toBe(
       "2026-01-26",
     );
-    expect(nextRecurrenceOnOrAfter("2022-03-01", "anual", "2026-11-15")).toBe(
+    expect(firstRecurrenceOnOrAfter("2022-03-01", "anual", "2026-11-15")).toBe(
       "2027-03-01",
     );
-    expect(nextRecurrenceOnOrAfter("2024-01-31", "mensal", "2024-03-01")).toBe(
+    expect(firstRecurrenceOnOrAfter("2024-01-31", "mensal", "2024-03-01")).toBe(
       "2024-03-31",
     );
   });
 
-  it("mantém a própria data quando a última ocorrência já é futura", () => {
-    expect(nextRecurrenceOnOrAfter("2026-12-10", "mensal", "2026-11-15")).toBe(
-      "2026-12-10",
-    );
+  it("usa a primeira ocorrência da série, não a última", () => {
+    expect(
+      firstRecurrenceOnOrAfter("2026-02-10", "mensal", "2026-11-01"),
+    ).toBe("2026-11-10");
+    expect(
+      firstRecurrenceOnOrAfter("2026-12-10", "mensal", "2026-11-15"),
+    ).toBe("2026-12-10");
   });
 });

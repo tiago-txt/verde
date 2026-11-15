@@ -51,7 +51,7 @@ import { formatCurrency, formatDate } from "@/lib/format";
 import { addDaysISO, todayISO } from "@/lib/dates";
 import {
   detectRecurrencesFromSpreadsheet,
-  nextRecurrenceOnOrAfter,
+  firstRecurrenceOnOrAfter,
   type RecurrenceCandidate,
 } from "@/lib/finance/recurrence-detection";
 import { suggestCategoryIcon } from "@/lib/finance/category-icons";
@@ -319,7 +319,7 @@ export function SpreadsheetImport({
   const [selectedRecurrenceKeys, setSelectedRecurrenceKeys] = useState<
     Set<string>
   >(new Set());
-  const [recurrencesFromToday, setRecurrencesFromToday] = useState(true);
+  const [recurrencesFromCurrentMonth, setRecurrencesFromCurrentMonth] = useState(true);
 
   const [preview, setPreview] = useState<SpreadsheetPreviewResult | null>(null);
   const [imported, setImported] = useState<string | null>(null);
@@ -334,13 +334,17 @@ export function SpreadsheetImport({
   }
 
   function recurrenceStartDate(candidate: RecurrenceCandidate): string {
-    return recurrencesFromToday
-      ? nextRecurrenceOnOrAfter(
-          candidate.ultimaData,
-          candidate.frequencia,
-          todayISO(),
-        )
-      : candidate.ultimaData;
+    if (!recurrencesFromCurrentMonth) return candidate.ultimaData;
+    const today = todayISO();
+    const reference =
+      candidate.frequencia === "semanal"
+        ? today
+        : `${today.slice(0, 7)}-01`;
+    return firstRecurrenceOnOrAfter(
+      candidate.primeiraData,
+      candidate.frequencia,
+      reference,
+    );
   }
 
   useEffect(() => {
@@ -1956,19 +1960,21 @@ export function SpreadsheetImport({
                 <p className="text-xs text-muted-foreground">
                   Séries com mesma origem, descrição, categoria e valor em
                   intervalos regulares. Por padrão, só as com ocorrência
-                  recente ficam marcadas. A série começa na próxima ocorrência
-                  a partir de hoje; ocorrências antigas não são vinculadas.
+                  recente ficam marcadas. A série começa na primeira ocorrência
+                  do mês atual em diante; ocorrências anteriores não são
+                  vinculadas. As ocorrências importadas mantêm os valores
+                  originais; meses futuros usam o valor mais recente.
                 </p>
                 <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-2">
                   <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs">
                     <Checkbox
-                      checked={recurrencesFromToday}
+                      checked={recurrencesFromCurrentMonth}
                       onCheckedChange={(checked) =>
-                        setRecurrencesFromToday(checked === true)
+                        setRecurrencesFromCurrentMonth(checked === true)
                       }
-                      aria-label="Criar recorrências somente a partir de hoje"
+                      aria-label="Criar recorrências somente a partir do mês atual"
                     />
-                    Criar somente a partir de hoje
+                    Criar somente a partir do mês atual
                   </label>
                   <span className="text-xs text-muted-foreground">
                     {selectedRecurrenceKeys.size} de{" "}
@@ -2019,7 +2025,7 @@ export function SpreadsheetImport({
                       <tr>
                         <th className="p-2 font-medium">Usar</th>
                         <th className="p-2 font-medium">Descrição</th>
-                        <th className="p-2 font-medium">Valor</th>
+                        <th className="p-2 font-medium">Valor (último)</th>
                         <th className="p-2 font-medium">Frequência</th>
                         <th className="p-2 font-medium">Ocorrências</th>
                         <th className="p-2 font-medium">Período</th>
@@ -2063,7 +2069,16 @@ export function SpreadsheetImport({
                             </span>
                           </td>
                           <td className="p-2">
-                            {cents(candidate.valorCentavos)}
+                            <span className="tabular">
+                              {cents(candidate.valorCentavos)}
+                            </span>
+                            {candidate.valorMinimo !==
+                              candidate.valorMaximo && (
+                              <span className="block text-muted-foreground">
+                                {cents(candidate.valorMinimo)} a{" "}
+                                {cents(candidate.valorMaximo)}
+                              </span>
+                            )}
                           </td>
                           <td className="p-2">
                             <Badge variant="secondary">
@@ -2800,3 +2815,5 @@ function readings(fileName: string | null, reading: boolean) {
     </p>
   );
 }
+
+

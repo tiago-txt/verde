@@ -45,7 +45,9 @@ export type RecurrenceCandidate = {
   ocorrencias: number;
 };
 
-const FREQUENCIES: RecurrenceFrequency[] = ["mensal", "semanal", "anual"];
+// Anual antes de mensal: uma série de 12 em 12 meses também caberia na grade
+// mensal com saltos, mas o intervalo anual é a leitura mais específica.
+const FREQUENCIES: RecurrenceFrequency[] = ["anual", "mensal", "semanal"];
 
 function expectedDate(
   start: string,
@@ -99,6 +101,28 @@ function dayDifference(start: string, date: string): number | null {
  * caibam na mesma grade da frequência. É o que permite reconhecer despesas
  * mensais que variam de valor ou que tiveram um mês sem lançamento.
  */
+function consecutiveDifferences(
+  dates: string[],
+  measure: (previous: string, current: string) => number | null,
+): number[] | null {
+  const differences: number[] = [];
+  for (let index = 1; index < dates.length; index += 1) {
+    const previous = dates[index - 1] as string;
+    const current = dates[index] as string;
+    const difference = measure(previous, current);
+    if (difference === null || difference <= 0) return null;
+    differences.push(difference);
+  }
+  return differences;
+}
+
+function hasCadence(differences: number[], expectedStep: number): boolean {
+  // Aceita falhas pontuais (um período sem lançamento), mas não uma série
+  // trimestral/bimestral disfarçada de mensal.
+  const exact = differences.filter((value) => value === expectedStep).length;
+  return exact / differences.length >= 0.6;
+}
+
 function matchesFrequencyAllowingGaps(
   dates: string[],
   frequencia: RecurrenceFrequency,
@@ -106,7 +130,7 @@ function matchesFrequencyAllowingGaps(
   if (dates.length < 2) return false;
   const start = dates[0] as string;
 
-  return dates.every((date, index) => {
+  const onGrid = dates.every((date, index) => {
     if (index === 0) return true;
     switch (frequencia) {
       case "mensal": {
@@ -129,13 +153,26 @@ function matchesFrequencyAllowingGaps(
       case "anual": {
         const years = (Number(date.slice(0, 4)) -
           Number(start.slice(0, 4))) as number;
-        return (
-          years > 0 &&
-          date === expectedDate(start, frequencia, years)
-        );
+        return years > 0 && date === expectedDate(start, frequencia, years);
       }
     }
   });
+  if (!onGrid) return false;
+
+  const differences = consecutiveDifferences(
+    dates,
+    frequencia === "mensal"
+      ? monthDifference
+      : frequencia === "semanal"
+        ? dayDifference
+        : (previous, current) =>
+            Number(current.slice(0, 4)) - Number(previous.slice(0, 4)),
+  );
+  if (!differences) return false;
+  return hasCadence(
+    differences,
+    frequencia === "semanal" ? 7 : 1,
+  );
 }
 
 /** Infere a frequência de uma sequência de datas. Para uma data, assume mensal. */
@@ -219,18 +256,21 @@ export function detectRecurrences(
     );
     const dates = entries.map((row) => row.data);
     const frequencia = FREQUENCIES.find((frequency) =>
-      matchesFrequency(dates, frequency),
+      matchesFrequencyAllowingGaps(dates, frequency),
     );
     if (!frequencia) continue;
 
     const latest = entries.at(-1) as RecurrenceDetectionRow;
     const first = entries[0] as RecurrenceDetectionRow;
+    const values = entries.map((row) => row.valorCentavos);
     candidates.push({
       key,
       frequencia,
       descricao: latest.descricao,
       tipo: latest.tipo,
       valorCentavos: latest.valorCentavos,
+      valorMinimo: Math.min(...values),
+      valorMaximo: Math.max(...values),
       origemNome: latest.origemNome,
       categoriaNome: latest.categoriaNome,
       rowIds: entries.map((row) => row.id),
