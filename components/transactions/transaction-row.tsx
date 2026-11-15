@@ -438,7 +438,7 @@ export const TransactionRow = memo(function TransactionRow({
             >
               <span
                 className={cn(
-                  "row-title line-clamp-2 min-w-0 flex-1 break-words underline-offset-4 lg:line-clamp-1 lg:group-hover/name:underline",
+                  "row-title line-clamp-2 min-w-0 break-words underline-offset-4 lg:line-clamp-1 lg:group-hover/name:underline",
                   !paid && !isCardPurchase && "text-foreground/80",
                 )}
               >
@@ -446,6 +446,7 @@ export const TransactionRow = memo(function TransactionRow({
                   ? "Pagamento de fatura"
                   : transaction.descricao}
               </span>
+              {titleBadges}
             </button>
             </div>
 
@@ -610,9 +611,6 @@ export const TransactionRow = memo(function TransactionRow({
               )}
             </span>
           )}
-              <span className="mt-1.5 flex min-h-4 items-center gap-1.5 pb-1">
-                {titleBadges}
-              </span>
             </div>
 
             {!isCardPurchase ? (
