@@ -292,7 +292,7 @@ export const TransactionRow = memo(function TransactionRow({
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "relative flex min-h-16 items-center gap-3 border-l-2 bg-background py-0 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[68px]",
+          "relative flex min-h-16 items-center gap-3 border-l-2 bg-background py-0 pl-2 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[68px]",
           typeIndicator,
           selected && "bg-primary/10",
           reveal === "left" && "translate-x-20",
@@ -444,7 +444,7 @@ export const TransactionRow = memo(function TransactionRow({
           </div>
 
           {hasSecondary && (
-            <span className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 overflow-hidden text-[13px] text-muted-foreground">
+            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-[13px] text-muted-foreground">
               {isTransfer ? (
                 <>
                   <EntityTile
@@ -492,7 +492,7 @@ export const TransactionRow = memo(function TransactionRow({
                   </span>
                 </>
               ) : (
-                <span className="inline-flex min-w-0 items-center gap-2.5">
+                <span className="inline-flex min-w-0 items-center gap-1.5">
                   {showCategory && transaction.categoriaNome && (
                     <>
                       <span className="truncate">
@@ -552,27 +552,27 @@ export const TransactionRow = memo(function TransactionRow({
                 </>
               )}
               {budgetCycle && (
-                <span className="inline-flex min-w-0 items-center gap-2">
-                  <span aria-hidden="true" className="shrink-0">
-                    ·
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="inline-flex min-w-0 items-center gap-1">
+                    <EntityTile
+                      kind="orcamento"
+                      entity={{
+                        id: transaction.orcamentoNome,
+                        nome: transaction.orcamentoNome,
+                        cor: transaction.orcamentoCor,
+                        icone: transaction.orcamentoIcone,
+                      }}
+                      size="xxs"
+                      plain
+                      className="shrink-0 rounded-[6px]"
+                    />
+                    <span className="truncate">
+                      {transaction.orcamentoNome ?? "Orçamento"}{" "}
+                      {formatMonthShort(budgetCycle)}
+                    </span>
                   </span>
-                  <EntityTile
-                    kind="orcamento"
-                    entity={{
-                      id: transaction.orcamentoNome,
-                      nome: transaction.orcamentoNome,
-                      cor: transaction.orcamentoCor,
-                      icone: transaction.orcamentoIcone,
-                    }}
-                    size="xxs"
-                    plain
-                    className="shrink-0 rounded-[6px]"
-                  />
-                  <span className="truncate">
-                    {transaction.orcamentoNome ?? "Orçamento"}{" "}
-                    {formatMonthShort(budgetCycle)}
-                  </span>
-                </span>
+                </>
               )}
             </span>
           )}
