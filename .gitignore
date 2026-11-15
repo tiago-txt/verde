@@ -23,6 +23,9 @@ coverage/
 *.tsbuildinfo
 npm-debug.log*
 
+# escopo de agentes
+SCOPE.txt
+
 # sistema
 .DS_Store
 Thumbs.db

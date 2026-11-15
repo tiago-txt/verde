@@ -289,12 +289,36 @@ cria 3 meses de contas, recorrências, parcelas e transferências.
 | `npm run build`        | build de produção (output standalone)                  |
 | `npm start`            | preview local do build                                 |
 | `npm run typecheck`    | TypeScript strict                                      |
+| `npm run lint`         | ESLint (Next + TypeScript)                             |
+| `npm run check`        | typecheck + lint + testes + build                      |
 | `npm test`             | testes unitários (Vitest)                              |
+| `npm run scope`        | valida o diff contra `SCOPE.txt` (ver abaixo)          |
 | `npm run db:generate`  | gera nova migration a partir do schema                 |
 | `npm run backup`       | backup seguro do SQLite para `./data/backups`          |
 
 As migrations são aplicadas **automaticamente no boot** (via
 `instrumentation.ts`), e o seed é idempotente.
+
+### Para agentes de IA
+
+O `AGENTS.md` na raiz define o fluxo de trabalho e as regras invioláveis. Para
+fechar o escopo de uma tarefa:
+
+1. Liste em `SCOPE.txt` (ignorado pelo git) um caminho ou glob por linha. Linhas
+   em branco e iniciadas por `#` são ignoradas.
+2. Faça as alterações e rode `npm run scope`. O comando compara o diff da working
+   tree (incluindo arquivos não rastreados) com o `SCOPE.txt` e falha listando
+   qualquer arquivo fora do escopo.
+3. Rode `npm run check` antes de entregar.
+
+Exemplo de `SCOPE.txt`:
+
+```text
+package.json
+.eslintrc.json
+scripts/diff-scope.mjs
+README.md
+```
 
 ---
 
@@ -533,7 +557,10 @@ criá-lo novamente em **Configurações → Usuários** antes de restaurar.
 ## Qualidade
 
 ```bash
+npm run check
+# equivale a:
 npm run typecheck
+npm run lint
 npm test
 npm run build
 ```

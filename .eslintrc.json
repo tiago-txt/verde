@@ -1,5 +1,19 @@
 {
+  "root": true,
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "ignorePatterns": [
+    "node_modules/",
+    ".next/",
+    "out/",
+    "build/",
+    "coverage/",
+    "data/",
+    "public/sw.js",
+    "next-env.d.ts",
+    "drizzle/meta/"
+  ],
   "rules": {
+    "prefer-const": "warn",
     "no-restricted-imports": [
       "error",
       {
@@ -20,6 +34,32 @@
       ],
       "rules": {
         "no-restricted-imports": "off"
+      }
+    },
+    {
+      "files": ["lib/finance/**/*.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "@/components/tile",
+                "message": "Use EntityTile/tileSpec para escolher cor, ícone, motivo e variação."
+              }
+            ],
+            "patterns": [
+              {
+                "group": ["@/lib/db/queries/*", "@/lib/actions/*"],
+                "message": "lib/finance é domínio puro: não importe queries nem actions."
+              },
+              {
+                "group": ["react", "react-dom", "react/*", "react-dom/*"],
+                "message": "lib/finance é domínio puro: não importe React."
+              }
+            ]
+          }
+        ]
       }
     }
   ]
