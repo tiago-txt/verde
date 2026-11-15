@@ -560,4 +560,44 @@ describe("importação de planilha", () => {
     expect(undo.ok).toBe(true);
     expect(countTransactions()).toBe(0);
   });
+
+  it("marca as faturas importadas como pagas até a data escolhida", async () => {
+    const request = buildRequest();
+    const result = await importSpreadsheetImportAction({
+      ...request,
+      decisions: {
+        ...request.decisions,
+        considerarFaturasPagasAte: "2030-12-31",
+      },
+    });
+    if (!result.ok) throw new Error(result.error);
+
+    const card = testDb.db
+      .select()
+      .from(creditCards)
+      .where(
+        and(
+          eq(creditCards.workspaceId, user.workspaceId),
+          eq(creditCards.nome, "Cartão Teste"),
+        ),
+      )
+      .get();
+    expect(card?.faturasPagasAte).toBe("2030-12-31");
+
+    const october = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      "2022-10",
+      FILTERS,
+    ).find((event) => event.cartaoId === card?.id);
+    expect(october).toMatchObject({
+      total: 8_000,
+      pago: 8_000,
+      restante: 0,
+      status: "paga",
+      consideradaPaga: true,
+    });
+
+    // Não cria pagamentos/transferências artificiais.
+    expect(countTransactions()).toBe(9);
+  });
 });

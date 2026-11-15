@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isValidISODate } from "@/lib/dates";
-import { idSchema, monthKeySchema } from "./common";
+import { idSchema, isoDateSchema, monthKeySchema } from "./common";
 
 const headerName = z.string().trim().min(1, "Escolha uma coluna");
 
@@ -185,6 +185,8 @@ export const spreadsheetDecisionsSchema = z.object({
   ignoreRowIds: z.array(z.string().trim().min(1).max(400)).max(50_000),
   ignoreDuplicateRows: z.boolean().optional(),
   reimportarHash: z.boolean().optional(),
+  /** Considera pagas as faturas importadas com vencimento até esta data. */
+  considerarFaturasPagasAte: isoDateSchema.nullable().optional(),
 });
 
 export const spreadsheetImportRequestSchema = z.object({

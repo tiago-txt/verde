@@ -7,6 +7,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowRightLeft,
+  CheckCheck,
   CreditCard,
   MoreVertical,
   Pencil,
@@ -31,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { useToast } from "@/components/ui/toast";
@@ -39,12 +41,14 @@ import { CardFormDialog } from "./card-form-dialog";
 import {
   createCardAction,
   deleteCardAction,
+  markHistoricalInvoicesPaidAction,
   mergeCardsAction,
   setCardArchivedAction,
   updateCardAction,
 } from "@/lib/actions/cards";
 import type { CardWithInvoice } from "@/lib/db/queries/cards";
 import type { CreditCard as CreditCardRow } from "@/lib/db/schema";
+import { todayISO } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
@@ -87,9 +91,12 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
   const [deleting, setDeleting] = useState<CardWithInvoice | null>(null);
   const [merging, setMerging] = useState<CardWithInvoice | null>(null);
   const [mergeTargetId, setMergeTargetId] = useState("");
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyUntil, setHistoryUntil] = useState(todayISO());
 
   const visible = showArchived ? cards : cards.filter((card) => !card.arquivado);
   const mergeTargets = cards.filter((card) => card.id !== merging?.id);
+  const hasHistoryCutoff = cards.some((card) => card.faturasPagasAte);
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     startTransition(async () => {
@@ -129,6 +136,20 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="h-11"
+            onClick={() => {
+              setHistoryUntil(todayISO());
+              setHistoryOpen(true);
+            }}
+          >
+            <CheckCheck className="h-4 w-4" />
+            <span className="hidden sm:inline">Faturas antigas como pagas</span>
+            <span className="sm:hidden">Histórico pago</span>
+          </Button>
+
           <Button
             type="button"
             variant="outline"
@@ -221,6 +242,12 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                       Fecha dia {card.diaFechamento} · vence dia{" "}
                       {card.diaVencimento}
                     </p>
+                    {card.faturasPagasAte && (
+                      <p className="text-xs text-muted-foreground">
+                        Faturas até {formatDate(card.faturasPagasAte)}{" "}
+                        consideradas pagas
+                      </p>
+                    )}
                   </div>
 
                   <DropdownMenu>
@@ -483,6 +510,72 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
               }}
             >
               Incorporar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Faturas antigas como pagas</DialogTitle>
+            <DialogDescription>
+              As faturas com vencimento até a data escolhida passam a ser
+              consideradas pagas no cálculo do limite e do histórico. Isso não
+              cria pagamentos nem altera o saldo das contas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="history-until">Considerar pagas até</Label>
+            <Input
+              id="history-until"
+              type="date"
+              value={historyUntil}
+              max={todayISO()}
+              onChange={(event) => setHistoryUntil(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Use a data de hoje para quitar todo o histórico importado que já
+              venceu. Faturas futuras continuam em aberto.
+            </p>
+          </div>
+          <DialogFooter className="flex-wrap gap-2">
+            {hasHistoryCutoff && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setHistoryOpen(false);
+                  run(
+                    () =>
+                      markHistoricalInvoicesPaidAction({ until: null }),
+                    "Marcação de histórico pago removida.",
+                  );
+                }}
+              >
+                Remover marcação
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setHistoryOpen(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              disabled={!historyUntil}
+              onClick={() => {
+                const until = historyUntil;
+                setHistoryOpen(false);
+                run(
+                  () => markHistoricalInvoicesPaidAction({ until }),
+                  "Faturas antigas consideradas pagas.",
+                );
+              }}
+            >
+              Aplicar a todos os cartões
             </Button>
           </DialogFooter>
         </DialogContent>

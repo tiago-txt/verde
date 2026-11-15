@@ -17,7 +17,7 @@ import {
   type CardCycleConfig,
 } from "@/lib/finance/cards";
 import { formatCurrency } from "@/lib/format";
-import { idSchema, monthKeySchema } from "@/lib/validation/common";
+import { idSchema, isoDateSchema, monthKeySchema } from "@/lib/validation/common";
 import {
   createCardSchema,
   payInvoiceSchema,
@@ -65,7 +65,7 @@ export async function getCardInvoiceDetailAction(
 
 function revalidateCards(cardId?: string) {
   invalidateForecastCache();
-  revalidatePath("/cartoes");
+  revalidatePath("/cartoes", "layout");
   if (cardId) revalidatePath(`/cartoes/${cardId}`);
   revalidatePath("/lancamentos");
   revalidatePath("/contas");
@@ -460,6 +460,45 @@ export async function mergeCardsAction(input: {
   revalidateCards(target.id);
   revalidateCards(source.id);
   return { ok: true, id: target.id, count: moved };
+}
+
+export async function markHistoricalInvoicesPaidAction(input: {
+  cardId?: string | null;
+  until?: string | null;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+
+  const parsed = z
+    .object({
+      cardId: idSchema.nullable().optional(),
+      until: isoDateSchema.nullable().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "Data inválida.");
+  }
+
+  const until =
+    parsed.data.until === undefined ? todayISO() : parsed.data.until;
+  const where = parsed.data.cardId
+    ? and(
+        ws(creditCards.workspaceId),
+        eq(creditCards.id, parsed.data.cardId),
+        isNull(creditCards.deletedAt),
+      )
+    : and(ws(creditCards.workspaceId), isNull(creditCards.deletedAt));
+
+  const result = db
+    .update(creditCards)
+    .set({ faturasPagasAte: until, updatedAt: new Date() })
+    .where(where)
+    .run();
+
+  if (result.changes === 0) return fail("Nenhum cartão encontrado.");
+
+  revalidateCards(parsed.data.cardId ?? undefined);
+  return { ok: true, count: result.changes };
 }
 
 export async function payInvoiceAction(

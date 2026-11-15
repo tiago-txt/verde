@@ -3,11 +3,13 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   CheckCircle2,
   Download,
   FileSpreadsheet,
   Loader2,
   RotateCcw,
+  Trash2,
   Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -30,6 +32,7 @@ import {
   importJsonAction,
   importTransactionsAction,
   previewImportAction,
+  resetWorkspaceDataAction,
   undoLastImportAction,
   type ImportPreview,
 } from "@/lib/actions/data";
@@ -108,6 +111,11 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
   const [jsonError, setJsonError] = useState<string | null>(null);
   const [jsonResult, setJsonResult] = useState<string | null>(null);
   const [jsonPending, startJsonTransition] = useTransition();
+  const [resetAck, setResetAck] = useState(false);
+  const [resetText, setResetText] = useState("");
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetResult, setResetResult] = useState<string | null>(null);
+  const [resetPending, startResetTransition] = useTransition();
 
   const csvHref = useMemo(() => {
     if (!de || !ate || de > ate) return null;
@@ -558,6 +566,105 @@ export function DataSettings({ latestImport }: DataSettingsProps) {
           </CardContent>
         </Card>
       )}
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle
+              className="h-4 w-4 text-destructive"
+              aria-hidden="true"
+            />
+            Começar de novo
+          </CardTitle>
+          <CardDescription>
+            Apaga contas, cartões, lançamentos, categorias, tags, orçamentos,
+            recorrências e o histórico de importações deste espaço. Seu usuário,
+            login e preferências são mantidos.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            Esta ação é irreversível. Baixe um backup JSON antes de continuar.
+          </p>
+          <Button asChild variant="outline">
+            <a href="/api/export/json" download>
+              <Download className="h-4 w-4" />
+              Baixar backup JSON
+            </a>
+          </Button>
+
+          <FormError message={resetError} />
+          {resetResult && (
+            <p className="rounded-md border border-success/40 bg-success/10 px-3 py-2 text-sm text-success">
+              {resetResult}
+            </p>
+          )}
+
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+            <Checkbox
+              checked={resetAck}
+              onCheckedChange={(checked) => setResetAck(checked === true)}
+              disabled={resetPending}
+            />
+            Entendi que esta ação é irreversível.
+          </label>
+
+          <div className="max-w-sm space-y-1">
+            <Label htmlFor="reset-confirm" className="text-xs text-muted-foreground">
+              Digite APAGAR para confirmar
+            </Label>
+            <Input
+              id="reset-confirm"
+              value={resetText}
+              onChange={(event) => setResetText(event.target.value)}
+              disabled={resetPending}
+              autoComplete="off"
+              placeholder="APAGAR"
+            />
+          </div>
+
+          <Button
+            type="button"
+            variant="destructive"
+            disabled={
+              !resetAck ||
+              resetText.trim().toUpperCase() !== "APAGAR" ||
+              resetPending
+            }
+            onClick={() => {
+              setResetError(null);
+              setResetResult(null);
+              startResetTransition(async () => {
+                const response = await resetWorkspaceDataAction({
+                  confirmacao: resetText,
+                });
+                if (!response.ok) {
+                  setResetError(response.error);
+                  return;
+                }
+                setResetAck(false);
+                setResetText("");
+                setResetResult(
+                  `${response.count ?? 0} lançamento(s) apagado(s). O espaço está pronto para uma nova importação.`,
+                );
+                toast({
+                  description:
+                    "Dados apagados. Você já pode refazer a importação.",
+                  tone: "success",
+                });
+                router.refresh();
+              });
+            }}
+          >
+            {resetPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            Apagar dados do meu espaço
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

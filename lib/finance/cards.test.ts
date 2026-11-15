@@ -4,6 +4,7 @@ import {
   calcularLimiteUsado,
   datasDaFatura,
   eventoDaFatura,
+  faturaConsideradaPaga,
   faturaDaCompra,
   faturaPassaFiltros,
   intervaloDaFatura,
@@ -218,6 +219,23 @@ describe("limite usado e disponível", () => {
     expect(
       calcularLimiteUsado([{ restante: 0, credito: 5000 }]),
     ).toBe(0);
+  });
+
+  it("considera pagas apenas faturas vencidas até a data marcada", () => {
+    const card = { diaFechamento: 10, diaVencimento: 17 };
+    expect(
+      faturaConsideradaPaga(
+        { ...card, faturasPagasAte: "2026-12-31" },
+        "2026-12",
+      ),
+    ).toBe(true);
+    expect(
+      faturaConsideradaPaga(
+        { ...card, faturasPagasAte: "2026-12-31" },
+        "2027-01",
+      ),
+    ).toBe(false);
+    expect(faturaConsideradaPaga(card, "2026-12")).toBe(false);
   });
 });
 

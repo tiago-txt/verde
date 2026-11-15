@@ -16,13 +16,17 @@ import {
   accounts,
   ACCOUNT_TYPES,
   budgetCategories,
+  budgetCycleExceptions,
   budgetOverrides,
   budgets,
+  budgetVersions,
   CARD_BRANDS,
   CARD_CLOSING_BEHAVIORS,
   categories,
   CATEGORY_TYPES,
   creditCards,
+  forecastPreferences,
+  importBatches,
   RECURRENCE_FREQUENCIES,
   recurrences,
   tags,
@@ -31,6 +35,7 @@ import {
   TRANSACTION_TYPES,
   type RecurrenceTemplate,
 } from "@/lib/db/schema";
+import { seedWorkspaceDefaults } from "@/lib/db/seed-workspace";
 import { getSystemCategoryIds } from "@/lib/db/queries/categories";
 import {
   MAX_IMPORT_BYTES,
@@ -600,6 +605,92 @@ export async function undoLastImportAction(): Promise<ActionResult> {
   return { ok: true, count: result.changes };
 }
 
+/**
+ * Apaga todos os dados financeiros do workspace do usuário e recria apenas as
+ * categorias/tags padrão. Mantém usuário, workspace, login e preferências.
+ */
+export async function resetWorkspaceDataAction(input: {
+  confirmacao: string;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const confirmation =
+    typeof input?.confirmacao === "string" ? input.confirmacao : "";
+  if (confirmation.trim().toUpperCase() !== "APAGAR") {
+    return fail('Digite "APAGAR" para confirmar a exclusão.');
+  }
+
+  const { db, ws } = scopedDb(user.workspaceId);
+  let removedTransactions = 0;
+
+  try {
+    db.transaction((tx) => {
+      removedTransactions =
+        tx
+          .select({ count: sql<number>`count(*)` })
+          .from(transactions)
+          .where(ws(transactions.workspaceId))
+          .get()?.count ?? 0;
+
+      tx.delete(transactionTags)
+        .where(ws(transactionTags.workspaceId))
+        .run();
+      tx.delete(transactions)
+        .where(ws(transactions.workspaceId))
+        .run();
+      tx.delete(budgetCycleExceptions)
+        .where(ws(budgetCycleExceptions.workspaceId))
+        .run();
+      tx.delete(budgetVersions)
+        .where(ws(budgetVersions.workspaceId))
+        .run();
+      tx.delete(budgetOverrides)
+        .where(ws(budgetOverrides.workspaceId))
+        .run();
+      tx.delete(budgetCategories)
+        .where(ws(budgetCategories.workspaceId))
+        .run();
+      tx.delete(budgets).where(ws(budgets.workspaceId)).run();
+      tx.delete(recurrences)
+        .where(ws(recurrences.workspaceId))
+        .run();
+      tx.delete(importBatches)
+        .where(ws(importBatches.workspaceId))
+        .run();
+      tx.delete(tags).where(ws(tags.workspaceId)).run();
+      tx.delete(categories)
+        .where(
+          and(
+            ws(categories.workspaceId),
+            isNotNull(categories.categoriaPaiId),
+          ),
+        )
+        .run();
+      tx.delete(categories).where(ws(categories.workspaceId)).run();
+      tx.delete(creditCards)
+        .where(ws(creditCards.workspaceId))
+        .run();
+      tx.delete(accounts).where(ws(accounts.workspaceId)).run();
+      tx.delete(forecastPreferences)
+        .where(ws(forecastPreferences.workspaceId))
+        .run();
+    });
+
+    seedWorkspaceDefaults(db, user.workspaceId);
+  } catch (error) {
+    console.error("[verde] erro ao reiniciar dados do workspace:", error);
+    return fail(
+      error instanceof Error
+        ? `Não foi possível apagar os dados: ${error.message}`
+        : "Não foi possível apagar os dados.",
+    );
+  }
+
+  revalidateAfterDataChange();
+  revalidatePath("/configuracoes");
+  revalidatePath("/configuracoes/categorias");
+  return { ok: true, count: removedTransactions };
+}
+
 export async function importJsonAction(input: {
   json: string;
 }): Promise<JsonImportResult> {
@@ -717,6 +808,7 @@ export async function importJsonAction(input: {
             cor: text(row.cor, "#818cf8"),
             icone: text(row.icone, "CreditCard"),
             arquivado: booleanValue(row.arquivado),
+            faturasPagasAte: text(row.faturasPagasAte) || null,
             deletedAt: dateOrNull(row.deletedAt),
           })
           .run();

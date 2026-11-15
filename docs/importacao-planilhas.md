@@ -78,6 +78,32 @@ abas e origens, concilie pagamentos/cartões históricos e clique em
 “Pré-visualizar” e “Importar planilha”. O botão “Desfazer esta importação”
 remove o lote inteiro.
 
+## Faturas históricas
+
+Depois de importar um histórico grande, é comum várias faturas antigas ficarem
+em aberto porque os pagamentos não existiam no arquivo ou foram para outro
+cartão. Em **Cartões → Faturas antigas como pagas** é possível escolher uma data:
+todas as faturas com vencimento até ela passam a ser consideradas pagas no
+cálculo do limite e do histórico.
+
+Essa opção **não cria pagamentos e não altera o saldo das contas**. Ela apenas
+marca as faturas históricas como quitadas para não inflarem o limite usado. É
+possível remover a marcação depois. Para juntar um cartão histórico ao cartão
+correto, use **Incorporar em outro cartão**.
+
+## Começar de novo
+
+Em **Configurações → Dados → Começar de novo** é possível apagar todos os
+dados financeiros do espaço atual: contas, cartões, lançamentos, categorias,
+tags, orçamentos, recorrências e o histórico de importações. O usuário, o login,
+o workspace e as preferências são mantidos, e as categorias/tags padrão são
+recriadas.
+
+É obrigatório digitar `APAGAR` para confirmar. Depois do reset, o mesmo arquivo
+pode ser importado novamente sem o bloqueio de hash. No wizard, marque
+“Considerar faturas antigas como pagas (até hoje)” para já deixar o histórico
+vencido quitado no limite.
+
 ## Limitações
 
 - Fórmulas e macros não são executadas; o importador lê apenas valores.

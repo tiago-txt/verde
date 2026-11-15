@@ -48,6 +48,7 @@ import {
 import type { SpreadsheetImportRequestInput } from "@/lib/validation/import";
 import { sha256Hex } from "@/lib/finance/sha256";
 import { formatCurrency } from "@/lib/format";
+import { todayISO } from "@/lib/dates";
 
 export type SpreadsheetImportOptions = {
   accounts: Array<{
@@ -302,6 +303,8 @@ export function SpreadsheetImport({
   >({});
   const [ignoreDuplicateRows, setIgnoreDuplicateRows] = useState(false);
   const [reimportarHash, setReimportarHash] = useState(false);
+  const [considerHistoricalAsPaid, setConsiderHistoricalAsPaid] =
+    useState(false);
 
   const [preview, setPreview] = useState<SpreadsheetPreviewResult | null>(null);
   const [imported, setImported] = useState<string | null>(null);
@@ -885,6 +888,7 @@ export function SpreadsheetImport({
       setTransferState({});
       setIgnoreDuplicateRows(false);
       setReimportarHash(false);
+      setConsiderHistoricalAsPaid(false);
       setStep(2);
       setPreview(null);
     } catch (cause) {
@@ -1125,6 +1129,9 @@ export function SpreadsheetImport({
       ignoreRowIds: [],
       ignoreDuplicateRows,
       reimportarHash,
+      considerarFaturasPagasAte: considerHistoricalAsPaid
+        ? todayISO()
+        : null,
     };
 
     return {
@@ -2212,7 +2219,23 @@ export function SpreadsheetImport({
                 />
                 Reimportar mesmo se o arquivo já foi importado
               </label>
+              <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm">
+                <Checkbox
+                  checked={considerHistoricalAsPaid}
+                  onCheckedChange={(checked) =>
+                    setConsiderHistoricalAsPaid(checked === true)
+                  }
+                />
+                Considerar faturas antigas como pagas (até hoje)
+              </label>
             </div>
+            {considerHistoricalAsPaid && (
+              <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+                As faturas importadas com vencimento até hoje serão consideradas
+                pagas no limite e no histórico. Isso não cria pagamentos nem
+                altera o saldo das contas.
+              </p>
+            )}
 
             <div className="flex flex-wrap gap-2">
               <Button
@@ -2490,6 +2513,11 @@ export function SpreadsheetImport({
             <p className="text-xs">
               Contas, cartões, categorias e tags criados são mantidos; apenas os
               lançamentos do lote são removidos.
+            </p>
+            <p className="text-xs">
+              Se faturas antigas ficaram em aberto, use “Cartões → Faturas
+              antigas como pagas” para considerá-las quitadas sem alterar o
+              saldo das contas.
             </p>
           </div>
         )}

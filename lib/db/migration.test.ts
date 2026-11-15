@@ -138,6 +138,12 @@ describe("migration 0007 (workspaces)", () => {
         (column) => column.name === "fatura_chave_override",
       ),
     ).toBe(true);
+    const cardColumns = testDb.sqlite
+      .prepare("pragma table_info(credit_cards)")
+      .all() as { name: string }[];
+    expect(
+      cardColumns.some((column) => column.name === "faturas_pagas_ate"),
+    ).toBe(true);
     const tables = testDb.sqlite
       .prepare("select name from sqlite_master where type = 'table'")
       .all() as { name: string }[];

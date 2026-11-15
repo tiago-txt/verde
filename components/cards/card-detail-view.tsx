@@ -363,6 +363,13 @@ export function CardDetailView({
             />
           </div>
 
+          {fatura.consideradaPaga && (
+            <p className="rounded-md border border-border bg-surface-low px-3 py-2 text-xs text-muted-foreground">
+              Fatura histórica considerada paga pela configuração do cartão.
+              Nenhum pagamento real foi criado.
+            </p>
+          )}
+
           <PaymentProgress
             pago={fatura.pago}
             total={fatura.total}

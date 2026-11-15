@@ -13,6 +13,7 @@ import {
   calcularLimiteUsado,
   chaveDaFatura,
   datasDaFatura,
+  faturaConsideradaPaga,
   faturaDaCompra,
   faturaPassaFiltros,
   limiteDisponivel,
@@ -117,6 +118,8 @@ export type CardInvoiceEvent = {
   restante: number;
   status: CardInvoiceSummary["status"];
   vencida: boolean;
+  /** Fatura antiga marcada como paga sem transferência real. */
+  consideradaPaga?: boolean;
   /** Contas que efetivamente pagaram esta fatura, da maior para a menor. */
   pagamentos: CardInvoicePayer[];
 };
@@ -146,6 +149,7 @@ function cardConfig(card: CreditCard): CardCycleConfig {
     diaFechamento: card.diaFechamento,
     diaVencimento: card.diaVencimento,
     fechamentoCompra: card.fechamentoCompra,
+    faturasPagasAte: card.faturasPagasAte,
   };
 }
 
@@ -284,12 +288,19 @@ function invoicesForCard(
   }
 
   return [...buckets.entries()]
-    .map(([chave, totals]) => ({
-      ...montarResumoFatura(chave, config, totals.total, totals.pago, hoje),
-      pagamentos: [...totals.pagadores.values()].sort(
-        (a, b) => b.valor - a.valor,
-      ),
-    }))
+    .map(([chave, totals]) => {
+      const consideradaPaga = faturaConsideradaPaga(config, chave);
+      const pago = consideradaPaga
+        ? Math.max(totals.pago, totals.total)
+        : totals.pago;
+      return {
+        ...montarResumoFatura(chave, config, totals.total, pago, hoje),
+        consideradaPaga,
+        pagamentos: [...totals.pagadores.values()].sort(
+          (a, b) => b.valor - a.valor,
+        ),
+      };
+    })
     .sort((a, b) => a.chave.localeCompare(b.chave));
 }
 
@@ -380,6 +391,13 @@ export function getCardDebtSnapshot(
       .filter(
         (movement) =>
           movement.cartaoId === card.id && movement.tipo !== "transferencia",
+      )
+      .filter(
+        (movement) =>
+          !faturaConsideradaPaga(
+            config,
+            chaveDaFatura(movement, config),
+          ),
       )
       .map((movement, index) => ({
         id: `${card.id}:${movement.data}:${index}`,
@@ -723,6 +741,7 @@ export function listCardInvoiceEventsForMonth(
         restante: fatura.restante,
         status: fatura.status,
         vencida: fatura.vencida,
+        consideradaPaga: fatura.consideradaPaga,
         pagamentos: fatura.pagamentos,
       });
     }

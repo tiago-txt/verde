@@ -23,6 +23,8 @@ export type CardCycleConfig = {
   diaVencimento: number;
   /** `proxima_fatura` (padrão) ou `fatura_atual` para compra no fechamento. */
   fechamentoCompra?: CardClosingBehavior;
+  /** Faturas com vencimento até esta data são consideradas pagas. */
+  faturasPagasAte?: string | null;
 };
 
 export type CardInvoiceStatus = "aberta" | "fechada" | "parcial" | "paga";
@@ -41,6 +43,8 @@ export type CardInvoiceSummary = CardInvoiceDates & {
   credito: number;
   status: CardInvoiceStatus;
   vencida: boolean;
+  /** Fatura antiga marcada como paga pelo usuário (sem transferência real). */
+  consideradaPaga?: boolean;
 };
 
 export type CardMovement = {
@@ -126,6 +130,18 @@ export function fechamentoDaFatura(
   card: CardCycleConfig,
 ): string {
   return datasDaFatura(chave, card).fechamento;
+}
+
+/**
+ * A fatura é histórica e foi marcada como paga pelo usuário?
+ * Usa a data de vencimento para não considerar faturas futuras.
+ */
+export function faturaConsideradaPaga(
+  card: CardCycleConfig,
+  chave: string,
+): boolean {
+  if (!card.faturasPagasAte) return false;
+  return datasDaFatura(chave, card).vencimento <= card.faturasPagasAte;
 }
 
 /**

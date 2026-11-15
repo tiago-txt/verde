@@ -1646,6 +1646,7 @@ export async function importSpreadsheetImportAction(
       const cardIds = new Map<string, string>();
       const categoryIds = new Map<string, string>();
       const tagIds = new Map<string, string>();
+      const involvedCardIds = new Set<string>();
 
       // Reaproveita os IDs existentes carregados no contexto do plano.
       for (const creation of plan.accountsToCreate.values()) {
@@ -1691,6 +1692,7 @@ export async function importSpreadsheetImportAction(
           })
           .run();
         cardIds.set(cardRef(creation.key), id);
+        involvedCardIds.add(id);
       }
 
       for (const creation of plan.categoriesToCreate.values()) {
@@ -1747,6 +1749,9 @@ export async function importSpreadsheetImportAction(
           ? resolveRef(row.categoriaRef, categoryIds)
           : null;
 
+        if (cartaoId) involvedCardIds.add(cartaoId);
+        if (cartaoDestinoId) involvedCardIds.add(cartaoDestinoId);
+
         tx.insert(transactions)
           .values({
             id,
@@ -1782,6 +1787,24 @@ export async function importSpreadsheetImportAction(
             .run();
         }
         imported += 1;
+      }
+
+      if (parsed.data.decisions.considerarFaturasPagasAte) {
+        const ids = [...involvedCardIds];
+        if (ids.length > 0) {
+          tx.update(creditCards)
+            .set({
+              faturasPagasAte: parsed.data.decisions.considerarFaturasPagasAte,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(creditCards.workspaceId, workspaceId),
+                inArray(creditCards.id, ids),
+              ),
+            )
+            .run();
+        }
       }
 
       tx.insert(importBatches)

@@ -11,13 +11,17 @@ import {
 import { users, transactions, creditCards, type User } from "./schema";
 import { createAccountAction } from "@/lib/actions/accounts";
 import { createCardAction, payInvoiceAction } from "@/lib/actions/cards";
-import { mergeCardsAction } from "@/lib/actions/cards";
+import {
+  markHistoricalInvoicesPaidAction,
+  mergeCardsAction,
+} from "@/lib/actions/cards";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { deleteTransactionAction } from "@/lib/actions/transactions";
 import {
   getCardInvoiceAccountDeltas,
   getCardInvoiceDetail,
   listCardInvoiceEventsForMonth,
+  listCards,
 } from "./queries/cards";
 import type { CardInvoiceFilters } from "@/lib/finance/cards";
 import { getMonthBalances, listMonthTransactions } from "./queries/transactions";
@@ -529,5 +533,60 @@ describe("fatura como evento único", () => {
       .where(eq(creditCards.id, fixture.cardId))
       .get();
     expect(source?.deletedAt).not.toBeNull();
+  });
+
+  it("considera faturas antigas como pagas sem criar transferências", async () => {
+    const fixture = await setupInvoice();
+
+    const marked = await markHistoricalInvoicesPaidAction({
+      cardId: fixture.cardId,
+      until: "2027-12-31",
+    });
+    expect(marked.ok).toBe(true);
+
+    const [event] = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    );
+    expect(event).toMatchObject({
+      total: 20_000,
+      pago: 20_000,
+      restante: 0,
+      status: "paga",
+      consideradaPaga: true,
+    });
+
+    const card = listCards(user.workspaceId).find(
+      (item) => item.id === fixture.cardId,
+    );
+    expect(card?.limiteUsado).toBe(0);
+    expect(card?.faturasPagasAte).toBe("2027-12-31");
+
+    const detail = getCardInvoiceDetail(
+      user.workspaceId,
+      fixture.cardId,
+      fixture.faturaChave,
+    );
+    expect(detail?.fatura.consideradaPaga).toBe(true);
+    expect(detail?.payments).toHaveLength(0);
+
+    const removed = await markHistoricalInvoicesPaidAction({
+      cardId: fixture.cardId,
+      until: null,
+    });
+    expect(removed.ok).toBe(true);
+
+    const [reopened] = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    );
+    expect(reopened).toMatchObject({
+      total: 20_000,
+      pago: 0,
+      restante: 20_000,
+      consideradaPaga: false,
+    });
   });
 });

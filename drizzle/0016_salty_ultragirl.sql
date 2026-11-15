@@ -1,0 +1,1 @@
+ALTER TABLE `credit_cards` ADD `faturas_pagas_ate` text;

@@ -248,6 +248,11 @@ export const creditCards = sqliteTable(
     })
       .notNull()
       .default("proxima_fatura"),
+    /**
+     * Faturas com vencimento até esta data são consideradas pagas no cálculo
+     * do histórico/limite. Não cria pagamentos nem altera saldos de contas.
+     */
+    faturasPagasAte: text("faturas_pagas_ate"),
     contaPagamentoId: text("conta_pagamento_id").references(() => accounts.id, {
       onDelete: "set null",
     }),
