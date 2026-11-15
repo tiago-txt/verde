@@ -31,7 +31,10 @@ export type RecurrenceCandidate = {
   frequencia: RecurrenceFrequency;
   descricao: string;
   tipo: "despesa" | "receita";
+  /** Valor da ocorrência mais recente, usado no modelo da série. */
   valorCentavos: number;
+  valorMinimo: number;
+  valorMaximo: number;
   origemNome: string;
   categoriaNome: string | null;
   rowIds: string[];
@@ -74,6 +77,67 @@ function matchesFrequency(
   );
 }
 
+function monthDifference(start: string, date: string): number | null {
+  const startParts = start.split("-").map(Number);
+  const dateParts = date.split("-").map(Number);
+  if (startParts.length !== 3 || dateParts.length !== 3) return null;
+  return (
+    ((dateParts[0] ?? 0) - (startParts[0] ?? 0)) * 12 +
+    ((dateParts[1] ?? 0) - (startParts[1] ?? 0))
+  );
+}
+
+function dayDifference(start: string, date: string): number | null {
+  const startTime = new Date(`${start}T12:00:00Z`).getTime();
+  const dateTime = new Date(`${date}T12:00:00Z`).getTime();
+  if (Number.isNaN(startTime) || Number.isNaN(dateTime)) return null;
+  return Math.round((dateTime - startTime) / 86_400_000);
+}
+
+/**
+ * Aceita séries com meses/ocorrências faltando, desde que todas as datas
+ * caibam na mesma grade da frequência. É o que permite reconhecer despesas
+ * mensais que variam de valor ou que tiveram um mês sem lançamento.
+ */
+function matchesFrequencyAllowingGaps(
+  dates: string[],
+  frequencia: RecurrenceFrequency,
+): boolean {
+  if (dates.length < 2) return false;
+  const start = dates[0] as string;
+
+  return dates.every((date, index) => {
+    if (index === 0) return true;
+    switch (frequencia) {
+      case "mensal": {
+        const months = monthDifference(start, date);
+        return (
+          months !== null &&
+          months > 0 &&
+          date === expectedDate(start, frequencia, months)
+        );
+      }
+      case "semanal": {
+        const days = dayDifference(start, date);
+        return (
+          days !== null &&
+          days > 0 &&
+          days % 7 === 0 &&
+          date === expectedDate(start, frequencia, days / 7)
+        );
+      }
+      case "anual": {
+        const years = (Number(date.slice(0, 4)) -
+          Number(start.slice(0, 4))) as number;
+        return (
+          years > 0 &&
+          date === expectedDate(start, frequencia, years)
+        );
+      }
+    }
+  });
+}
+
 /** Infere a frequência de uma sequência de datas. Para uma data, assume mensal. */
 export function inferRecurrenceFrequency(
   dates: string[],
@@ -88,8 +152,26 @@ export function inferRecurrenceFrequency(
 }
 
 /**
- * Detecta séries de lançamentos com mesma origem, descrição, categoria, tipo
- * e valor, em intervalos mensais, semanais ou anuais exatos.
+ * Primeira ocorrência da série que cai em `referenceDate` ou depois.
+ * Parte da primeira ocorrência para não começar no fim de uma série longa.
+ */
+export function firstRecurrenceOnOrAfter(
+  firstDate: string,
+  frequencia: RecurrenceFrequency,
+  referenceDate: string,
+): string {
+  for (let index = 0; index < 2_000; index += 1) {
+    const candidate = expectedDate(firstDate, frequencia, index);
+    if (candidate >= referenceDate) return candidate;
+  }
+  return firstDate;
+}
+
+/**
+ * Detecta séries de lançamentos com mesma origem, descrição, categoria e tipo,
+ * em intervalos mensais, semanais ou anuais. Valores podem variar e pode haver
+ * meses sem lançamento; a série usa o valor da ocorrência mais recente como
+ * modelo para as próximas.
  *
  * Exige pelo menos 3 ocorrências e não considera linhas parceladas/especiais.
  */
@@ -113,7 +195,6 @@ export function detectRecurrences(
     const key = [
       normalizeEntityName(row.origemNome),
       row.tipo,
-      row.valorCentavos,
       normalizeEntityName(row.descricao),
       normalizeEntityName(row.categoriaNome ?? ""),
     ].join("|");

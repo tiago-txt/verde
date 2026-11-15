@@ -48,11 +48,15 @@ import {
 import type { SpreadsheetImportRequestInput } from "@/lib/validation/import";
 import { sha256Hex } from "@/lib/finance/sha256";
 import { formatCurrency, formatDate } from "@/lib/format";
-import { todayISO } from "@/lib/dates";
+import { addDaysISO, todayISO } from "@/lib/dates";
 import {
   detectRecurrencesFromSpreadsheet,
+  nextRecurrenceOnOrAfter,
   type RecurrenceCandidate,
 } from "@/lib/finance/recurrence-detection";
+import { suggestCategoryIcon } from "@/lib/finance/category-icons";
+import { findBankIconByName } from "@/lib/finance/bank-icons";
+import { ICON_MAP } from "@/lib/icons";
 
 export type SpreadsheetImportOptions = {
   accounts: Array<{
@@ -315,6 +319,7 @@ export function SpreadsheetImport({
   const [selectedRecurrenceKeys, setSelectedRecurrenceKeys] = useState<
     Set<string>
   >(new Set());
+  const [recurrencesFromToday, setRecurrencesFromToday] = useState(true);
 
   const [preview, setPreview] = useState<SpreadsheetPreviewResult | null>(null);
   const [imported, setImported] = useState<string | null>(null);
@@ -322,6 +327,21 @@ export function SpreadsheetImport({
 
   const accountOptions = options.accounts.filter((item) => !item.arquivada);
   const cardOptions = options.cards;
+
+  function isRecentRecurrence(candidate: RecurrenceCandidate): boolean {
+    const windowDays = candidate.frequencia === "anual" ? 456 : 183;
+    return candidate.ultimaData >= addDaysISO(todayISO(), -windowDays);
+  }
+
+  function recurrenceStartDate(candidate: RecurrenceCandidate): string {
+    return recurrencesFromToday
+      ? nextRecurrenceOnOrAfter(
+          candidate.ultimaData,
+          candidate.frequencia,
+          todayISO(),
+        )
+      : candidate.ultimaData;
+  }
 
   useEffect(() => {
     if (!analysis) {
@@ -331,7 +351,15 @@ export function SpreadsheetImport({
     }
     const candidates = detectRecurrencesFromSpreadsheet(analysis.rows);
     setRecurrenceCandidates(candidates);
-    setSelectedRecurrenceKeys(new Set(candidates.map((item) => item.key)));
+    // Por padrão, só marcamos séries com ocorrência recente. Séries antigas
+    // continuam visíveis, mas exigem seleção manual.
+    setSelectedRecurrenceKeys(
+      new Set(
+        candidates
+          .filter((candidate) => isRecentRecurrence(candidate))
+          .map((candidate) => candidate.key),
+      ),
+    );
   }, [analysis]);
 
   const categoryMemo = useMemo(() => analysis?.categories ?? [], [analysis]);
@@ -1158,7 +1186,7 @@ export function SpreadsheetImport({
         .map((candidate) => ({
           key: candidate.key,
           frequencia: candidate.frequencia,
-          dataInicio: candidate.ultimaData,
+          dataInicio: recurrenceStartDate(candidate),
           dataFim: null,
         })),
     };
@@ -1276,6 +1304,15 @@ export function SpreadsheetImport({
       .map((group) => normalizeEntityName(group.cardName ?? ""))
       .filter(Boolean),
   ).size;
+  const sortedRecurrenceCandidates = [...recurrenceCandidates].sort((a, b) =>
+    b.ultimaData.localeCompare(a.ultimaData) ||
+    a.descricao.localeCompare(b.descricao),
+  );
+  const recentRecurrenceKeys = new Set(
+    recurrenceCandidates
+      .filter((candidate) => isRecentRecurrence(candidate))
+      .map((candidate) => candidate.key),
+  );
 
   return (
     <Card>
@@ -1475,6 +1512,10 @@ export function SpreadsheetImport({
                           ? "conta"
                           : sheet.kind;
                       const origin = originFor(sheet.name, kind);
+                      const detectedBank =
+                        origin.mode === "new"
+                          ? findBankIconByName(origin.name)
+                          : null;
                       return (
                         <tr key={sheet.name} className="border-t border-border align-top">
                           <td className="p-2">
@@ -1571,7 +1612,9 @@ export function SpreadsheetImport({
                             <p className="mt-1 text-xs text-muted-foreground">
                               {origin.mode === "existing"
                                 ? "Usando existente"
-                                : "Criando novo"}
+                                : detectedBank
+                                  ? `Ícone do banco: ${detectedBank.name}`
+                                  : "Criando novo · ícone padrão"}
                             </p>
                           </td>
                           <td className="p-2">
@@ -1676,12 +1719,24 @@ export function SpreadsheetImport({
                       const matching = options.categories.filter(
                         (item) => item.tipo === category.tipo,
                       );
+                      const SuggestedIcon =
+                        ICON_MAP[suggestCategoryIcon(category.nome, category.tipo)];
                       return (
                         <tr
                           key={category.key}
                           className="border-t border-border"
                         >
-                          <td className="p-2">{category.nome}</td>
+                          <td className="p-2">
+                            <span className="inline-flex items-center gap-1.5">
+                              {decision.action === "criar" && (
+                                <SuggestedIcon
+                                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                                  aria-hidden="true"
+                                />
+                              )}
+                              {category.nome}
+                            </span>
+                          </td>
                           <td className="p-2">{category.tipo}</td>
                           <td className="p-2">{category.count}</td>
                           <td className="p-2">
@@ -1900,12 +1955,66 @@ export function SpreadsheetImport({
                 </h3>
                 <p className="text-xs text-muted-foreground">
                   Séries com mesma origem, descrição, categoria e valor em
-                  intervalos regulares. Marque as que devem virar uma
-                  recorrência editável em lote. As ocorrências importadas serão
-                  vinculadas à série.
+                  intervalos regulares. Por padrão, só as com ocorrência
+                  recente ficam marcadas. A série começa na próxima ocorrência
+                  a partir de hoje; ocorrências antigas não são vinculadas.
                 </p>
+                <div className="flex flex-wrap items-center gap-3 rounded-md border border-border p-2">
+                  <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs">
+                    <Checkbox
+                      checked={recurrencesFromToday}
+                      onCheckedChange={(checked) =>
+                        setRecurrencesFromToday(checked === true)
+                      }
+                      aria-label="Criar recorrências somente a partir de hoje"
+                    />
+                    Criar somente a partir de hoje
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {selectedRecurrenceKeys.size} de{" "}
+                    {recurrenceCandidates.length} selecionada(s)
+                    {recentRecurrenceKeys.size < recurrenceCandidates.length
+                      ? ` · ${recurrenceCandidates.length - recentRecurrenceKeys.size} antiga(s) desmarcada(s)`
+                      : ""}
+                  </span>
+                  <div className="ml-auto flex flex-wrap gap-1">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-11 text-xs sm:h-8"
+                      onClick={() =>
+                        setSelectedRecurrenceKeys(new Set(recentRecurrenceKeys))
+                      }
+                    >
+                      Selecionar recentes
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-11 text-xs sm:h-8"
+                      onClick={() =>
+                        setSelectedRecurrenceKeys(
+                          new Set(recurrenceCandidates.map((item) => item.key)),
+                        )
+                      }
+                    >
+                      Selecionar todas
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="h-11 text-xs sm:h-8"
+                      onClick={() => setSelectedRecurrenceKeys(new Set())}
+                    >
+                      Limpar
+                    </Button>
+                  </div>
+                </div>
                 <div className="max-h-64 overflow-auto">
-                  <table className="w-full min-w-[860px] text-left text-xs">
+                  <table className="w-full min-w-[920px] text-left text-xs">
                     <thead className="sticky top-0 bg-card text-muted-foreground">
                       <tr>
                         <th className="p-2 font-medium">Usar</th>
@@ -1914,11 +2023,11 @@ export function SpreadsheetImport({
                         <th className="p-2 font-medium">Frequência</th>
                         <th className="p-2 font-medium">Ocorrências</th>
                         <th className="p-2 font-medium">Período</th>
-                        <th className="p-2 font-medium">Próxima</th>
+                        <th className="p-2 font-medium">Início da série</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {recurrenceCandidates.map((candidate) => (
+                      {sortedRecurrenceCandidates.map((candidate) => (
                         <tr
                           key={candidate.key}
                           className="border-t border-border"
@@ -1969,9 +2078,17 @@ export function SpreadsheetImport({
                           <td className="p-2">
                             {formatDate(candidate.primeiraData)} a{" "}
                             {formatDate(candidate.ultimaData)}
+                            {!recentRecurrenceKeys.has(candidate.key) && (
+                              <Badge
+                                variant="warning"
+                                className="ml-1.5 px-1.5 py-0"
+                              >
+                                antiga
+                              </Badge>
+                            )}
                           </td>
                           <td className="p-2">
-                            {formatDate(candidate.proximaData)}
+                            {formatDate(recurrenceStartDate(candidate))}
                           </td>
                         </tr>
                       ))}

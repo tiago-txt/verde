@@ -30,6 +30,8 @@ import {
   faturaDaCompra,
   type CardCycleConfig,
 } from "@/lib/finance/cards";
+import { findBankIconByName } from "@/lib/finance/bank-icons";
+import { suggestCategoryIcon } from "@/lib/finance/category-icons";
 import {
   classifySpecialRow,
   investmentGroupKey,
@@ -1706,6 +1708,7 @@ export async function importSpreadsheetImportAction(
       // Reaproveita os IDs existentes carregados no contexto do plano.
       for (const creation of plan.accountsToCreate.values()) {
         const id = crypto.randomUUID();
+        const bank = findBankIconByName(creation.nome);
         tx.insert(accounts)
           .values({
             id,
@@ -1713,8 +1716,8 @@ export async function importSpreadsheetImportAction(
             nome: creation.nome,
             tipo: "corrente",
             saldoInicial: creation.saldoInicial,
-            cor: "#34d399",
-            icone: "Wallet",
+            cor: bank?.brandColor ?? "#34d399",
+            icone: bank?.id ?? "Wallet",
             arquivada: false,
             createdAt: now,
             updatedAt: now,
@@ -1728,6 +1731,7 @@ export async function importSpreadsheetImportAction(
         const contaPagamentoId = creation.contaPagamentoRef
           ? resolveRef(creation.contaPagamentoRef, accountIds)
           : null;
+        const bank = findBankIconByName(creation.nome);
         tx.insert(creditCards)
           .values({
             id,
@@ -1739,8 +1743,8 @@ export async function importSpreadsheetImportAction(
             diaVencimento: creation.diaVencimento,
             fechamentoCompra: "proxima_fatura",
             contaPagamentoId,
-            cor: "#818cf8",
-            icone: "CreditCard",
+            cor: bank?.brandColor ?? "#818cf8",
+            icone: bank?.id ?? "CreditCard",
             arquivado: creation.arquivado,
             apelidos: [],
             createdAt: now,
@@ -1759,8 +1763,7 @@ export async function importSpreadsheetImportAction(
             workspaceId,
             nome: creation.nome,
             tipo: creation.tipo,
-            icone:
-              creation.tipo === "despesa" ? "CircleEllipsis" : "CirclePlus",
+            icone: suggestCategoryIcon(creation.nome, creation.tipo),
             cor: "#94a3b8",
             isSystem: false,
             createdAt: now,
@@ -1854,10 +1857,16 @@ export async function importSpreadsheetImportAction(
         const latest = candidatePlanRows.at(-1);
         if (!latest) continue;
 
-        const linkedIds = candidate.rowIds
-          .map((rowId) => transactionIdByRowId.get(rowId))
+        const recurrenceStart = decision.dataInicio ?? latest.data;
+        // Ao iniciar a série em uma data posterior à última ocorrência
+        // importada, as ocorrências antigas ficam de fora do vínculo.
+        const rowsToLink =
+          recurrenceStart === latest.data
+            ? candidatePlanRows
+            : candidatePlanRows.filter((row) => row.data >= recurrenceStart);
+        const linkedIds = rowsToLink
+          .map((row) => transactionIdByRowId.get(row.rowId))
           .filter((id): id is string => Boolean(id));
-        if (linkedIds.length === 0) continue;
 
         const contaId = latest.contaRef
           ? resolveRef(latest.contaRef, accountIds)
@@ -1896,22 +1905,24 @@ export async function importSpreadsheetImportAction(
             id: recurrenceId,
             workspaceId,
             frequencia: decision.frequencia ?? candidate.frequencia,
-            dataInicio: decision.dataInicio ?? latest.data,
+            dataInicio: recurrenceStart,
             dataFim: decision.dataFim ?? null,
             ativo: true,
             template,
           })
           .run();
 
-        tx.update(transactions)
-          .set({ recorrenciaId: recurrenceId, updatedAt: now })
-          .where(
-            and(
-              eq(transactions.workspaceId, workspaceId),
-              inArray(transactions.id, linkedIds),
-            ),
-          )
-          .run();
+        if (linkedIds.length > 0) {
+          tx.update(transactions)
+            .set({ recorrenciaId: recurrenceId, updatedAt: now })
+            .where(
+              and(
+                eq(transactions.workspaceId, workspaceId),
+                inArray(transactions.id, linkedIds),
+              ),
+            )
+            .run();
+        }
       }
 
       if (parsed.data.decisions.considerarFaturasPagasAte) {

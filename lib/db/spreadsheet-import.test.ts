@@ -310,6 +310,7 @@ describe("importação de planilha", () => {
       )
       .get();
     expect(account?.saldoInicial).toBe(68_594);
+    expect(account?.icone).toBe("Wallet");
 
     const card = testDb.db
       .select()
@@ -323,6 +324,7 @@ describe("importação de planilha", () => {
       .get();
     expect(card?.arquivado).toBe(false);
     expect(card?.contaPagamentoId).toBe(account?.id);
+    expect(card?.icone).toBe("CreditCard");
 
     const historical = testDb.db
       .select()
@@ -497,20 +499,20 @@ describe("importação de planilha", () => {
         .get(),
     ).toBeUndefined();
 
-    // Categoria criada.
-    expect(
-      testDb.db
-        .select()
-        .from(categories)
-        .where(
-          and(
-            eq(categories.workspaceId, user.workspaceId),
-            eq(categories.nome, "Investimentos"),
-            eq(categories.tipo, "despesa"),
-          ),
-        )
-        .get(),
-    ).toBeDefined();
+    // Categoria criada com ícone semântico automático.
+    const createdCategory = testDb.db
+      .select()
+      .from(categories)
+      .where(
+        and(
+          eq(categories.workspaceId, user.workspaceId),
+          eq(categories.nome, "Investimentos"),
+          eq(categories.tipo, "despesa"),
+        ),
+      )
+      .get();
+    expect(createdCategory).toBeDefined();
+    expect(createdCategory?.icone).toBe("TrendingUp");
 
     const batch = testDb.db
       .select()
@@ -737,5 +739,75 @@ describe("importação de planilha", () => {
           row.recorrenciaId === recurrence?.id && row.data > "2024-03-10",
       ),
     ).toBe(true);
+  });
+
+  it("inicia a recorrência somente a partir da data escolhida", async () => {
+    const sheets: SpreadsheetSheet[] = [
+      {
+        name: "Conta",
+        headers: [
+          "Data",
+          "Descrição",
+          "Categoria",
+          "Valor",
+          "Situação",
+          "Tags",
+          "Informações adicionais",
+        ],
+        rows: [
+          ["10.01.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+          ["10.02.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+          ["10.03.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+        ],
+      },
+    ];
+
+    const request = buildRequest(sheets);
+    const analysis = analyzeSpreadsheet(sheets);
+    const candidates = detectRecurrencesFromSpreadsheet(analysis.rows);
+    expect(candidates).toHaveLength(1);
+    request.decisions.recurrences = candidates.map((candidate) => ({
+      key: candidate.key,
+      frequencia: candidate.frequencia,
+      dataInicio: "2026-12-10",
+      dataFim: null,
+    }));
+
+    const result = await importSpreadsheetImportAction(request);
+    if (!result.ok) throw new Error(result.error);
+
+    const recurrence = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.workspaceId, user.workspaceId))
+      .get();
+    expect(recurrence?.dataInicio).toBe("2026-12-10");
+
+    const imported = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.descricao, "Aluguel"),
+          eq(transactions.importBatchId, result.batchId),
+        ),
+      )
+      .all();
+    // As ocorrências antigas ficam independentes da nova série.
+    expect(imported.every((row) => row.recorrenciaId === null)).toBe(true);
+
+    const generated = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.descricao, "Aluguel"),
+          eq(transactions.recorrenciaId, recurrence?.id ?? ""),
+        ),
+      )
+      .all();
+    expect(generated.some((row) => row.data === "2026-12-10")).toBe(true);
   });
 });

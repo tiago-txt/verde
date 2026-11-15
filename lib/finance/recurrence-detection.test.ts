@@ -3,6 +3,7 @@ import {
   detectRecurrences,
   detectRecurrencesFromSpreadsheet,
   inferRecurrenceFrequency,
+  nextRecurrenceOnOrAfter,
   type RecurrenceDetectionRow,
 } from "./recurrence-detection";
 import type { CanonicalSpreadsheetRow } from "./spreadsheet-import";
@@ -152,5 +153,31 @@ describe("detector de recorrências", () => {
     const candidates = detectRecurrencesFromSpreadsheet(rows);
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.rowIds).toEqual(["1", "2", "3"]);
+  });
+});
+
+describe("início da série a partir de hoje", () => {
+  it("avança a série antiga até a próxima ocorrência a partir da referência", () => {
+    expect(nextRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-10")).toBe(
+      "2026-11-10",
+    );
+    expect(nextRecurrenceOnOrAfter("2022-08-10", "mensal", "2026-11-15")).toBe(
+      "2026-12-10",
+    );
+    expect(nextRecurrenceOnOrAfter("2026-01-05", "semanal", "2026-01-20")).toBe(
+      "2026-01-26",
+    );
+    expect(nextRecurrenceOnOrAfter("2022-03-01", "anual", "2026-11-15")).toBe(
+      "2027-03-01",
+    );
+    expect(nextRecurrenceOnOrAfter("2024-01-31", "mensal", "2024-03-01")).toBe(
+      "2024-03-31",
+    );
+  });
+
+  it("mantém a própria data quando a última ocorrência já é futura", () => {
+    expect(nextRecurrenceOnOrAfter("2026-12-10", "mensal", "2026-11-15")).toBe(
+      "2026-12-10",
+    );
   });
 });

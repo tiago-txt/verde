@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   BANK_ICONS,
   findBankIcon,
+  findBankIconByName,
   filterBankIcons,
   isBankIconId,
 } from "./bank-icons";
@@ -44,6 +45,23 @@ describe("catálogo de instituições financeiras", () => {
     expect(filterBankIcons("mercado pago").map((bank) => bank.id)).toContain(
       "bank:mercadopago",
     );
+  });
+
+  it("identifica banco pelo nome usado na importação", () => {
+    expect(findBankIconByName("Nu")?.id).toBe("bank:nubank");
+    expect(findBankIconByName("Nubank")?.id).toBe("bank:nubank");
+    expect(findBankIconByName("Conta Salário")).toBeNull();
+    expect(findBankIconByName("Banco Inter")?.id).toBe("bank:inter");
+    expect(findBankIconByName("Cartão Amazon Prime")?.id).toBe(
+      "bank:amazonprime",
+    );
+    expect(findBankIconByName("Cartão Samsung")?.id).toBe("bank:samsung");
+    expect(findBankIconByName("Cartão Carbono")?.id).toBe("bank:c6");
+    expect(findBankIconByName("Recarga Pay")?.id).toBe("bank:recargapay");
+    expect(findBankIconByName("Elite")?.id).toBe("bank:santanderelite");
+    expect(findBankIconByName("Meliuz")?.id).toBe("bank:meliuz");
+    expect(findBankIconByName("N26")?.id).toBe("bank:n26");
+    expect(findBankIconByName("Next")?.id).toBe("bank:next");
   });
 
   it("mantém ids estáveis e validação compatível", () => {

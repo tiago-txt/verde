@@ -67,7 +67,7 @@ export const BANK_ICONS: BankIconDefinition[] = [
   {
     id: "bank:c6",
     name: "C6 Bank",
-    keywords: ["c6", "c6 bank"],
+    keywords: ["c6", "c6 bank", "carbono", "c6 carbono", "c6 carbon"],
     brandColor: "#242424",
     logo: "/banks/c6bank.svg",
   },
@@ -214,4 +214,41 @@ export function filterBankIcons(query: string): BankIconDefinition[] {
     if (normalize(bank.id).includes(term)) return true;
     return bank.keywords.some((keyword) => normalize(keyword).includes(term));
   });
+}
+
+/**
+ * Tenta identificar a instituição a partir do nome da conta/cartão.
+ * Usado na importação para já criar o registro com o ícone do banco.
+ */
+export function findBankIconByName(
+  name: string | null | undefined,
+): BankIconDefinition | null {
+  const value = normalize(name ?? "");
+  if (!value) return null;
+
+  const exact = BANK_ICONS.find(
+    (bank) =>
+      normalize(bank.name) === value ||
+      bank.keywords.some((keyword) => normalize(keyword) === value),
+  );
+  if (exact) return exact;
+
+  const tokens = value.split(/[^a-z0-9]+/).filter(Boolean);
+
+  const phrase = BANK_ICONS.find((bank) =>
+    bank.keywords.some((keyword) => {
+      const normalized = normalize(keyword);
+      return normalized.includes(" ") && value.includes(normalized);
+    }),
+  );
+  if (phrase) return phrase;
+
+  return (
+    BANK_ICONS.find((bank) =>
+      bank.keywords.some((keyword) => {
+        const normalized = normalize(keyword);
+        return !normalized.includes(" ") && tokens.includes(normalized);
+      }),
+    ) ?? null
+  );
 }
