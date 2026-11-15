@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, ChevronUp, Info } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -185,6 +185,21 @@ export function TransactionsSummaryFooter({
   const [breakdownKind, setBreakdownKind] = useState<
     "despesa" | "receita" | null
   >(null);
+  const desktopFooterRef = useRef<HTMLDivElement>(null);
+  const [desktopFooterHeight, setDesktopFooterHeight] = useState(0);
+
+  useEffect(() => {
+    const element = desktopFooterRef.current;
+    if (!element) return;
+
+    const update = () =>
+      setDesktopFooterHeight(element.getBoundingClientRect().height);
+    update();
+
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
 
   // Caixa usa o resumo original (realizado + previsto com faturas/orçamento).
   // Competência usa o resultado por competência, sem somar a fatura virtual.
@@ -253,7 +268,10 @@ export function TransactionsSummaryFooter({
 
   return (
     <>
-      <div className="fixed bottom-0 left-0 right-0 z-30 hidden border-t border-border bg-card/95 backdrop-blur lg:left-[var(--sidebar-width,260px)] lg:block">
+      <div
+        ref={desktopFooterRef}
+        className="fixed bottom-0 left-0 right-0 z-30 hidden border-t border-border bg-card/95 backdrop-blur lg:left-[var(--sidebar-width,260px)] lg:block"
+      >
         {expanded && (
           <div className="mx-auto max-w-7xl px-8 pt-3">
             <div className="ml-auto w-full max-w-sm border-b border-border pb-3">
@@ -287,6 +305,14 @@ export function TransactionsSummaryFooter({
           </Button>
         </div>
       </div>
+
+      {expanded && (
+        <div
+          aria-hidden="true"
+          className="hidden lg:block"
+          style={{ height: desktopFooterHeight + 16 }}
+        />
+      )}
 
       <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden">
         <div className="flex h-[52px] items-center gap-2 pl-4 pr-2">
