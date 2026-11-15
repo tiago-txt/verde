@@ -25,6 +25,7 @@ import {
 } from "@/lib/finance/budgets";
 import { loadBudgetSeries } from "./budgets";
 import {
+  buildMonthHistory,
   construirProjecao,
   causasDoPeriodo,
   detectarPeriodosNegativos,
@@ -583,6 +584,7 @@ function buildProjectionForAccounts(
   comEstimativas: boolean,
 ): {
   contas: ForecastAccount[];
+  rows: ForecastTransactionRow[];
   eventos: ForecastEvent[];
   projection: ForecastProjection;
 } {
@@ -604,6 +606,7 @@ function buildProjectionForAccounts(
 
   return {
     contas: accountsWithBalance,
+    rows,
     eventos,
     projection: construirProjecao({
       hoje,
@@ -676,6 +679,13 @@ export function getForecastData(
     causas: causasDoPeriodo(projection, period),
   }));
 
+  const monthHistory = buildMonthHistory(
+    contas,
+    completo.rows,
+    projection.saldoInicial,
+    hoje,
+  );
+
   const data: ForecastData = {
     prefs: {
       horizonte: prefs.horizonte,
@@ -688,7 +698,7 @@ export function getForecastData(
     projection,
     projectionCerto,
     alertas,
-    meses: resumoMensal(projection),
+    meses: resumoMensal(projection, projection.margem, monthHistory),
     menorSaldo: menorSaldoDaSerie(projection),
     temReceitaAnual: loadActiveRecurrences(workspaceId).some(
       (row) =>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { formatCurrency, formatDate } from "@/lib/format";
 import type { ForecastData } from "@/lib/db/queries/forecast";
+import { impactoNoTotal } from "@/lib/finance/forecast";
 import { NumberSource } from "@/components/dashboard/number-source";
 
 function sparklinePoints(data: ForecastData): string {
@@ -35,9 +36,21 @@ export function ForecastMiniCard({ data }: { data: ForecastData }) {
         : `Negativo a partir de ${formatDate(first.inicio)}; mínimo ${formatCurrency(first.menorSaldo)}.`
       : `Positivo pelos próximos ${data.prefs.horizonte} meses; mínimo ${formatCurrency(data.menorSaldo.saldo)} em ${formatDate(data.menorSaldo.data)}.`;
   const ultimo = data.projection.pontos.at(-1)?.saldo ?? data.projection.saldoInicial;
-  const entradas = data.meses.reduce((sum, mes) => sum + mes.entradas, 0);
-  const saidas = data.meses.reduce((sum, mes) => sum + mes.saidas, 0);
-  const liberacoes = data.meses.reduce((sum, mes) => sum + mes.liberacoes, 0);
+  const contasSelecionadas = new Set(
+    data.projection.entrada.contas.map((conta) => conta.id),
+  );
+  let entradas = 0;
+  let saidas = 0;
+  let liberacoes = 0;
+  for (const evento of data.projection.eventos) {
+    const impacto = impactoNoTotal(evento, contasSelecionadas);
+    if (evento.kind === "liberacao") {
+      liberacoes += Math.max(0, impacto);
+      continue;
+    }
+    if (impacto > 0) entradas += impacto;
+    else if (impacto < 0) saidas += Math.abs(impacto);
+  }
 
   return (
     <Card className="h-full">

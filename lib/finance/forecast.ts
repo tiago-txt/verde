@@ -101,6 +101,87 @@ export type ForecastMonth = {
   negativo: boolean;
 };
 
+/**
+ * Movimentação já realizada no mês corrente (paga até hoje). Permite que a
+ * linha do mês atual mostre o fluxo completo do mês, e não só o que falta.
+ */
+export type ForecastMonthHistory = {
+  saldoInicial: number;
+  entradas: number;
+  saidas: number;
+  pontos: ForecastPoint[];
+};
+
+export type ForecastHistoryAccount = { id: string };
+
+export type ForecastHistoryRow = {
+  tipo: "receita" | "despesa" | "transferencia";
+  valor: number;
+  data: string;
+  pago: boolean;
+  contaId: string | null;
+  contaDestinoId: string | null;
+  cartaoId: string | null;
+  cartaoDestinoId?: string | null;
+};
+
+/**
+ * Reconstrói o saldo do início do mês e o fluxo realizado até hoje no escopo
+ * das contas selecionadas. O ponto final coincide com o saldo atual.
+ */
+export function buildMonthHistory(
+  accounts: ForecastHistoryAccount[],
+  rows: ForecastHistoryRow[],
+  currentBalance: number,
+  hoje: string,
+): ForecastMonthHistory {
+  const selected = new Set(accounts.map((account) => account.id));
+  const monthStart = `${hoje.slice(0, 7)}-01`;
+  let entradas = 0;
+  let saidas = 0;
+  const daily = new Map<string, number>();
+
+  for (const row of rows) {
+    if (!row.pago || row.cartaoId) continue;
+    if (row.data < monthStart || row.data > hoje) continue;
+
+    let impact = 0;
+    if (row.tipo === "receita" && row.contaId && selected.has(row.contaId)) {
+      impact = row.valor;
+    } else if (
+      row.tipo === "despesa" &&
+      row.contaId &&
+      selected.has(row.contaId)
+    ) {
+      impact = -row.valor;
+    } else if (row.tipo === "transferencia") {
+      if (row.contaId && selected.has(row.contaId)) impact -= row.valor;
+      if (row.contaDestinoId && selected.has(row.contaDestinoId)) {
+        impact += row.valor;
+      }
+      // Transferência para cartão não tem conta de destino: só a saída conta.
+    }
+
+    if (impact === 0) continue;
+    if (impact > 0) entradas += impact;
+    else saidas += -impact;
+    daily.set(row.data, (daily.get(row.data) ?? 0) + impact);
+  }
+
+  const saldoInicial = currentBalance - (entradas - saidas);
+  const days = [
+    ...new Set([monthStart, ...[...daily.keys()].sort(), hoje]),
+  ].sort();
+  let running = saldoInicial;
+  const pontos: ForecastPoint[] = [];
+  for (const day of days) {
+    running += daily.get(day) ?? 0;
+    pontos.push({ data: day, saldo: running, porConta: {} });
+  }
+
+  return { saldoInicial, entradas, saidas, pontos };
+}
+
 export type ForecastDraft = {
   descricao: string;
   eventos: ForecastEvent[];
@@ -424,38 +505,55 @@ function saldoAntesDe(
 export function resumoMensal(
   projection: ForecastProjection,
   margem = projection.margem,
+  mesAtual?: ForecastMonthHistory,
 ): ForecastMonth[] {
   const selected = idsDasContas(projection.entrada.contas);
   const months: ForecastMonth[] = [];
   const lastMonth = projection.fim.slice(0, 7);
+  const currentMonth = projection.entrada.hoje.slice(0, 7);
 
   for (
-    let month = projection.entrada.hoje.slice(0, 7);
+    let month = currentMonth;
     month <= lastMonth;
     month = addMonths(month, 1)
   ) {
     const range = monthRange(month);
-    const start = range.start < projection.entrada.hoje
-      ? projection.entrada.hoje
-      : range.start;
+    const history = month === currentMonth ? mesAtual : undefined;
+    const start = history
+      ? range.start
+      : range.start < projection.entrada.hoje
+        ? projection.entrada.hoje
+        : range.start;
     const end = range.end > projection.fim ? projection.fim : range.end;
     if (start > end) continue;
 
-    const saldoInicial = saldoAntesDe(projection, start);
-    const points = projection.pontos.filter(
-      (point) => point.data >= start && point.data <= end,
-    );
-    const saldoFinal = points.at(-1)?.saldo ?? saldoInicial;
+    const saldoInicial = history
+      ? history.saldoInicial
+      : saldoAntesDe(projection, start);
+    const points = [
+      ...(history?.pontos ?? []),
+      ...projection.pontos.filter(
+        (point) =>
+          point.data <= end &&
+          (history
+            ? point.data >= projection.entrada.hoje
+            : point.data >= start),
+      ),
+    ];
+    const saldoFinal =
+      projection.pontos.filter((point) => point.data <= end).at(-1)?.saldo ??
+      saldoInicial;
     const minimo = points.reduce(
       (min, point) => Math.min(min, point.saldo),
       saldoInicial,
     );
 
-    let entradas = 0;
-    let saidas = 0;
+    let entradas = history?.entradas ?? 0;
+    let saidas = history?.saidas ?? 0;
     let liberacoes = 0;
+    const eventStart = history ? projection.entrada.hoje : start;
     for (const event of projection.eventos) {
-      if (event.data < start || event.data > end) continue;
+      if (event.data < eventStart || event.data > end) continue;
       const impact = impactoNoTotal(event, selected);
       if (event.kind === "liberacao") {
         liberacoes += Math.max(0, impact);

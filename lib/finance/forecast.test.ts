@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMonthHistory,
   causasDoPeriodo,
   construirProjecao,
   detectarPeriodosNegativos,
@@ -46,6 +47,67 @@ function input(eventos: ForecastEvent[], patch: Partial<ForecastInput> = {}): Fo
     ...patch,
   };
 }
+
+describe("resumo do mês corrente com histórico", () => {
+  it("inclui entradas e saídas já realizadas e mantém o saldo final", () => {
+    const history = buildMonthHistory(
+      [conta],
+      [
+        {
+          tipo: "receita",
+          valor: 50_000,
+          data: "2026-11-05",
+          pago: true,
+          contaId: conta.id,
+          contaDestinoId: null,
+          cartaoId: null,
+        },
+        {
+          tipo: "despesa",
+          valor: 20_000,
+          data: "2026-11-07",
+          pago: true,
+          contaId: conta.id,
+          contaDestinoId: null,
+          cartaoId: null,
+        },
+        {
+          tipo: "despesa",
+          valor: 30_000,
+          data: "2026-10-30",
+          pago: true,
+          contaId: conta.id,
+          contaDestinoId: null,
+          cartaoId: null,
+        },
+      ],
+      100_000,
+      HOJE,
+    );
+
+    expect(history).toMatchObject({
+      saldoInicial: 70_000,
+      entradas: 50_000,
+      saidas: 20_000,
+    });
+
+    const projection = construirProjecao(
+      input([evento({ data: "2026-11-20", tipo: "saida", valor: 30_000 })]),
+    );
+    const months = resumoMensal(projection, 0, history);
+    const nov = months.find((month) => month.mes === "2026-11")!;
+
+    expect(nov).toMatchObject({
+      saldoInicial: 70_000,
+      entradas: 50_000,
+      saidas: 50_000,
+      saldoFinal: 70_000,
+      minimo: 70_000,
+      negativo: false,
+    });
+    expect(nov.saldoInicial + nov.entradas - nov.saidas).toBe(nov.saldoFinal);
+  });
+});
 
 describe("previsão de saldo", () => {
   it("sem eventos a série é reta e o primeiro ponto é o saldo atual", () => {
