@@ -1,14 +1,17 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   CheckCircle2,
+  Copy,
   KeyRound,
   Loader2,
   Plus,
   ShieldCheck,
+  Sparkles,
   UserCheck,
   UserX,
   Trash2,
@@ -20,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import type { AdminUserRow } from "@/lib/db/queries/users";
 import {
+  createDemoAccountAction,
   createUserAction,
   deleteUserAction,
   resetUserPasswordAction,
@@ -39,7 +43,44 @@ export function UsersSettings({
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [demo, setDemo] = useState<{ email: string; senha: string } | null>(
+    null,
+  );
+  const [demoPending, startDemoTransition] = useTransition();
   const router = useRouter();
+
+  function createDemo() {
+    setFeedback(null);
+    startDemoTransition(async () => {
+      const result = await createDemoAccountAction();
+      if (!result.ok) {
+        setFeedback({ tone: "error", message: result.error });
+        return;
+      }
+      setDemo({ email: result.email, senha: result.senha });
+      setFeedback({
+        tone: "success",
+        message: "Conta demo criada. Compartilhe as credenciais com o testador.",
+      });
+      router.refresh();
+    });
+  }
+
+  async function copyDemoCredentials() {
+    if (!demo) return;
+    try {
+      await navigator.clipboard.writeText(`${demo.email}\n${demo.senha}`);
+      setFeedback({
+        tone: "success",
+        message: "Credenciais copiadas.",
+      });
+    } catch {
+      setFeedback({
+        tone: "error",
+        message: "Não foi possível copiar. Selecione e copie manualmente.",
+      });
+    }
+  }
 
   function handleCreate(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,6 +178,70 @@ export function UsersSettings({
           <span className="break-words">{feedback.message}</span>
         </div>
       )}
+
+      <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="tile grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary/10 text-primary">
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
+            </span>
+            <div className="min-w-0 space-y-1">
+              <p className="font-medium">Conta de demonstração</p>
+              <p className="text-sm text-muted-foreground">
+                Cria um workspace isolado com 3 meses de dados de exemplo,
+                recorrências, cartões e faturas. Ideal para enviar a testadores.
+              </p>
+            </div>
+          </div>
+          <Button
+            type="button"
+            className="h-11"
+            onClick={createDemo}
+            disabled={demoPending}
+          >
+            {demoPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Sparkles className="h-4 w-4" />
+            )}
+            Criar conta demo
+          </Button>
+        </div>
+
+        {demo && (
+          <div className="space-y-2 rounded-lg border border-grout bg-forest-container/40 p-3">
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <p className="text-xs text-muted-foreground">E-mail</p>
+                <p className="font-mono text-sm break-all">{demo.email}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Senha</p>
+                <p className="font-mono text-sm">{demo.senha}</p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-11"
+                onClick={() => void copyDemoCredentials()}
+              >
+                <Copy className="h-4 w-4" />
+                Copiar credenciais
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="h-11">
+                <Link href="/login">Abrir login</Link>
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Cada clique cria uma conta separada. Use uma por testador para
+              evitar que eles compartilhem as mesmas alterações.
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">

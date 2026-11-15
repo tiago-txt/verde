@@ -8,9 +8,18 @@ import {
   type TestDatabase,
   type TestUser,
 } from "@/lib/db/testing";
-import { accounts, categories, tags, users, workspaces, type User } from "@/lib/db/schema";
+import {
+  accounts,
+  categories,
+  tags,
+  transactions,
+  users,
+  workspaces,
+  type User,
+} from "@/lib/db/schema";
 import { loginAction } from "@/lib/actions/auth";
 import {
+  createDemoAccountAction,
   createUserAction,
   deleteUserAction,
   setUserActiveAction,
@@ -276,6 +285,45 @@ describe("autenticação multiusuário", () => {
     expect(
       categoryCount.filter((category) => category.isSystem),
     ).toHaveLength(2);
+  });
+
+  it("cria conta demo isolada com dados de exemplo e senha compartilhável", async () => {
+    setCurrent(admin);
+    const result = await createDemoAccountAction();
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.email).toContain("@verde.local");
+    expect(result.senha.length).toBeGreaterThan(8);
+
+    const demoUser = testDb.db
+      .select()
+      .from(users)
+      .where(eq(users.email, result.email))
+      .get();
+    expect(demoUser).toMatchObject({
+      nome: "Conta Demo",
+      role: "membro",
+      ativo: true,
+      mustChangePassword: false,
+    });
+
+    const demoAccounts = testDb.db
+      .select()
+      .from(accounts)
+      .where(eq(accounts.workspaceId, demoUser!.workspaceId))
+      .all();
+    const demoTransactions = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.workspaceId, demoUser!.workspaceId))
+      .all();
+
+    expect(demoAccounts.length).toBeGreaterThanOrEqual(3);
+    expect(demoAccounts.some((account) => account.nome.includes("(Demo)"))).toBe(
+      true,
+    );
+    expect(demoTransactions.length).toBeGreaterThan(0);
   });
 
   it("exclui usuário e todo o workspace (dados isolados)", async () => {

@@ -14,6 +14,7 @@ import {
   getUserByEmail,
   getUserById,
 } from "@/lib/db/queries/users";
+import { seedDemoData } from "@/lib/db/seed-demo";
 import { seedWorkspaceDefaults, workspaceNameFor } from "@/lib/db/seed-workspace";
 import {
   changePasswordSchema,
@@ -106,6 +107,64 @@ export async function createUserAction(
       message: `Usuário criado. Senha temporária: ${senha}`,
     },
   };
+}
+
+export type DemoAccountResult =
+  | { ok: true; email: string; senha: string }
+  | { ok: false; error: string };
+
+/**
+ * Cria um workspace isolado com 3 meses de dados de exemplo e um usuário
+ * membro para testes. O admin compartilha as credenciais com os testadores.
+ */
+export async function createDemoAccountAction(): Promise<DemoAccountResult> {
+  await requireAdmin();
+
+  let email = "";
+  do {
+    email = `demo-${randomBytes(4).toString("hex")}@verde.local`;
+  } while (getUserByEmail(email));
+
+  const senha = generateTemporaryPassword();
+  const workspaceId = crypto.randomUUID();
+  const userId = crypto.randomUUID();
+  const { db } = scopedDb(workspaceId);
+
+  try {
+    db.transaction((tx) => {
+      tx.insert(workspaces)
+        .values({ id: workspaceId, nome: "Demonstração" })
+        .run();
+      tx.insert(users)
+        .values({
+          id: userId,
+          workspaceId,
+          nome: "Conta Demo",
+          email,
+          senhaHash: hashSync(senha, 12),
+          role: "membro",
+          isAdmin: false,
+          ativo: true,
+          // A senha é compartilhada pelo admin; não força troca no primeiro login.
+          mustChangePassword: false,
+        })
+        .run();
+    });
+
+    seedWorkspaceDefaults(db, workspaceId);
+    seedDemoData(db, workspaceId);
+  } catch (error) {
+    console.error("[verde] erro ao criar conta demo:", error);
+    try {
+      db.delete(workspaces).where(eq(workspaces.id, workspaceId)).run();
+    } catch {
+      // A conta pode ser removida manualmente na tela de Usuários.
+    }
+    return { ok: false, error: "Não foi possível criar a conta demo." };
+  }
+
+  revalidateUsers();
+  return { ok: true, email, senha };
 }
 
 export async function resetUserPasswordAction(

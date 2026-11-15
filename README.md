@@ -105,6 +105,10 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   storages locais para não vazar estado entre usuários no mesmo aparelho.
 - **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
   parcelas, transferências, 2 cartões com faturas e um pagamento de fatura.
+- **Conta de demonstração para testadores**: em
+  **Configurações → Usuários**, o admin pode criar uma conta demo. Cada clique
+  gera um workspace isolado com os mesmos dados de exemplo e credenciais
+  próprias (e-mail e senha), sem afetar os dados reais.
 
 ### Regras de fatura de cartão
 
