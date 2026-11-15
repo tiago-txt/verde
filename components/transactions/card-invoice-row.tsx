@@ -1,21 +1,10 @@
 "use client";
 
-import {
-  AlertTriangle,
-  ArrowRight,
-  Banknote,
-  CheckCircle2,
-  Clock3,
-  ThumbsDown,
-  ThumbsUp,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, ThumbsDown, ThumbsUp } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import type { CardInvoiceEvent } from "@/lib/db/queries/cards";
-import { addDaysISO } from "@/lib/dates";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { invoiceProjectionStatus } from "@/lib/design/row-status";
-import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 
 type CardInvoiceRowProps = {
@@ -36,25 +25,17 @@ export function CardInvoiceRow({
     status: event.status,
   });
   const statusMeta = {
-    aberta: { label: "aberta", tone: "text-amber", icon: Clock3 },
-    fechada: { label: "fechada", tone: "text-info", icon: Clock3 },
-    parcial: { label: "parcial", tone: "text-amber", icon: Clock3 },
-    paga: { label: "paga", tone: "text-primary", icon: CheckCircle2 },
-    vencida: { label: "vencida", tone: "text-clay", icon: AlertTriangle },
+    aberta: { label: "Aberta", tone: "text-amber" },
+    fechada: { label: "Fechada", tone: "text-info" },
+    parcial: { label: "Parcial", tone: "text-amber" },
+    paga: { label: "Paga", tone: "text-primary" },
+    vencida: { label: "Vencida", tone: "text-clay" },
   }[projectionStatus];
   const pagador =
     event.pagamentos.find((item) => Boolean(item.contaNome)) ?? null;
   const outrosPagadores = pagador
     ? event.pagamentos.filter((item) => item.contaId !== pagador.contaId).length
     : 0;
-  const isMobile = useIsMobile();
-  const mobileStatusLabel = {
-    aberta: "Aberta",
-    fechada: "Fechada",
-    parcial: "Parcial",
-    paga: "Paga",
-    vencida: "Vencida",
-  }[projectionStatus];
 
   const ariaLabel = [
     `Fatura ${event.cartaoNome}`,
@@ -69,13 +50,13 @@ export function CardInvoiceRow({
       : [`vence ${formatDate(event.vencimento)}`]),
   ].join(", ");
 
-  if (isMobile) {
-    return (
+  return (
+    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left transition-colors lg:hover:bg-forest-container/60">
       <button
         type="button"
         onClick={() => onOpen(event)}
         aria-label={ariaLabel}
-        className="list-row-cv-virtual relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3 rounded-md px-0 text-left outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       >
         <EntityTile
           kind="fatura"
@@ -145,7 +126,7 @@ export function CardInvoiceRow({
                   <span className="truncate">{event.cartaoNome}</span>
                 </>
               ) : (
-                <span className="truncate">{mobileStatusLabel}</span>
+                <span className="truncate">{statusMeta.label}</span>
               )
             ) : (
               <>
@@ -179,202 +160,12 @@ export function CardInvoiceRow({
             )}
           </span>
         </span>
-
-        <span className="flex shrink-0 flex-col items-end justify-center gap-0.5">
-          <span
-            className={cn(
-              "tabular text-base font-semibold",
-              isPaid
-                ? "text-primary"
-                : isOverdue
-                  ? "text-clay"
-                  : "text-on-surface",
-            )}
-          >
-            −{formatCurrency(event.total)}
-          </span>
-          <span
-            className={cn(
-              "flex items-center gap-1 text-xs font-medium",
-              statusMeta.tone,
-            )}
-          >
-            {isPaid ? (
-              <ThumbsUp className="h-4 w-4" aria-hidden="true" />
-            ) : (
-              <ThumbsDown className="h-4 w-4" aria-hidden="true" />
-            )}
-            {mobileStatusLabel}
-          </span>
-        </span>
-      </button>
-    );
-  }
-
-  return (
-    <div className="group relative flex min-h-[72px] w-full flex-wrap items-stretch overflow-hidden rounded-lg border border-grout/80 bg-surface-low shadow-[0_4px_16px_rgba(7,16,11,0.45)] opacity-90">
-      <span
-        aria-hidden="true"
-        className={cn(
-          "absolute inset-y-0 left-0 z-10 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
-          isPaid
-            ? "border-l-success/70"
-            : isOverdue
-              ? "border-l-clay/70"
-              : event.status === "parcial"
-                ? "border-l-amber/70"
-                : "border-l-info/70",
-        )}
-      />
-
-      <button
-        type="button"
-        onClick={() => onOpen(event)}
-        aria-label={ariaLabel}
-        className="flex min-w-[10rem] flex-1 items-center gap-2 px-3 py-3 text-left transition-colors hover:bg-forest-container/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:gap-3 sm:px-4"
-      >
-        <EntityTile
-          kind="fatura"
-          entity={{
-            id: event.cartaoId,
-            nome: event.cartaoNome,
-            cor: event.cartaoCor,
-            icone: event.cartaoIcone,
-          }}
-          dashed={!isPaid}
-          className="h-10 w-10 sm:h-12 sm:w-12"
-        />
-
-        <span className="min-w-0 flex-1">
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span className="row-title">
-              {event.cartaoNome}{" "}
-              <span className="text-xs font-normal text-muted-foreground">
-                {isPaid
-                  ? "Pagamento de Fatura"
-                  : `Fatura ${formatMonthTitle(event.inicio.slice(0, 7))}`}
-              </span>
-            </span>
-            {pagador && !isPaid && (
-              <span className="inline-flex min-w-0 items-center gap-1 rounded-full border border-grout bg-surface-lowest px-2 py-0.5 text-xs text-muted-foreground">
-                <span
-                  aria-hidden="true"
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: pagador.contaCor ?? undefined }}
-                />
-                <span className="truncate">
-                  paga por{" "}
-                  <span className="font-medium text-foreground/85">
-                    {pagador.contaNome ?? "sem conta"}
-                  </span>
-                </span>
-                {outrosPagadores > 0 && (
-                  <span
-                    className="shrink-0"
-                    title={`Mais ${outrosPagadores} conta(s)`}
-                  >
-                    +{outrosPagadores}
-                  </span>
-                )}
-              </span>
-            )}
-          </span>
-
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-            {isPaid && pagador ? (
-              <>
-                <span className="inline-flex min-w-0 items-center gap-1">
-                  <EntityTile
-                    kind="conta"
-                    entity={{
-                      id: pagador.contaId,
-                      nome: pagador.contaNome,
-                      cor: pagador.contaCor,
-                      icone: pagador.contaIcone,
-                    }}
-                    size="xxs"
-                    plain
-                    className="shrink-0"
-                  />
-                  <span className="truncate">
-                    {pagador.contaNome ?? "sem conta"}
-                  </span>
-                  {outrosPagadores > 0 && (
-                    <span
-                      className="shrink-0"
-                      title={`Mais ${outrosPagadores} conta(s)`}
-                    >
-                      +{outrosPagadores}
-                    </span>
-                  )}
-                </span>
-                <span aria-hidden="true">→</span>
-                <span className="inline-flex min-w-0 items-center gap-1">
-                  <EntityTile
-                    kind="cartao"
-                    entity={{
-                      id: event.cartaoId,
-                      nome: event.cartaoNome,
-                      cor: event.cartaoCor,
-                      icone: event.cartaoIcone,
-                    }}
-                    size="xxs"
-                    plain
-                    className="shrink-0"
-                  />
-                  <span className="truncate">{event.cartaoNome}</span>
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>
-                  ciclo {formatDate(event.inicio).slice(0, 5)}–
-                  {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
-                </span>
-              </>
-            ) : (
-              <>
-                <span className="inline-flex min-w-0 items-center gap-1">
-                  <EntityTile
-                    kind="cartao"
-                    entity={{
-                      id: event.cartaoId,
-                      nome: event.cartaoNome,
-                      cor: event.cartaoCor,
-                      icone: event.cartaoIcone,
-                    }}
-                    size="xxs"
-                    plain
-                    className="shrink-0"
-                  />
-                  <span className="truncate">{event.cartaoNome}</span>
-                </span>
-                <span aria-hidden="true">·</span>
-                <span>vence {formatDate(event.vencimento)}</span>
-                {event.pago > 0 && event.restante > 0 && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>
-                      restam{" "}
-                      <span className="tabular">
-                        {formatCurrency(event.restante)}
-                      </span>
-                    </span>
-                  </>
-                )}
-                <span aria-hidden="true">·</span>
-                <span>
-                  ciclo {formatDate(event.inicio).slice(0, 5)}–
-                  {formatDate(addDaysISO(event.fechamento, -1)).slice(0, 5)}
-                </span>
-              </>
-            )}
-          </span>
-        </span>
       </button>
 
-      <div className="row-slot py-3 pr-3 sm:pr-4">
+      <div className="flex min-w-[6.25rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
         <span
           className={cn(
-            "row-value row-amount",
+            "tabular whitespace-nowrap text-base font-semibold leading-5 sm:text-lg",
             isPaid
               ? "text-primary"
               : isOverdue
@@ -385,24 +176,28 @@ export function CardInvoiceRow({
           −{formatCurrency(event.total)}
         </span>
         {event.restante > 0 ? (
-          <Button
+          <button
             type="button"
-            size="icon"
-            variant="outline"
-            className="h-12 w-12 shrink-0 border-grout"
             onClick={() => onPay(event)}
             title="Pagar fatura"
             aria-label={`Pagar fatura ${event.cartaoNome}`}
+            className={cn(
+              "flex h-7 items-center gap-1 text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              statusMeta.tone,
+            )}
           >
-            <Banknote className="h-5 w-5" aria-hidden="true" />
-          </Button>
+            <ThumbsDown className="h-4 w-4" aria-hidden="true" />
+            {statusMeta.label}
+          </button>
         ) : (
           <span
-            className="grid h-12 w-12 shrink-0 place-items-center rounded-lg border border-primary/35 bg-primary/10 text-primary"
-            title="Fatura paga"
-            aria-label="Fatura paga"
+            className={cn(
+              "flex h-7 items-center gap-1 text-xs font-medium",
+              statusMeta.tone,
+            )}
           >
-            <CheckCircle2 className="h-5 w-5" aria-hidden="true" />
+            <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+            {statusMeta.label}
           </span>
         )}
       </div>

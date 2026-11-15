@@ -10,7 +10,6 @@ import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
-import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { cn } from "@/lib/utils";
 
 type BudgetEventRowProps = {
@@ -63,16 +62,13 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
     },
   }[projectionStatus];
   const StatusIcon = statusMeta.icon;
-  const isMobile = useIsMobile();
 
   const sobraReference = formatMonthTitle(
     summary.inicio.slice(0, 7),
   ).replace(/\s\d{2}(\d{2})$/, " $1");
   const descriptor = isProvision
-    ? "Orçamento Atual"
-    : isMobile
-      ? "Sobra do Orçamento Anterior"
-      : "Sobra do orçamento anterior";
+    ? "Orçamento atual"
+    : "Sobra do orçamento anterior";
 
   const valueTone = isOverspent
     ? "text-clay"
@@ -84,13 +80,6 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
   const valueText = isAlert
     ? formatCurrency(0)
     : `${isProvision ? "" : "+"}${formatCurrency(event.valor)}`;
-  const accentClass = isOverspent
-    ? "border-l-destructive/70"
-    : isConsumed
-      ? "border-l-amber/70"
-      : isProvision
-        ? "border-l-info/60"
-        : "border-l-success/70";
   const subline = isOverspent ? (
     <span>
       Estourado em{" "}
@@ -115,23 +104,8 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           ? `, sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} ${formatCurrency(event.sobraAnterior.valor)}`
           : ""
       }`}
-      className={cn(
-        "group relative flex min-h-[72px] w-full items-center gap-2 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
-        isMobile
-          ? "gap-3 px-0 list-row-cv-virtual"
-          : "overflow-hidden rounded-lg border border-grout/80 bg-surface-low px-3 py-3 shadow-[0_4px_16px_rgba(7,16,11,0.45)] transition-colors hover:bg-forest-container/50 sm:gap-3 sm:px-4",
-        !isMobile && "opacity-90",
-      )}
+      className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:hover:bg-forest-container/60"
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "absolute inset-y-0 left-0 w-[3px] border-l-2 border-dashed transition-[width] duration-150 lg:group-hover:w-1",
-          isMobile && "hidden",
-          accentClass,
-        )}
-      />
-
       <EntityTile
         kind="orcamento"
         entity={{
@@ -141,14 +115,14 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           icone: summary.icone,
         }}
         dashed
-        plain={isMobile}
-        className={cn("h-10 w-10", !isMobile && "sm:h-12 sm:w-12")}
+        plain
+        className="h-10 w-10"
       />
 
-      <span className={cn("flex-1", isMobile ? "min-w-0" : "min-w-[10rem]")}>
+      <span className="min-w-0 flex-1">
         <span className="row-title block">
           {summary.nome}
-          {isMobile ? " · " : " "}
+          {" · "}
           <span className="text-xs font-normal text-muted-foreground">
             {descriptor}
           </span>
@@ -194,49 +168,27 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         ))}
       </span>
 
-      {isMobile ? (
-        <span className="flex shrink-0 flex-col items-end justify-center gap-0.5">
-          <span
-            className={cn(
-              "tabular text-base font-semibold",
-              valueTone,
-            )}
-          >
-            {valueText}
-          </span>
-          <span
-            className={cn(
-              "flex whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
-              statusMeta.tone,
-            )}
-          >
-            <StatusIcon className="h-4 w-4" aria-hidden="true" />
-            {statusMeta.label}
-          </span>
+      <span className="flex min-w-[6.25rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
+        <span
+          className={cn(
+            "tabular whitespace-nowrap text-base font-semibold leading-5 sm:text-lg",
+            valueTone,
+          )}
+        >
+          {valueText}
         </span>
-      ) : (
-        <span className="row-slot">
-          <span
-            className={cn(
-              "row-value row-amount",
-              valueTone,
-            )}
-          >
-            {valueText}
-          </span>
-          <span
-            className={cn(
-              "grid h-12 w-12 shrink-0 place-items-center rounded-lg border",
-              statusMeta.box,
-              statusMeta.tone,
-            )}
-            title={`Status: ${statusMeta.label}`}
-            aria-label={`Status: ${statusMeta.label}`}
-          >
-            <StatusIcon className="h-5 w-5" aria-hidden="true" />
-          </span>
+        <span
+          className={cn(
+            "flex whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
+            statusMeta.tone,
+          )}
+          title={`Status: ${statusMeta.label}`}
+          aria-label={`Status: ${statusMeta.label}`}
+        >
+          <StatusIcon className="h-4 w-4" aria-hidden="true" />
+          {statusMeta.label}
         </span>
-      )}
+      </span>
     </button>
   );
 }

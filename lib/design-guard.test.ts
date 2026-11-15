@@ -122,19 +122,19 @@ describe("guarda de design", () => {
     expect(css).toContain('[data-decorations="off"]');
   });
 
-  it("mantém fatura e orçamento no mesmo container dos lançamentos", () => {
+  it("mantém fatura e orçamento na mesma lista contínua dos lançamentos", () => {
     for (const relative of [
       "components/transactions/budget-event-row.tsx",
       "components/transactions/card-invoice-row.tsx",
     ]) {
       const content = fs.readFileSync(path.join(process.cwd(), relative), "utf8");
+      // Lista contínua: mesma linha plana, sem card/sombra por evento.
+      expect(content).toContain("list-row-cv-virtual");
       expect(content).toContain("min-h-[72px]");
-      expect(content).toContain("bg-surface-low");
-      expect(content).toContain("border-dashed");
       expect(content).toContain("EntityTile");
-      expect(content).toContain("row-value");
       expect(content).toContain("row-title");
-      expect(content).toContain("row-slot");
+      expect(content).not.toContain("bg-surface-low");
+      expect(content).not.toContain("shadow-[");
     }
     const invoice = fs.readFileSync(
       path.join(
@@ -143,7 +143,16 @@ describe("guarda de design", () => {
       ),
       "utf8",
     );
-    expect(invoice).toContain("Banknote");
-    expect(invoice).toContain('variant="outline"');
+    expect(invoice).toContain("Pagar fatura");
+    expect(invoice).toContain("ThumbsDown");
+    const transaction = fs.readFileSync(
+      path.join(
+        process.cwd(),
+        "components/transactions/transaction-row.tsx",
+      ),
+      "utf8",
+    );
+    expect(transaction).toContain("list-row-cv");
+    expect(transaction).not.toContain("bg-surface-low");
   });
 });

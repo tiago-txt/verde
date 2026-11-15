@@ -50,6 +50,7 @@ import {
   BulkBudgetOffsetDialog,
   BulkCategoryDialog,
   BulkDeleteDialog,
+  BulkRecurrenceDialog,
   BulkTagDialog,
   QuickCategoryDialog,
 } from "./bulk-actions";
@@ -79,7 +80,6 @@ import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/toast";
-import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { useSecondaryInfo } from "@/lib/hooks/use-secondary-info";
 import {
   bulkAddTagAction,
@@ -87,6 +87,7 @@ import {
   bulkDeleteTransactionsAction,
   bulkSetBudgetOffsetAction,
   bulkSetPaidAction,
+  createRecurrenceFromTransactionsAction,
   deleteTransactionAction,
   duplicateTransactionAction,
   setTransactionPaidAction,
@@ -119,6 +120,7 @@ import { aplicarEventosAoResumo } from "@/lib/finance/budgets";
 import { aplicarFaturasAoResumo } from "@/lib/finance/cards";
 import { summarizeTransactions } from "@/lib/finance/summary";
 import type { CardBasis, ResultSummary } from "@/lib/finance/result";
+import type { RecurrenceFrequency } from "@/lib/db/schema";
 import { formatCurrency, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -228,7 +230,6 @@ export function TransactionsPageClient({
 }: TransactionsPageClientProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [secondaryInfo] = useSecondaryInfo();
   const [optimisticTransactions, applyOptimistic] = useOptimistic(
     transactions,
@@ -263,6 +264,7 @@ export function TransactionsPageClient({
   const [bulkBudgetOpen, setBulkBudgetOpen] = useState(false);
   const [bulkTagOpen, setBulkTagOpen] = useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkRecurrenceOpen, setBulkRecurrenceOpen] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [categoryTarget, setCategoryTarget] =
     useState<TransactionListItem | null>(null);
@@ -425,6 +427,13 @@ export function TransactionsPageClient({
   const hasMoreDays = groups.length > filters.dias;
   const activeFilters = hasActiveFilters(filters);
   const selectedCount = selectedIds.size;
+  const selectedDates = useMemo(
+    () =>
+      optimisticTransactions
+        .filter((item) => selectedIds.has(item.id))
+        .map((item) => item.data),
+    [optimisticTransactions, selectedIds],
+  );
 
   function go(next: TransactionFilters) {
     router.push(buildTransactionHref(next));
@@ -848,6 +857,35 @@ export function TransactionsPageClient({
     });
   }
 
+  function bulkCreateRecurrence(
+    frequencia: RecurrenceFrequency,
+    dataFim: string | null,
+  ) {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkError(null);
+
+    startBulkTransition(async () => {
+      const result = await createRecurrenceFromTransactionsAction({
+        ids,
+        frequencia,
+        dataFim,
+      });
+
+      if (!result.ok) {
+        setBulkError(result.error);
+        return;
+      }
+
+      setBulkRecurrenceOpen(false);
+      setSelectedIds(new Set());
+      setFlash(
+        `${result.count} lançamento(s) vinculado(s) à recorrência.`,
+      );
+      router.refresh();
+    });
+  }
+
   function markOverduePaid() {
     const ids = overdueIds;
     if (ids.length === 0) return;
@@ -1104,6 +1142,10 @@ export function TransactionsPageClient({
             setBulkError(null);
             setBulkBudgetOpen(true);
           }}
+          onRecurrence={() => {
+            setBulkError(null);
+            setBulkRecurrenceOpen(true);
+          }}
           onDelete={() => {
             setBulkError(null);
             setBulkDeleteOpen(true);
@@ -1143,7 +1185,7 @@ export function TransactionsPageClient({
           />
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-6 sm:space-y-7">
           {visibleGroups.map((group) => {
             const selectableItems = group.items.filter(
               (item) => !item.cartaoId,
@@ -1175,19 +1217,12 @@ export function TransactionsPageClient({
               <div
                 key={group.day}
                 id={`day-${group.day}`}
-                className={cn(
-                  isMobile
-                    ? "border-b border-border"
-                    : "scroll-mt-4 overflow-hidden rounded-lg border border-grout bg-surface-low",
-                )}
+                className="scroll-mt-4 border-b border-border/40 pb-3 last:border-b-0 last:pb-0"
               >
                 <div
                   className={cn(
-                    "flex items-center justify-between gap-2 border-b",
-                    isMobile
-                      ? "sticky top-0 z-20 h-10 flex-nowrap border-border bg-background"
-                      : "flex-wrap border-grout bg-forest-container/70 px-3 py-2.5 sm:px-4",
-                    !isMobile && group.day === today && "bg-amber/10",
+                    "flex flex-wrap items-center justify-between gap-2 border-b border-grout bg-forest-container/70 px-0 py-2.5 sm:px-4",
+                    group.day === today && "bg-amber/10",
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -1206,21 +1241,10 @@ export function TransactionsPageClient({
                         aria-label={`Selecionar todos os lançamentos de ${formatDate(group.day)}`}
                       />
                     )}
-                    <span
-                      className={cn(
-                        "font-display tabular font-bold leading-none",
-                        isMobile ? "text-xl" : "text-2xl",
-                      )}
-                    >
+                    <span className="font-display tabular text-xl font-bold leading-none sm:text-2xl">
                       {Number(group.day.slice(8, 10))}
                     </span>
-                    <span
-                      className={cn(
-                        isMobile
-                          ? "text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                          : "rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary",
-                      )}
-                    >
+                    <span className="rounded border border-grout bg-forest-high px-1.5 py-0.5 font-mono text-xs font-semibold uppercase tracking-[0.08em] text-primary">
                       {new Intl.DateTimeFormat("pt-BR", {
                         weekday: "short",
                         timeZone: "UTC",
@@ -1229,12 +1253,7 @@ export function TransactionsPageClient({
                         .replace(".", "")}
                     </span>
                     {group.day === today && (
-                      <Badge
-                        className={cn(
-                          "bg-amber/15 text-amber",
-                          isMobile && "h-5 px-2 py-0",
-                        )}
-                      >
+                      <Badge className="bg-amber/15 text-amber">
                         Hoje
                       </Badge>
                     )}
@@ -1243,14 +1262,13 @@ export function TransactionsPageClient({
                     </span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
-                    <span className="hidden shrink-0 sm:inline">
+                    <span className="hidden shrink-0 md:inline">
                       {summaryParts.join(" · ")}
                     </span>
                     {!filters.de && !filters.ate && (
                       <span
                         className={cn(
-                          "tabular inline-flex items-center gap-1 font-semibold",
-                          isMobile ? "text-sm" : "text-xs",
+                          "tabular inline-flex items-center gap-1 text-xs font-semibold sm:text-sm",
                           balance < 0 ? "text-clay" : "text-on-surface",
                         )}
                         title={`Saldo ${dayBalanceMode === "realizado" ? "realizado" : "previsto"} acumulado das contas até este dia`}
@@ -1259,14 +1277,7 @@ export function TransactionsPageClient({
                           className="hidden h-3.5 w-3.5 text-amber sm:inline"
                           aria-hidden="true"
                         />
-                        <span
-                          className={cn(
-                            "text-xs font-normal",
-                            isMobile
-                              ? "text-muted-foreground"
-                              : "hidden text-outline sm:inline",
-                          )}
-                        >
+                        <span className="text-xs font-normal text-muted-foreground">
                           {dayBalanceMode === "realizado"
                             ? "Saldo realizado"
                             : "Saldo previsto"}
@@ -1277,7 +1288,7 @@ export function TransactionsPageClient({
                   </div>
                 </div>
 
-                <div className={isMobile ? "divide-y divide-border" : "space-y-2 p-2"}>
+                <div className="px-0 pt-1 sm:px-4 lg:divide-y lg:divide-border/40">
                   {group.items.map((transaction) => (
                     <TransactionRow
                       key={transaction.id}
@@ -1552,6 +1563,19 @@ export function TransactionsPageClient({
         }}
         tags={formData.tags}
         onConfirm={bulkAddTag}
+        pending={isBulkPending}
+        error={bulkError}
+      />
+
+      <BulkRecurrenceDialog
+        open={bulkRecurrenceOpen}
+        onOpenChange={(open) => {
+          setBulkRecurrenceOpen(open);
+          if (!open) setBulkError(null);
+        }}
+        count={selectedCount}
+        dates={selectedDates}
+        onConfirm={bulkCreateRecurrence}
         pending={isBulkPending}
         error={bulkError}
       />
