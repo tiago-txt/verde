@@ -31,8 +31,8 @@ describe("rodapé de resumo", () => {
       entradasPrevistas: 600_000,
       saidasPrevistas: 325_000,
       totalPrevisto: 275_000,
-      pendenciasAnterioresDespesas: 0,
-      pendenciasAnterioresReceitas: 0,
+      previstoProjetado: null,
+      carryProjetado: 0,
       saldoAnterior: 0,
       saldo: 300_000,
       previsto: 275_000,
@@ -86,7 +86,6 @@ describe("rodapé de resumo", () => {
     expect(breakdown.despesa.map((item) => item.id)).toEqual([
       "despesas-pagas",
       "despesas-a-pagar",
-      "pendencias-anteriores-despesas",
       "pagamentos-fatura",
       "faturas-restantes",
       "reservas",
@@ -108,25 +107,32 @@ describe("rodapé de resumo", () => {
     );
   });
 
-  it("pendências de meses anteriores entram no previsto e no detalhamento", () => {
+  it("projeção acumulada encadeia o previsto e aparece no detalhamento", () => {
     const summary = {
       ...base,
-      pendenciasAnterioresDespesas: 33_200,
-      pendenciasAnterioresReceitas: 0,
+      entradasPrevistas: 220_000,
+      saidasPrevistas: 262_483,
+      entradasPagas: 0,
+      saidasPagas: 0,
+      saldoRealizado: 0,
     };
-    const footer = buildFooterSummary(summary, 38_200);
-    expect(footer.pendenciasAnterioresDespesas).toBe(33_200);
-    expect(footer.totalPrevisto).toBe(300_000 - 33_200);
-    expect(footer.previsto).toBe(38_200 + 300_000 - 33_200);
+    const footer = buildFooterSummary(summary, 38_200, 4_143);
+    expect(footer.previstoProjetado).toBe(4_143);
+    expect(footer.previsto).toBe(4_143);
+    expect(footer.carryProjetado).toBe(
+      4_143 - (38_200 + 220_000 - 262_483),
+    );
 
-    const breakdown = buildFooterBreakdown(summary);
+    const breakdown = buildFooterBreakdown(summary, 38_200, 4_143);
     expect(
-      breakdown.despesa.find(
-        (item) => item.id === "pendencias-anteriores-despesas",
-      )?.value,
-    ).toBe(33_200);
+      breakdown.receita.find((item) => item.id === "projecao-acumulada")
+        ?.value,
+    ).toBe(8_426);
     expect(breakdown.despesa.reduce((sum, item) => sum + item.value, 0)).toBe(
-      footer.saidasPrevistas + 33_200,
+      footer.saidasPrevistas,
+    );
+    expect(breakdown.receita.reduce((sum, item) => sum + item.value, 0)).toBe(
+      footer.entradasPrevistas + 8_426,
     );
   });
 });

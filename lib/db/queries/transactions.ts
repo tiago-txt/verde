@@ -9,7 +9,6 @@ import {
   isNotNull,
   isNull,
   like,
-  lt,
   lte,
   or,
   sql,
@@ -642,52 +641,6 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
     lastAccountId: lastTransaction?.contaId ?? null,
     lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,
-  };
-}
-
-export type PendenciasAnteriores = {
-  despesas: number;
-  receitas: number;
-  count: number;
-};
-
-/**
- * Despesas/receitas de conta em aberto de meses anteriores. Compras de cartão
- * e pagamentos de fatura ficam de fora: esses são tratados pelas faturas.
- */
-export function getPendenciasAntesDoMes(
-  workspaceId: string,
-  monthKey: string,
-): PendenciasAnteriores {
-  const { db, ws } = scopedDb(workspaceId);
-  const start = `${monthKey}-01`;
-
-  const row = db
-    .select({
-      despesas: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'despesa' then ${transactions.valor} else 0 end), 0)`,
-      receitas: sql<number>`coalesce(sum(case when ${transactions.tipo} = 'receita' then ${transactions.valor} else 0 end), 0)`,
-      count: sql<number>`count(*)`,
-    })
-    .from(transactions)
-    .where(
-      and(
-        ws(transactions.workspaceId),
-        isNull(transactions.deletedAt),
-        eq(transactions.pago, false),
-        lt(transactions.data, start),
-        inArray(transactions.tipo, ["despesa", "receita"]),
-        isNotNull(transactions.contaId),
-        isNull(transactions.cartaoId),
-        isNull(transactions.cartaoDestinoId),
-        isNull(transactions.faturaChave),
-      ),
-    )
-    .get();
-
-  return {
-    despesas: Math.abs(row?.despesas ?? 0),
-    receitas: Math.abs(row?.receitas ?? 0),
-    count: row?.count ?? 0,
   };
 }
 

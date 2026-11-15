@@ -30,10 +30,9 @@ type TransactionsSummaryFooterProps = {
   summary: MonthSummaryWithBudgets & {
     faturasCartao?: number;
     pagamentosFatura?: number;
-    pendenciasAnterioresDespesas?: number;
-    pendenciasAnterioresReceitas?: number;
   };
   openingBalance?: number;
+  projectedBalance?: number | null;
   basis: CardBasis;
   result: ResultSummary;
 };
@@ -177,6 +176,7 @@ function Statement({
 export function TransactionsSummaryFooter({
   summary,
   openingBalance = 0,
+  projectedBalance,
   basis,
   result,
 }: TransactionsSummaryFooterProps) {
@@ -203,12 +203,20 @@ export function TransactionsSummaryFooter({
           pagamentosFatura: 0,
           provisoesOrcamento: 0,
           sobrasOrcamento: 0,
-          pendenciasAnterioresDespesas: 0,
-          pendenciasAnterioresReceitas: 0,
         };
 
-  const values = buildFooterSummary(effectiveSummary, openingBalance);
-  const legacyBreakdown = buildFooterBreakdown(effectiveSummary);
+  const previstoProjetado =
+    basis === "caixa" ? (projectedBalance ?? undefined) : undefined;
+  const values = buildFooterSummary(
+    effectiveSummary,
+    openingBalance,
+    previstoProjetado,
+  );
+  const legacyBreakdown = buildFooterBreakdown(
+    effectiveSummary,
+    openingBalance,
+    previstoProjetado,
+  );
   const resultBreakdown = result.breakdown;
   const items: FooterBreakdownItem[] =
     basis === "caixa"
@@ -390,13 +398,12 @@ export function TransactionsSummaryFooter({
             A soma dos componentes é {formatCurrency(breakdownTotal)} e o valor
             exibido no rodapé é {formatCurrency(shownTotal)}.
           </p>
-          {(breakdownKind === "despesa"
-            ? values.pendenciasAnterioresDespesas
-            : values.pendenciasAnterioresReceitas) > 0 && (
-            <p className="text-xs text-muted-foreground">
-              A diferença inclui “Em aberto de meses anteriores”.
-            </p>
-          )}
+          {(breakdownKind === "despesa" || breakdownKind === "receita") &&
+            values.carryProjetado !== 0 && (
+              <p className="text-xs text-muted-foreground">
+                A diferença inclui a projeção acumulada de meses anteriores.
+              </p>
+            )}
         </DialogContent>
       </Dialog>
     </>

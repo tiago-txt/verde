@@ -5,13 +5,12 @@ import { requireUser } from "@/lib/auth/current-user";
 import {
   ensureRecurrencesForMonth,
   getMonthBalances,
-  getPendenciasAntesDoMes,
   getTransactionDetail,
   getTransactionFormData,
   listMonthTransactions,
 } from "@/lib/db/queries/transactions";
 import { getBudgetEventsForMonth, getBudgetEventsForDayBalances } from "@/lib/db/queries/budgets";
-import { getForecastBanner } from "@/lib/db/queries/forecast";
+import { getForecastBanner, getMonthProjection } from "@/lib/db/queries/forecast";
 import { listCardInvoiceEventsForMonth, listCardInvoiceEventsForDayBalances } from "@/lib/db/queries/cards";
 import { getCardBasis } from "@/lib/db/queries/finance-preferences";
 import { listResultRows } from "@/lib/db/queries/reports";
@@ -38,9 +37,19 @@ export default async function LancamentosPage({
   const transactions = listMonthTransactions(workspaceId, filters);
   const formData = getTransactionFormData(workspaceId);
   const customRange = Boolean(filters.de && filters.ate);
-  const pendenciasAnteriores = customRange
-    ? { despesas: 0, receitas: 0, count: 0 }
-    : getPendenciasAntesDoMes(workspaceId, filters.mes);
+  const hasActiveFilters =
+    Boolean(filters.tipo) ||
+    filters.contas.length > 0 ||
+    filters.cartoes.length > 0 ||
+    filters.categorias.length > 0 ||
+    filters.tags.length > 0 ||
+    filters.status !== "todos" ||
+    Boolean(filters.q) ||
+    filters.comprasCartao;
+  const projectedBalance =
+    customRange || hasActiveFilters
+      ? null
+      : getMonthProjection(workspaceId, filters.mes).saldo;
   const budgetEvents = customRange
     ? []
     : getBudgetEventsForMonth(workspaceId, filters.mes, filters, {
@@ -110,7 +119,7 @@ export default async function LancamentosPage({
       cardBasis={cardBasis}
       result={result}
       dayBalanceMode={monthBalances.modo}
-      pendenciasAnteriores={pendenciasAnteriores}
+      projectedBalance={projectedBalance}
     />
   );
 }

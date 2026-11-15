@@ -26,7 +26,7 @@ import {
   listCards,
 } from "./queries/cards";
 import type { CardInvoiceFilters } from "@/lib/finance/cards";
-import { getMonthBalances, getPendenciasAntesDoMes, listMonthTransactions } from "./queries/transactions";
+import { getMonthBalances, listMonthTransactions } from "./queries/transactions";
 import { faturaDaCompra } from "@/lib/finance/cards";
 import { addMonths, todayISO } from "@/lib/dates";
 
@@ -644,34 +644,6 @@ describe("fatura como evento único", () => {
     expect(monthBalances[`${futureMonth}-11`]).toBe(
       100_000 + 110_000 - 65_000,
     );
-  });
-
-  it("carrega despesas não pagas de meses anteriores como pendências", async () => {
-    const fixture = await setupInvoice();
-    const now = new Date();
-    testDb.db
-      .insert(transactions)
-      .values(
-        [15_000, 15_000, 3_200].map((valor, index) => ({
-          id: crypto.randomUUID(),
-          workspaceId: user.workspaceId,
-          tipo: "despesa" as const,
-          descricao: `Investimento ${index + 1}`,
-          valor,
-          data: "2026-11-10",
-          pago: false,
-          contaId: fixture.accountId,
-          createdAt: now,
-          updatedAt: now,
-        })),
-      )
-      .run();
-
-    expect(getPendenciasAntesDoMes(user.workspaceId, "2026-12")).toEqual({
-      despesas: 33_200,
-      receitas: 0,
-      count: 3,
-    });
   });
 
   it("separa o histórico por fatura, não pela data da compra", async () => {

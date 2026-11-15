@@ -7,8 +7,10 @@ export type FooterSummary = {
   entradasPrevistas: number;
   saidasPrevistas: number;
   totalPrevisto: number;
-  pendenciasAnterioresDespesas: number;
-  pendenciasAnterioresReceitas: number;
+  /** Fechamento previsto vindo da projeção encadeada, quando disponível. */
+  previstoProjetado: number | null;
+  /** Diferença entre a projeção encadeada e o saldo anterior + mês atual. */
+  carryProjetado: number;
   /** Saldo de tudo o que veio antes do mês (conta + lançamentos). */
   saldoAnterior: number;
   /** Fechamento realizado: saldo anterior + receitas pagas − saídas pagas. */
@@ -22,8 +24,6 @@ type SummaryWithBreakdown = MonthSummary & {
   sobrasOrcamento?: number;
   faturasCartao?: number;
   pagamentosFatura?: number;
-  pendenciasAnterioresDespesas?: number;
-  pendenciasAnterioresReceitas?: number;
 };
 
 export type FooterBreakdownItem = {
@@ -47,19 +47,15 @@ export type FooterBreakdown = {
 export function buildFooterSummary(
   summary: SummaryWithBreakdown,
   saldoAnterior = 0,
+  previstoProjetado?: number,
 ): FooterSummary {
   const sobras = summary.sobrasOrcamento ?? 0;
   const entradasPrevistas = summary.entradasPrevistas - sobras;
   const saidasPrevistas = summary.saidasPrevistas - sobras;
-  const pendenciasAnterioresDespesas =
-    summary.pendenciasAnterioresDespesas ?? 0;
-  const pendenciasAnterioresReceitas =
-    summary.pendenciasAnterioresReceitas ?? 0;
-  const totalPrevisto =
-    entradasPrevistas -
-    saidasPrevistas -
-    pendenciasAnterioresDespesas +
-    pendenciasAnterioresReceitas;
+  const totalPrevisto = entradasPrevistas - saidasPrevistas;
+  const basePrevisto = saldoAnterior + totalPrevisto;
+  const previsto = previstoProjetado ?? basePrevisto;
+  const carryProjetado = previsto - basePrevisto;
 
   return {
     entradas: summary.entradasPagas,
@@ -68,11 +64,11 @@ export function buildFooterSummary(
     entradasPrevistas,
     saidasPrevistas,
     totalPrevisto,
-    pendenciasAnterioresDespesas,
-    pendenciasAnterioresReceitas,
+    previstoProjetado: previstoProjetado ?? null,
+    carryProjetado,
     saldoAnterior,
     saldo: saldoAnterior + summary.saldoRealizado,
-    previsto: saldoAnterior + totalPrevisto,
+    previsto,
   };
 }
 
@@ -86,84 +82,95 @@ export function buildFooterSummary(
  */
 export function buildFooterBreakdown(
   summary: SummaryWithBreakdown,
+  saldoAnterior = 0,
+  previstoProjetado?: number,
 ): FooterBreakdown {
   const sobras = summary.sobrasOrcamento ?? 0;
   const pagamentosFatura = summary.pagamentosFatura ?? 0;
+  const entradasPrevistas = summary.entradasPrevistas - sobras;
+  const saidasPrevistas = summary.saidasPrevistas - sobras;
+  const basePrevisto =
+    saldoAnterior + entradasPrevistas - saidasPrevistas;
+  const carry = previstoProjetado === undefined ? 0 : previstoProjetado - basePrevisto;
 
-  return {
-    despesa: [
-      {
-        id: "despesas-pagas",
-        label: "Lançamentos pagos",
-        value: summary.saidasPagas - pagamentosFatura,
-        href: "/lancamentos?status=pagos",
-      },
-      {
-        id: "despesas-a-pagar",
-        label: "Lançamentos a pagar",
-        value:
-          summary.saidasPrevistas -
-          summary.saidasPagas -
-          (summary.faturasCartao ?? 0) -
-          (summary.provisoesOrcamento ?? 0),
-        href: "/lancamentos?status=nao_pagos",
-      },
-      {
-        id: "pendencias-anteriores-despesas",
-        label: "Em aberto de meses anteriores",
-        value: summary.pendenciasAnterioresDespesas ?? 0,
-        href: "/lancamentos?status=nao_pagos",
-      },
-      {
-        id: "pagamentos-fatura",
-        label: "Pagamentos de fatura",
-        value: pagamentosFatura,
-        href: "/lancamentos?tipo=transferencia",
-      },
-      {
-        id: "faturas-restantes",
-        label: "Faturas restantes",
-        value: summary.faturasCartao ?? 0,
-        href: "/cartoes",
-      },
-      {
-        id: "reservas",
-        label: "Reservas de orçamento",
-        value: summary.provisoesOrcamento ?? 0,
-        href: "/limite-de-gastos",
-      },
-      {
-        id: "liberacoes",
-        label: "Liberações de orçamento",
-        value: -sobras,
-        href: "/limite-de-gastos",
-      },
-    ],
-    receita: [
-      {
-        id: "receitas-pagas",
-        label: "Receitas pagas",
-        value: summary.entradasPagas,
-        href: "/lancamentos?status=pagos",
-      },
-      {
-        id: "receitas-a-receber",
-        label: "Receitas a receber",
-        value: summary.entradasPrevistas - summary.entradasPagas,
-        href: "/lancamentos?status=nao_pagos",
-      },
-      {
-        id: "pendencias-anteriores-receitas",
-        label: "Em aberto de meses anteriores",
-        value: summary.pendenciasAnterioresReceitas ?? 0,
-        href: "/lancamentos?status=nao_pagos",
-      },
-      {
-        id: "liberacoes",
-        label: "Liberações de orçamento",
-        value: -sobras,
-        href: "/limite-de-gastos",
-      },
-    ],
-  };
+  const despesa: FooterBreakdownItem[] = [
+    {
+      id: "despesas-pagas",
+      label: "Lançamentos pagos",
+      value: summary.saidasPagas - pagamentosFatura,
+      href: "/lancamentos?status=pagos",
+    },
+    {
+      id: "despesas-a-pagar",
+      label: "Lançamentos a pagar",
+      value:
+        summary.saidasPrevistas -
+        summary.saidasPagas -
+        (summary.faturasCartao ?? 0) -
+        (summary.provisoesOrcamento ?? 0),
+      href: "/lancamentos?status=nao_pagos",
+    },
+    {
+      id: "pagamentos-fatura",
+      label: "Pagamentos de fatura",
+      value: pagamentosFatura,
+      href: "/lancamentos?tipo=transferencia",
+    },
+    {
+      id: "faturas-restantes",
+      label: "Faturas restantes",
+      value: summary.faturasCartao ?? 0,
+      href: "/cartoes",
+    },
+    {
+      id: "reservas",
+      label: "Reservas de orçamento",
+      value: summary.provisoesOrcamento ?? 0,
+      href: "/limite-de-gastos",
+    },
+    {
+      id: "liberacoes",
+      label: "Liberações de orçamento",
+      value: -sobras,
+      href: "/limite-de-gastos",
+    },
+  ];
+  const receita: FooterBreakdownItem[] = [
+    {
+      id: "receitas-pagas",
+      label: "Receitas pagas",
+      value: summary.entradasPagas,
+      href: "/lancamentos?status=pagos",
+    },
+    {
+      id: "receitas-a-receber",
+      label: "Receitas a receber",
+      value: summary.entradasPrevistas - summary.entradasPagas,
+      href: "/lancamentos?status=nao_pagos",
+    },
+    {
+      id: "liberacoes",
+      label: "Liberações de orçamento",
+      value: -sobras,
+      href: "/limite-de-gastos",
+    },
+  ];
+
+  if (carry < 0) {
+    despesa.push({
+      id: "projecao-acumulada",
+      label: "Em aberto de meses anteriores",
+      value: -carry,
+      href: "/lancamentos?status=nao_pagos",
+    });
+  } else if (carry > 0) {
+    receita.push({
+      id: "projecao-acumulada",
+      label: "Projeção acumulada de meses anteriores",
+      value: carry,
+      href: "/lancamentos?status=nao_pagos",
+    });
+  }
+
+  return { despesa, receita };
 }
