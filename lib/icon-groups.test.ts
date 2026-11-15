@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { ICON_GROUPS, ungroupedIcons } from "./icon-groups";
+import { ICON_MAP } from "./icons";
 import { ICON_NAMES } from "./icon-names";
 
 describe("grupos semânticos de ícones", () => {
@@ -17,5 +18,9 @@ describe("grupos semânticos de ícones", () => {
       expect(group.icons.length).toBeGreaterThan(0);
       expect(group.label.trim().length).toBeGreaterThan(0);
     }
+  });
+
+  it("mapeia todos os nomes para um componente de ícone", () => {
+    expect(Object.keys(ICON_MAP).sort()).toEqual([...ICON_NAMES].sort());
   });
 });

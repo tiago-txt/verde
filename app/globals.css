@@ -205,6 +205,50 @@
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
   }
+  .transactions-sticky-header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: hsl(var(--background) / 0.96);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .transactions-day-header {
+    position: sticky;
+    top: var(--transactions-header-height, 0px);
+    z-index: 20;
+    background: hsl(var(--forest-container) / 0.97);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .transactions-day-header-today {
+    background: color-mix(
+      in srgb,
+      hsl(var(--amber)) 10%,
+      hsl(var(--forest-container)) 90%
+    );
+  }
+  .indeterminate-bar {
+    position: relative;
+    overflow: hidden;
+  }
+  .indeterminate-bar::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 40%;
+    background: hsl(var(--primary));
+    animation: indeterminate 1.2s ease-in-out infinite;
+  }
+  @keyframes indeterminate {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(300%);
+    }
+  }
   .tile {
     box-shadow:
       inset 0 0 0 1px color-mix(in srgb, currentColor 22%, transparent),

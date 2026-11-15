@@ -7,6 +7,7 @@ import {
   useState,
   useOptimistic,
   useTransition,
+  type CSSProperties,
 } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -121,7 +122,7 @@ import { aplicarFaturasAoResumo } from "@/lib/finance/cards";
 import { summarizeTransactions } from "@/lib/finance/summary";
 import type { CardBasis, ResultSummary } from "@/lib/finance/result";
 import type { RecurrenceFrequency } from "@/lib/db/schema";
-import { formatCurrency, formatDate } from "@/lib/format";
+import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type OptimisticAction =
@@ -236,6 +237,27 @@ export function TransactionsPageClient({
     optimisticReducer,
   );
   const [isBulkPending, startBulkTransition] = useTransition();
+  const [isNavigating, startNavigation] = useTransition();
+  const [pendingMonth, setPendingMonth] = useState<string | null>(null);
+  const stickyHeaderRef = useRef<HTMLDivElement>(null);
+  const [stickyHeaderHeight, setStickyHeaderHeight] = useState(0);
+
+  useEffect(() => {
+    const element = stickyHeaderRef.current;
+    if (!element) return;
+
+    const update = () =>
+      setStickyHeaderHeight(element.getBoundingClientRect().height);
+    update();
+
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isNavigating) setPendingMonth(null);
+  }, [isNavigating]);
 
   // Pré-carrega o formulário em segundo plano para o "+" abrir imediatamente.
   useEffect(() => {
@@ -435,8 +457,13 @@ export function TransactionsPageClient({
     [optimisticTransactions, selectedIds],
   );
 
-  function go(next: TransactionFilters) {
-    router.push(buildTransactionHref(next));
+  function go(next: TransactionFilters, showFeedback = true) {
+    if (!showFeedback) {
+      router.push(buildTransactionHref(next));
+      return;
+    }
+    if (next.mes !== filters.mes) setPendingMonth(next.mes);
+    startNavigation(() => router.push(buildTransactionHref(next)));
   }
 
   function changeFilters(
@@ -498,15 +525,15 @@ export function TransactionsPageClient({
   }
 
   function openDetails(transaction: TransactionListItem) {
-    go({ ...filters, detalhe: transaction.id });
+    go({ ...filters, detalhe: transaction.id }, false);
   }
 
   function closeDetails() {
-    if (filters.detalhe) go({ ...filters, detalhe: null });
+    if (filters.detalhe) go({ ...filters, detalhe: null }, false);
   }
 
   function navigateDetail(id: string) {
-    go({ ...filters, detalhe: id });
+    go({ ...filters, detalhe: id }, false);
   }
 
   function loadMoreDays() {
@@ -911,8 +938,6 @@ export function TransactionsPageClient({
   const handlersRef = useRef({
     openDetails,
     handleEdit,
-    handleDelete,
-    handleDuplicate,
     handleLongPress,
     handleTogglePaid,
     toggleSelected,
@@ -921,8 +946,6 @@ export function TransactionsPageClient({
   handlersRef.current = {
     openDetails,
     handleEdit,
-    handleDelete,
-    handleDuplicate,
     handleLongPress,
     handleTogglePaid,
     toggleSelected,
@@ -936,11 +959,6 @@ export function TransactionsPageClient({
         handlersRef.current.openDetails(transaction),
       onEdit: (transaction: TransactionListItem) =>
         handlersRef.current.handleEdit(transaction),
-      onDelete: (transaction: TransactionListItem) =>
-        handlersRef.current.handleDelete(transaction),
-      onDuplicate: (transaction: TransactionListItem) => {
-        void handlersRef.current.handleDuplicate(transaction);
-      },
       onLongPress: (transaction: TransactionListItem) =>
         handlersRef.current.handleLongPress(transaction),
       onTogglePaid: (transaction: TransactionListItem, pago: boolean) =>
@@ -954,7 +972,15 @@ export function TransactionsPageClient({
   );
 
   return (
-    <div className="space-y-4 pb-20 lg:pb-0">
+    <div
+      className="space-y-4 pb-20 lg:pb-0"
+      aria-busy={isNavigating}
+      style={
+        {
+          "--transactions-header-height": `${stickyHeaderHeight}px`,
+        } as CSSProperties
+      }
+    >
       {forecastAlert && (
         <ForecastBanner
           userId={userId}
@@ -962,6 +988,10 @@ export function TransactionsPageClient({
           alert={forecastAlert}
         />
       )}
+      <div
+        ref={stickyHeaderRef}
+        className="transactions-sticky-header -mx-4 px-4 py-2 lg:-mx-8 lg:px-8"
+      >
       <div className="flex items-center gap-1 max-[379px]:flex-wrap lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
         <div className="hidden min-w-0 lg:block">
           <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>
@@ -977,21 +1007,29 @@ export function TransactionsPageClient({
             size="icon"
             className="compact-44 tap-48 h-11 w-11 shrink-0 rounded-lg"
             aria-label="Mês anterior"
+            disabled={isNavigating}
             onClick={() => changeMonth(addMonths(filters.mes, -1))}
           >
             <ChevronLeft className="h-4 w-4" />
           </Button>
           <MonthPicker
-            month={filters.mes}
+            month={pendingMonth ?? filters.mes}
             onChange={changeMonth}
             className="text-center text-[13px] lg:text-base"
           />
+          {isNavigating && (
+            <Loader2
+              className="h-3.5 w-3.5 shrink-0 animate-spin text-primary"
+              aria-hidden="true"
+            />
+          )}
           <Button
             type="button"
             variant="ghost"
             size="icon"
             className="compact-44 tap-48 h-11 w-11 shrink-0 rounded-lg"
             aria-label="Próximo mês"
+            disabled={isNavigating}
             onClick={() => changeMonth(addMonths(filters.mes, 1))}
           >
             <ChevronRight className="h-4 w-4" />
@@ -1112,6 +1150,21 @@ export function TransactionsPageClient({
           </DropdownMenu>
         </div>
       </div>
+      </div>
+
+      <span className="sr-only" role="status" aria-live="polite">
+        {isNavigating
+          ? `Carregando ${
+              pendingMonth ? formatMonthTitle(pendingMonth) : "lançamentos"
+            }`
+          : ""}
+      </span>
+
+      <div className="h-0.5 overflow-hidden rounded-full bg-primary/10" aria-hidden="true">
+        {isNavigating && (
+          <div className="indeterminate-bar h-full w-full bg-primary" />
+        )}
+      </div>
 
       <FilterBar
         filters={filters}
@@ -1185,7 +1238,12 @@ export function TransactionsPageClient({
           />
         </div>
       ) : (
-        <div className="space-y-6 sm:space-y-7">
+        <div
+          className={cn(
+            "space-y-6 transition-opacity sm:space-y-7",
+            isNavigating && "pointer-events-none opacity-60",
+          )}
+        >
           {visibleGroups.map((group) => {
             const selectableItems = group.items.filter(
               (item) => !item.cartaoId,
@@ -1217,12 +1275,12 @@ export function TransactionsPageClient({
               <div
                 key={group.day}
                 id={`day-${group.day}`}
-                className="scroll-mt-4 border-b border-border/40 pb-3 last:border-b-0 last:pb-0"
+                className="scroll-mt-32 border-b border-border/40 pb-3 last:border-b-0 last:pb-0"
               >
                 <div
                   className={cn(
-                    "flex flex-wrap items-center justify-between gap-2 border-b border-grout bg-forest-container/70 px-0 py-2.5 sm:px-4",
-                    group.day === today && "bg-amber/10",
+                    "transactions-day-header flex flex-wrap items-center justify-between gap-2 border-b border-grout px-0 py-2.5 sm:px-4",
+                    group.day === today && "transactions-day-header-today",
                   )}
                 >
                   <div className="flex min-w-0 items-center gap-2">
@@ -1299,8 +1357,6 @@ export function TransactionsPageClient({
                       onToggleSelected={rowActions.onToggleSelected}
                       onOpenDetails={rowActions.onOpenDetails}
                       onEdit={rowActions.onEdit}
-                      onDelete={rowActions.onDelete}
-                      onDuplicate={rowActions.onDuplicate}
                       onLongPress={rowActions.onLongPress}
                       onTogglePaid={rowActions.onTogglePaid}
                       onChangeCategory={rowActions.onChangeCategory}

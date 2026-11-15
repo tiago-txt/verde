@@ -11,6 +11,16 @@ export const COLOR_PALETTE = [
   { value: "#facc15", label: "Amarelo" },
   { value: "#84cc16", label: "Lima" },
   { value: "#94a3b8", label: "Cinza" },
+  { value: "#059669", label: "Esmeralda escura" },
+  { value: "#0ea5e9", label: "Céu" },
+  { value: "#3b82f6", label: "Azul royal" },
+  { value: "#8b5cf6", label: "Púrpura" },
+  { value: "#d946ef", label: "Fúcsia" },
+  { value: "#ec4899", label: "Magenta" },
+  { value: "#ef4444", label: "Vermelho" },
+  { value: "#ea580c", label: "Terracota" },
+  { value: "#d97706", label: "Âmbar" },
+  { value: "#64748b", label: "Ardósia" },
 ] as const;
 
 export const DEFAULT_COLOR = COLOR_PALETTE[0].value;

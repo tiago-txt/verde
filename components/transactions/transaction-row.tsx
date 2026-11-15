@@ -1,15 +1,13 @@
 "use client";
 
-import { memo, useRef, useState } from "react";
+import { memo, useRef } from "react";
 import {
   ArrowRight,
-  Pencil,
   Repeat,
   StickyNote,
   Tag,
   ThumbsDown,
   ThumbsUp,
-  Trash2,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -31,8 +29,6 @@ type TransactionRowProps = {
   onToggleSelected?: (id: string) => void;
   onOpenDetails: (transaction: TransactionListItem) => void;
   onEdit: (transaction: TransactionListItem) => void;
-  onDelete: (transaction: TransactionListItem) => void;
-  onDuplicate: (transaction: TransactionListItem) => void;
   onLongPress?: (transaction: TransactionListItem) => void;
   onTogglePaid: (transaction: TransactionListItem, pago: boolean) => void;
   onChangeCategory?: (transaction: TransactionListItem) => void;
@@ -80,8 +76,6 @@ export const TransactionRow = memo(function TransactionRow({
   onToggleSelected,
   onOpenDetails,
   onEdit,
-  onDelete,
-  onDuplicate,
   onLongPress,
   onTogglePaid,
   onChangeCategory,
@@ -89,8 +83,7 @@ export const TransactionRow = memo(function TransactionRow({
   const longPressTimer = useRef<number | null>(null);
   const longPressTriggered = useRef(false);
   const pointerStart = useRef<{ x: number; y: number } | null>(null);
-  const touchStartX = useRef<number | null>(null);
-  const [reveal, setReveal] = useState<"left" | "right" | null>(null);
+  const pointerMoved = useRef(false);
   const paid = transaction.pago;
   const isTransfer = transaction.tipo === "transferencia";
   const isCardPurchase = Boolean(transaction.cartaoId);
@@ -215,22 +208,36 @@ export const TransactionRow = memo(function TransactionRow({
     </>
   );
 
+  function consumePointerMove() {
+    if (!pointerMoved.current) return false;
+    pointerMoved.current = false;
+    return true;
+  }
+
   function handleMainClick() {
+    if (consumePointerMove()) return;
     if (longPressTriggered.current) {
       longPressTriggered.current = false;
       return;
     }
-    if (reveal) {
-      setReveal(null);
+    if (selectionMode) {
+      onToggleSelected?.(transaction.id);
       return;
     }
-    if (selectionMode) onToggleSelected?.(transaction.id);
-    else onOpenDetails(transaction);
+    if (!canHover() && !transaction.faturaChave) {
+      onEdit(transaction);
+      return;
+    }
+    onOpenDetails(transaction);
   }
 
   function handlePointerDown(event: React.PointerEvent<HTMLElement>) {
-    if (selectionMode || !onLongPress) return;
+    pointerMoved.current = false;
     pointerStart.current = { x: event.clientX, y: event.clientY };
+
+    const target = event.target as HTMLElement | null;
+    if (selectionMode || !onLongPress || target?.closest("button")) return;
+
     longPressTimer.current = window.setTimeout(() => {
       longPressTriggered.current = true;
       onLongPress(transaction);
@@ -244,6 +251,7 @@ export const TransactionRow = memo(function TransactionRow({
       Math.abs(event.clientX - start.x) > 10 ||
       Math.abs(event.clientY - start.y) > 10
     ) {
+      pointerMoved.current = true;
       clearLongPress();
     }
   }
@@ -256,76 +264,12 @@ export const TransactionRow = memo(function TransactionRow({
     }
   }
 
-  function handleTouchStart(event: React.TouchEvent) {
-    touchStartX.current = event.touches[0]?.clientX ?? null;
-  }
-
-  function handleTouchEnd(event: React.TouchEvent) {
-    const start = touchStartX.current;
-    touchStartX.current = null;
-    if (start === null) return;
-    const delta =
-      (event.changedTouches[0]?.clientX ?? start) - start;
-    if (Math.abs(delta) < 48) return;
-    setReveal(delta > 0 ? "left" : "right");
-  }
-
   return (
     <div className="list-row-cv group relative overflow-hidden">
-      {/* Ações por deslize permanecem exclusivas do toque. */}
-      {reveal === "left" && (
-        <div className="absolute inset-y-0 left-0 flex w-20 items-stretch bg-success/15 lg:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              onTogglePaid(transaction, !paid);
-              setReveal(null);
-            }}
-            aria-label={paid ? "Marcar como não pago" : "Marcar como pago"}
-            className="flex w-full flex-col items-center justify-center gap-1 text-success"
-          >
-            {paid ? (
-              <ThumbsDown className="h-5 w-5" />
-            ) : (
-              <ThumbsUp className="h-5 w-5" />
-            )}
-            <span className="text-xs">{paid ? "Desfazer" : "Pagar"}</span>
-          </button>
-        </div>
-      )}
-      {reveal === "right" && (
-        <div className="absolute inset-y-0 right-0 flex w-36 items-stretch lg:hidden">
-          <button
-            type="button"
-            onClick={() => {
-              setReveal(null);
-              onEdit(transaction);
-            }}
-            aria-label={`Editar ${transaction.descricao}`}
-            className="flex w-1/2 flex-col items-center justify-center gap-1 bg-info/15 text-info"
-          >
-            <Pencil className="h-5 w-5" />
-            <span className="text-xs">Editar</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setReveal(null);
-              onDelete(transaction);
-            }}
-            aria-label={`Excluir ${transaction.descricao}`}
-            className="flex w-1/2 flex-col items-center justify-center gap-1 bg-destructive/15 text-destructive"
-          >
-            <Trash2 className="h-5 w-5" />
-            <span className="text-xs">Excluir</span>
-          </button>
-        </div>
-      )}
-
       <div
         role="button"
         tabIndex={0}
-        aria-label={`Abrir detalhes de ${transaction.descricao}`}
+        aria-label={`Abrir ${transaction.descricao}`}
         onClick={handleMainClick}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
@@ -333,20 +277,16 @@ export const TransactionRow = memo(function TransactionRow({
           event.preventDefault();
           handleMainClick();
         }}
-        onPointerDown={handlePointerDown}
-        onPointerUp={clearLongPress}
-        onPointerMove={handlePointerMove}
+        onPointerDownCapture={handlePointerDown}
+        onPointerUpCapture={clearLongPress}
+        onPointerMoveCapture={handlePointerMove}
         onPointerLeave={clearLongPress}
-        onPointerCancel={clearLongPress}
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
+        onPointerCancelCapture={clearLongPress}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "relative flex min-h-16 items-center gap-2.5 border-l-2 bg-background py-0 pl-2 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:min-h-[68px] sm:gap-3",
+          "relative flex min-h-16 items-center gap-2.5 border-l-2 bg-background py-0 pl-2 outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:min-h-[68px] sm:gap-3",
           typeIndicator,
           selected && "bg-primary/10",
-          reveal === "left" && "translate-x-20",
-          reveal === "right" && "-translate-x-36",
           !selectionMode && !selected && "lg:hover:bg-forest-container/60",
         )}
       >
@@ -393,6 +333,7 @@ export const TransactionRow = memo(function TransactionRow({
             type="button"
             onClick={(event) => {
               event.stopPropagation();
+              if (consumePointerMove()) return;
               if (selectionMode) {
                 onToggleSelected?.(transaction.id);
                 return;
@@ -429,11 +370,12 @@ export const TransactionRow = memo(function TransactionRow({
               type="button"
               onClick={(event) => {
                 event.stopPropagation();
+                if (consumePointerMove()) return;
                 if (selectionMode) {
                   onToggleSelected?.(transaction.id);
                   return;
                 }
-                if (canHover() && !transaction.faturaChave) {
+                if (!transaction.faturaChave) {
                   onEdit(transaction);
                   return;
                 }
@@ -441,7 +383,7 @@ export const TransactionRow = memo(function TransactionRow({
               }}
               onPointerDown={(event) => event.stopPropagation()}
               aria-label={`Abrir ${transaction.descricao}`}
-              title="Abrir lançamento"
+              title={transaction.faturaChave ? "Abrir lançamento" : "Editar lançamento"}
               className="hover-action group/name -mx-1 flex min-w-0 max-w-full flex-1 items-center gap-1 rounded-md px-1 py-0.5 text-left outline-none transition-colors focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring lg:hover:bg-accent"
             >
               <span
@@ -626,6 +568,7 @@ export const TransactionRow = memo(function TransactionRow({
                 type="button"
                 onClick={(event) => {
                   event.stopPropagation();
+                  if (consumePointerMove()) return;
                   onTogglePaid(transaction, !paid);
                 }}
                 onPointerDown={(event) => event.stopPropagation()}
