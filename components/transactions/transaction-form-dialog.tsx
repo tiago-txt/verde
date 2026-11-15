@@ -506,15 +506,15 @@ export function TransactionFormDialog({
   ]);
 
   const repetitionChipLabel =
-    mode === "edit"
-      ? isInstallment
-        ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
-        : "Recorrente"
-      : repeticao === "fixa"
-        ? `Fixa · ${frequencia}`
-        : repeticao === "parcelada"
-          ? `Parcela 1/${parcelas || "?"}`
-          : "Repetir";
+    repeticao === "fixa"
+      ? `Fixa · ${frequencia}`
+      : repeticao === "parcelada"
+        ? `Parcela 1/${parcelas || "?"}`
+        : mode === "edit" && isInstallment
+          ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
+          : mode === "edit" && transaction?.recorrenciaId
+            ? "Recorrente"
+            : "Repetir";
 
   function handleTypeChange(next: TransactionType) {
     setValue("tipo", next, { shouldValidate: true });
@@ -1528,23 +1528,23 @@ export function TransactionFormDialog({
                   isMobile ? "overflow-x-auto pb-1" : "flex-wrap",
                 )}
               >
-                {(mode === "create" || isGrouped) && (
-                  <AdvancedChip
-                    icon={Repeat}
-                    label={repetitionChipLabel}
-                    active={
-                      mode === "edit" || repeticao !== "nenhuma"
-                    }
-                    open={activeChip === "repetir"}
-                    onClick={() => toggleChip("repetir")}
-                    disabled={mode === "edit"}
-                    title={
-                      mode === "edit"
-                        ? "A recorrência é alterada pelo escopo escolhido"
+                <AdvancedChip
+                  icon={Repeat}
+                  label={repetitionChipLabel}
+                  active={
+                    (mode === "edit" && isGrouped) || repeticao !== "nenhuma"
+                  }
+                  open={activeChip === "repetir"}
+                  onClick={() => toggleChip("repetir")}
+                  disabled={mode === "edit" && isGrouped}
+                  title={
+                    mode === "edit" && isGrouped
+                      ? "A recorrência é alterada pelo escopo escolhido"
+                      : mode === "edit"
+                        ? "Transformar em fixa ou parcelada a partir deste lançamento"
                         : "Repetir"
-                    }
-                  />
-                )}
+                  }
+                />
                 <AdvancedChip
                   icon={Target}
                   label={
@@ -1629,7 +1629,7 @@ export function TransactionFormDialog({
               </div>
 
               <div className="col-span-2 sm:col-span-6">
-                {mode === "create" && (
+                {(mode === "create" || !isGrouped) && (
                   <Accordion open={activeChip === "repetir"}>
                     <div className="space-y-2">
                       <div className="grid grid-cols-3 gap-1.5">

@@ -248,10 +248,16 @@
     background-color: hsl(var(--tile-surface));
   }
   .row-title {
-    font-size: 15px;
-    line-height: 22px;
+    font-size: 14px;
+    line-height: 20px;
     font-weight: 600;
     letter-spacing: -0.01em;
+  }
+  @media (min-width: 640px) {
+    .row-title {
+      font-size: 15px;
+      line-height: 22px;
+    }
   }
   .row-value {
     font-family: var(--font-mono), ui-monospace, monospace;

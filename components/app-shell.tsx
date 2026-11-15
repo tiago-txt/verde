@@ -279,7 +279,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
       <nav
         aria-label="Navegação principal"
-        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest/95 lg:hidden"
+        className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-grout bg-surface-lowest shadow-[0_-6px_18px_rgba(0,0,0,0.22)] lg:hidden"
       >
         <div className="grid h-14 grid-cols-5 items-stretch">
           {MOBILE_LEFT.map((item) => {

@@ -552,6 +552,112 @@ export async function updateTransactionAction(
   try {
     db.transaction((tx) => {
       if (!isGrouped) {
+        // Conversão de um lançamento avulso em recorrência fixa. A ocorrência
+        // editada vira a primeira da série; as próximas são geradas a partir
+        // dela, sem tocar no histórico anterior.
+        if (data.repeticao === "fixa") {
+          const recurrenceId = crypto.randomUUID();
+          const template: RecurrenceTemplate = {
+            tipo: data.tipo,
+            descricao: data.descricao,
+            valor: data.valor,
+            contaId,
+            cartaoId,
+            contaDestinoId,
+            categoriaId,
+            observacao,
+            tagIds: data.tagIds,
+            pago: false,
+            orcamentoDeslocamento,
+            ...cardSnapshot,
+          };
+
+          tx.insert(recurrences)
+            .values({
+              id: recurrenceId,
+              workspaceId,
+              frequencia: data.frequencia,
+              dataInicio: data.data,
+              dataFim: data.dataFim,
+              ativo: true,
+              template,
+            })
+            .run();
+
+          tx.update(transactions)
+            .set({ ...updateValuesWithDate, recorrenciaId: recurrenceId })
+            .where(
+              and(
+                eq(transactions.id, data.id),
+                eq(transactions.workspaceId, workspaceId),
+              ),
+            )
+            .run();
+          replaceTags(tx, workspaceId, data.id, data.tagIds);
+          return;
+        }
+
+        // Conversão em parcelamento: a ocorrência editada vira a parcela 1/N
+        // e as demais são criadas a partir da data editada.
+        if (data.repeticao === "parcelada") {
+          const groupId = crypto.randomUUID();
+          const plan = buildInstallmentPlan({
+            valorCents: data.valor,
+            parcelas: data.parcelas,
+            dataInicio: data.data,
+            baseValor: data.baseValor,
+          });
+          const [first, ...rest] = plan;
+          if (!first) return;
+
+          tx.update(transactions)
+            .set({
+              ...updateValues,
+              valor: first.valor,
+              data: first.data,
+              pago: isCard ? false : data.pago,
+              recorrenciaId: null,
+              parcelaGrupoId: groupId,
+              parcelaAtual: first.numero,
+              parcelaTotal: plan.length,
+            })
+            .where(
+              and(
+                eq(transactions.id, data.id),
+                eq(transactions.workspaceId, workspaceId),
+              ),
+            )
+            .run();
+          replaceTags(tx, workspaceId, data.id, data.tagIds);
+
+          for (const item of rest) {
+            const installmentId = crypto.randomUUID();
+            tx.insert(transactions)
+              .values({
+                id: installmentId,
+                workspaceId,
+                tipo: data.tipo,
+                descricao: data.descricao,
+                valor: item.valor,
+                data: item.data,
+                pago: false,
+                contaId,
+                cartaoId,
+                contaDestinoId: null,
+                categoriaId,
+                observacao,
+                parcelaGrupoId: groupId,
+                parcelaAtual: item.numero,
+                parcelaTotal: plan.length,
+                orcamentoDeslocamento,
+                ...cardSnapshot,
+              })
+              .run();
+            insertTags(tx, workspaceId, installmentId, data.tagIds);
+          }
+          return;
+        }
+
         tx.update(transactions)
           .set(updateValuesWithDate)
           .where(
@@ -705,6 +811,16 @@ export async function updateTransactionAction(
         ? error.message
         : "Não foi possível salvar o lançamento.",
     );
+  }
+
+  if (!isGrouped && data.repeticao === "fixa") {
+    try {
+      ensureRecurrencesForMonth(workspaceId, data.data.slice(0, 7));
+    } catch (error) {
+      // A primeira ocorrência já foi convertida; a geração é idempotente e será
+      // tentada novamente ao abrir a tela de lançamentos.
+      console.error("[verde] erro ao gerar recorrências:", error);
+    }
   }
 
   revalidateTransactions();

@@ -104,7 +104,7 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
           ? `, sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} ${formatCurrency(event.sobraAnterior.valor)}`
           : ""
       }`}
-      className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:hover:bg-forest-container/60"
+      className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 pl-2.5 pr-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60"
     >
       <EntityTile
         kind="orcamento"
@@ -116,77 +116,81 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
         }}
         dashed
         plain
-        className="h-10 w-10"
+        className="h-9 w-9 sm:h-10 sm:w-10"
       />
 
       <span className="min-w-0 flex-1">
-        <span className="row-title block">
-          {summary.nome}
-          {" · "}
-          <span className="text-xs font-normal text-muted-foreground">
-            {descriptor}
-          </span>
-        </span>
-
-        <span
-          className={cn(
-            "mt-0.5 flex flex-wrap items-center text-[13px] text-muted-foreground",
-            "gap-x-1 gap-y-0",
-          )}
-        >
-          {subline}
-        </span>
-
-        {event.sobraAnterior && (
-          <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-            <span>
-              {event.sobraAnterior.realocadaPara
-                ? `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} realocada para ${event.sobraAnterior.realocadaPara.nome}:`
-                : `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)}${
-                    event.sobraAnterior.rolada ? " incluída:" : " livre:"
-                  }`}
-            </span>
-            <span className="tabular font-medium text-primary">
-              +{formatCurrency(event.sobraAnterior.valor)}
+        <span className="flex min-w-0 items-start justify-between gap-2">
+          <span className="row-title block min-w-0 flex-1">
+            {summary.nome}
+            {" · "}
+            <span className="text-xs font-normal text-muted-foreground">
+              {descriptor}
             </span>
           </span>
-        )}
-
-        {event.sobraRecebida?.map((item) => (
           <span
-            key={`${item.budgetId}:${item.ciclo}`}
-            className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+            className={cn(
+              "tabular shrink-0 whitespace-nowrap pt-0.5 text-right text-sm font-semibold leading-5 sm:text-lg",
+              valueTone,
+            )}
           >
-            <span>
-              Inclui{" "}
-              <span className="tabular font-medium text-primary">
-                +{formatCurrency(item.valor)}
-              </span>{" "}
-              de {item.nome} ({formatMonthShort(item.ciclo)})
-            </span>
+            {valueText}
           </span>
-        ))}
-      </span>
-
-      <span className="flex min-w-[6.25rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
-        <span
-          className={cn(
-            "tabular whitespace-nowrap text-base font-semibold leading-5 sm:text-lg",
-            valueTone,
-          )}
-        >
-          {valueText}
         </span>
-        <span
-          className={cn(
-            "flex whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
-            statusMeta.tone,
-          )}
-          title={`Status: ${statusMeta.label}`}
-          aria-label={`Status: ${statusMeta.label}`}
-        >
-          <StatusIcon className="h-4 w-4" aria-hidden="true" />
-          {statusMeta.label}
+
+        <span className="mt-1.5 flex min-w-0 items-start justify-between gap-2">
+          <span className="min-w-0 flex-1">
+            <span
+              className={cn(
+                "flex flex-wrap items-center text-xs text-muted-foreground sm:text-sm",
+                "gap-x-1 gap-y-0",
+              )}
+            >
+              {subline}
+            </span>
+
+            {event.sobraAnterior && (
+              <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                <span>
+                  {event.sobraAnterior.realocadaPara
+                    ? `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} realocada para ${event.sobraAnterior.realocadaPara.nome}:`
+                    : `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)}${
+                        event.sobraAnterior.rolada ? " incluída:" : " livre:"
+                      }`}
+                </span>
+                <span className="tabular font-medium text-primary">
+                  +{formatCurrency(event.sobraAnterior.valor)}
+                </span>
+              </span>
+            )}
+
+            {event.sobraRecebida?.map((item) => (
+              <span
+                key={`${item.budgetId}:${item.ciclo}`}
+                className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+              >
+                <span>
+                  Inclui{" "}
+                  <span className="tabular font-medium text-primary">
+                    +{formatCurrency(item.valor)}
+                  </span>{" "}
+                  de {item.nome} ({formatMonthShort(item.ciclo)})
+                </span>
+              </span>
+            ))}
+          </span>
+
+          <span
+            className={cn(
+              "flex shrink-0 whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
+              statusMeta.tone,
+            )}
+            title={`Status: ${statusMeta.label}`}
+            aria-label={`Status: ${statusMeta.label}`}
+          >
+            <StatusIcon className="h-4 w-4" aria-hidden="true" />
+            {statusMeta.label}
+          </span>
         </span>
       </span>
     </button>

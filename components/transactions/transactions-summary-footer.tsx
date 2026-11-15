@@ -288,7 +288,7 @@ export function TransactionsSummaryFooter({
         </div>
       </div>
 
-      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card/95 lg:hidden">
+      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden">
         <div className="flex h-[52px] items-center gap-2 pl-4 pr-2">
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
             <div className="min-w-0 text-right">

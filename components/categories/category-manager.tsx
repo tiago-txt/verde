@@ -7,6 +7,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowLeft,
+  Combine,
   Loader2,
   MoreHorizontal,
   Pencil,
@@ -48,6 +49,7 @@ import { CategoryFormDialog } from "./category-form-dialog";
 import { TagManager } from "./tag-manager";
 import {
   deleteCategoryAction,
+  mergeCategoriesAction,
   setCategoryArchivedAction,
 } from "@/lib/actions/categories";
 import type {
@@ -68,6 +70,7 @@ type CategoryRowProps = {
   pending: boolean;
   onEdit: (category: CategoryWithCount) => void;
   onDelete: (category: CategoryWithCount) => void;
+  onMerge: (category: CategoryWithCount) => void;
   onToggleArchive: (category: CategoryWithCount) => void;
 };
 
@@ -77,6 +80,7 @@ function CategoryRow({
   pending,
   onEdit,
   onDelete,
+  onMerge,
   onToggleArchive,
 }: CategoryRowProps) {
   return (
@@ -132,6 +136,10 @@ function CategoryRow({
           </DropdownMenuItem>
           {!category.isSystem && (
             <>
+              <DropdownMenuItem onSelect={() => onMerge(category)}>
+                <Combine />
+                Mesclar com...
+              </DropdownMenuItem>
               <DropdownMenuItem onSelect={() => onToggleArchive(category)}>
                 {category.deletedAt ? (
                   <>
@@ -176,6 +184,10 @@ export function CategoryManager({
   const [deleting, setDeleting] = useState<CategoryWithCount | null>(null);
   const [moveToId, setMoveToId] = useState("");
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [merging, setMerging] = useState<CategoryWithCount | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
+  const [mergeError, setMergeError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
 
@@ -211,6 +223,18 @@ export function CategoryManager({
         .sort((a, b) => Number(b.isSystem) - Number(a.isSystem))
     : [];
 
+  const mergeTargets = merging
+    ? categories
+        .filter(
+          (category) =>
+            category.tipo === merging.tipo &&
+            !category.deletedAt &&
+            category.id !== merging.id &&
+            category.categoriaPaiId !== merging.id,
+        )
+        .sort((a, b) => Number(b.isSystem) - Number(a.isSystem))
+    : [];
+
   function openNew(type: CategoryType) {
     setDefaultType(type);
     setEditing(null);
@@ -242,6 +266,45 @@ export function CategoryManager({
     setDeleteError(null);
     setMoveToId("");
     setDeleting(category);
+  }
+
+  function openMerge(category: CategoryWithCount) {
+    setMergeError(null);
+    setMergeTargetId("");
+    setNotice(null);
+    setMerging(category);
+  }
+
+  async function confirmMerge() {
+    if (!merging || !mergeTargetId) return;
+    setMergeError(null);
+    setNotice(null);
+
+    if (merging.childrenCount > 0) {
+      setMergeError(
+        "Esta categoria possui subcategorias. Mescle ou mova as subcategorias primeiro.",
+      );
+      return;
+    }
+
+    setPendingId(merging.id);
+    const result = await mergeCategoriesAction({
+      sourceId: merging.id,
+      targetId: mergeTargetId,
+    });
+    setPendingId(null);
+
+    if (!result.ok) {
+      setMergeError(result.error);
+      return;
+    }
+
+    const targetName =
+      categories.find((category) => category.id === mergeTargetId)?.nome ??
+      "categoria de destino";
+    setNotice(`"${merging.nome}" foi mesclada em "${targetName}".`);
+    setMerging(null);
+    router.refresh();
   }
 
   async function confirmDelete() {
@@ -292,6 +355,14 @@ export function CategoryManager({
       />
 
       <FormError message={flash} />
+      {notice && (
+        <div
+          role="status"
+          className="rounded-md border border-primary/30 bg-primary/10 px-3 py-2.5 text-sm text-primary"
+        >
+          {notice}
+        </div>
+      )}
 
       <div className="flex items-center gap-2">
         <Checkbox
@@ -341,6 +412,7 @@ export function CategoryManager({
                           pending={pendingId === root.id}
                           onEdit={openEdit}
                           onDelete={openDelete}
+                          onMerge={openMerge}
                           onToggleArchive={(category) =>
                             void toggleArchive(category)
                           }
@@ -355,6 +427,7 @@ export function CategoryManager({
                                 pending={pendingId === child.id}
                                 onEdit={openEdit}
                                 onDelete={openDelete}
+                                onMerge={openMerge}
                                 onToggleArchive={(category) =>
                                   void toggleArchive(category)
                                 }
@@ -467,6 +540,78 @@ export function CategoryManager({
               {deleting && deleting.transactionCount > 0
                 ? "Mover e excluir"
                 : "Excluir categoria"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(merging)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMerging(null);
+            setMergeError(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mesclar categoria</DialogTitle>
+            <DialogDescription>
+              {merging
+                ? `Todos os lançamentos, orçamentos e recorrências de "${merging.nome}" serão movidos para a categoria de destino. A categoria de origem será excluída.`
+                : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          <FormError message={mergeError} />
+
+          {merging && merging.childrenCount > 0 ? (
+            <p className="text-sm text-destructive">
+              Esta categoria possui {merging.childrenCount} subcategoria(s).
+              Mescle ou mova as subcategorias primeiro.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="merge-target">Categoria de destino</Label>
+              <NativeSelect
+                id="merge-target"
+                value={mergeTargetId}
+                onChange={(event) => setMergeTargetId(event.target.value)}
+              >
+                <option value="">Selecione uma categoria</option>
+                {mergeTargets.map((target) => (
+                  <option key={target.id} value={target.id}>
+                    {target.nome}
+                    {target.isSystem ? " (sugerido)" : ""}
+                  </option>
+                ))}
+              </NativeSelect>
+              <p className="text-xs text-muted-foreground">
+                O histórico é preservado. Lançamentos arquivados, orçamentos,
+                recorrências e relatórios passam a usar a categoria de destino.
+              </p>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMerging(null)}
+              disabled={Boolean(pendingId)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => void confirmMerge()}
+              disabled={
+                Boolean(pendingId) ||
+                !mergeTargetId ||
+                (merging?.childrenCount ?? 0) > 0
+              }
+            >
+              {pendingId && <Loader2 className="h-4 w-4 animate-spin" />}
+              Mesclar categorias
             </Button>
           </DialogFooter>
         </DialogContent>

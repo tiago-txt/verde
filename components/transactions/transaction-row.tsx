@@ -18,6 +18,7 @@ import type { TransactionListItem } from "@/lib/db/queries/transactions";
 import { faturaDaCompra, intervaloDaFatura } from "@/lib/finance/cards";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { transactionRowStatus } from "@/lib/design/row-status";
+import { categoryTileColor } from "@/lib/finance/investment-category";
 import type { SecondaryInfo } from "@/lib/finance/row-secondary";
 import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
@@ -111,18 +112,15 @@ export const TransactionRow = memo(function TransactionRow({
       : transaction.tipo === "despesa"
         ? "−"
         : "";
-  const valueColor = isTransfer
-    ? "text-info"
-    : transaction.tipo === "receita"
-      ? "text-primary"
-      : "text-clay";
-  // Indicação extra de despesa/receita: filete sólido à esquerda.
-  // A fatura usa tracejado; aqui a leitura é por tipo do lançamento.
-  const typeIndicator = isTransfer
-    ? "border-l-info/70"
-    : transaction.tipo === "receita"
-      ? "border-l-primary/70"
-      : "border-l-clay/70";
+  const valueColor = isInvoicePayment
+    ? "text-clay"
+    : isTransfer
+      ? "text-info"
+      : transaction.tipo === "receita"
+        ? "text-primary"
+        : "text-clay";
+  // Filete neutro à esquerda. A leitura de entrada/saída fica no valor.
+  const typeIndicator = "border-l-grout/70";
 
   const rowStatus = transactionRowStatus({
     pago: paid,
@@ -159,11 +157,55 @@ export const TransactionRow = memo(function TransactionRow({
       : null;
   const budgetCycle = transaction.orcamentoCiclo;
   const hasBudget = Boolean(budgetCycle);
-  const hasSecondary =
-    hasBudget ||
+  const categoryColor = categoryTileColor({
+    nome: transaction.categoriaNome,
+    tipo: transaction.tipo,
+    cor: transaction.categoriaCor,
+  });
+  const hasContact =
     isTransfer ||
     (showAccount && Boolean(accountName)) ||
     (showCategory && Boolean(transaction.categoriaNome));
+  const hasSecondary = hasBudget || hasContact;
+
+  const titleBadges = (
+    <>
+      {transaction.recorrenciaId && (
+        <Repeat
+          className="h-3.5 w-3.5 shrink-0 text-primary"
+          aria-label="Lançamento recorrente"
+        />
+      )}
+      {transaction.parcelaGrupoId && (
+        <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-xs">
+          {transaction.parcelaAtual}/{transaction.parcelaTotal}
+        </Badge>
+      )}
+      {isCardPurchase && cardInvoiceKey && (
+        <Badge
+          variant="outline"
+          className="hidden shrink-0 px-1.5 py-0 text-xs sm:inline-flex"
+        >
+          Fatura {formatMonthShort(cardInvoiceKey)}
+        </Badge>
+      )}
+      {transaction.observacao && (
+        <StickyNote
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+          aria-label="Tem observação"
+        />
+      )}
+      {transaction.tags.length > 0 && (
+        <span
+          className="inline-flex shrink-0 items-center gap-0.5 text-xs text-gold"
+          title={transaction.tags.map((tag) => `#${tag.nome}`).join(" ")}
+        >
+          <Tag className="h-3 w-3" aria-hidden="true" />
+          {transaction.tags.length}
+        </span>
+      )}
+    </>
+  );
 
   function handleMainClick() {
     if (longPressTriggered.current) {
@@ -292,7 +334,7 @@ export const TransactionRow = memo(function TransactionRow({
         onTouchEnd={handleTouchEnd}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "relative flex min-h-16 items-center gap-3 border-l-2 bg-background py-0 pl-2 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:min-h-[68px]",
+          "relative flex min-h-16 items-center gap-2.5 border-l-2 bg-background py-0 pl-2 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:min-h-[68px] sm:gap-3",
           typeIndicator,
           selected && "bg-primary/10",
           reveal === "left" && "translate-x-20",
@@ -324,7 +366,7 @@ export const TransactionRow = memo(function TransactionRow({
                 : { id: transaction.id, nome: transaction.descricao }
             }
             plain
-            className="h-10 w-10"
+            className="h-9 w-9 sm:h-10 sm:w-10"
           />
         ) : isCardPurchase ? (
           <EntityTile
@@ -336,7 +378,7 @@ export const TransactionRow = memo(function TransactionRow({
               icone: transaction.cartaoIcone,
             }}
             plain
-            className="h-10 w-10"
+            className="h-9 w-9 sm:h-10 sm:w-10"
           />
         ) : (
           <button
@@ -364,16 +406,17 @@ export const TransactionRow = memo(function TransactionRow({
                 id: transaction.categoriaId,
                 nome: transaction.categoriaNome,
                 icone: transaction.categoriaIcone,
-                cor: transaction.categoriaCor,
+                cor: categoryColor,
               }}
               plain
-              className="h-10 w-10"
+              className="h-9 w-9 sm:h-10 sm:w-10"
             />
           </button>
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+          <div className="flex min-w-0 items-start justify-between gap-2">
+            <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
             <button
               type="button"
               onClick={(event) => {
@@ -391,11 +434,11 @@ export const TransactionRow = memo(function TransactionRow({
               onPointerDown={(event) => event.stopPropagation()}
               aria-label={`Abrir ${transaction.descricao}`}
               title="Abrir lançamento"
-              className="hover-action group/name -mx-1 flex min-w-0 max-w-full items-center gap-1 rounded-md px-1 py-0.5 text-left outline-none transition-colors focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring lg:hover:bg-accent"
+              className="hover-action group/name -mx-1 flex min-w-0 max-w-full flex-1 items-center gap-1 rounded-md px-1 py-0.5 text-left outline-none transition-colors focus-visible:underline focus-visible:ring-2 focus-visible:ring-ring lg:hover:bg-accent"
             >
               <span
                 className={cn(
-                  "row-title truncate underline-offset-4 lg:group-hover/name:underline",
+                  "row-title line-clamp-2 min-w-0 flex-1 break-words underline-offset-4 lg:line-clamp-1 lg:group-hover/name:underline",
                   !paid && !isCardPurchase && "text-foreground/80",
                 )}
               >
@@ -404,47 +447,23 @@ export const TransactionRow = memo(function TransactionRow({
                   : transaction.descricao}
               </span>
             </button>
-            {transaction.recorrenciaId && (
-              <Repeat
-                className="h-3.5 w-3.5 shrink-0 text-primary"
-                aria-label="Lançamento recorrente"
-              />
-            )}
-            {transaction.parcelaGrupoId && (
-              <Badge
-                variant="secondary"
-                className="shrink-0 px-1.5 py-0 text-xs"
-              >
-                {transaction.parcelaAtual}/{transaction.parcelaTotal}
-              </Badge>
-            )}
-            {isCardPurchase && cardInvoiceKey && (
-              <Badge
-                variant="outline"
-                className="hidden shrink-0 px-1.5 py-0 text-xs sm:inline-flex"
-              >
-                Fatura {formatMonthShort(cardInvoiceKey)}
-              </Badge>
-            )}
-            {transaction.observacao && (
-              <StickyNote
-                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                aria-label="Tem observação"
-              />
-            )}
-            {transaction.tags.length > 0 && (
-              <span
-                className="inline-flex shrink-0 items-center gap-0.5 text-xs text-gold"
-                title={transaction.tags.map((tag) => `#${tag.nome}`).join(" ")}
-              >
-                <Tag className="h-3 w-3" aria-hidden="true" />
-                {transaction.tags.length}
-              </span>
-            )}
+            </div>
+
+            <span
+              className={cn(
+                "tabular shrink-0 whitespace-nowrap pt-0.5 text-right text-sm font-semibold leading-5 sm:text-lg",
+                valueColor,
+              )}
+            >
+              {sign}
+              {formatCurrency(transaction.valor)}
+            </span>
           </div>
 
-          {hasSecondary && (
-            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-[13px] text-muted-foreground">
+          <div className="mt-1 flex min-w-0 items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              {hasSecondary && (
+                <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-muted-foreground sm:text-sm">
               {isTransfer ? (
                 <>
                   <EntityTile
@@ -459,7 +478,7 @@ export const TransactionRow = memo(function TransactionRow({
                     plain
                     className="shrink-0"
                   />
-                  <span className="truncate">
+                  <span className="line-clamp-2 min-w-0 max-w-full break-words lg:line-clamp-1">
                     {transaction.contaNome ?? "Sem conta"}
                   </span>
                   <ArrowRight
@@ -487,30 +506,24 @@ export const TransactionRow = memo(function TransactionRow({
                     plain
                     className="shrink-0"
                   />
-                  <span className="truncate">
+                  <span className="line-clamp-2 min-w-0 max-w-full break-words lg:line-clamp-1">
                     {destinationName ?? "Sem conta"}
                   </span>
                 </>
               ) : (
-                <span className="inline-flex min-w-0 items-center gap-1.5">
-                  {showCategory && transaction.categoriaNome && (
-                    <>
-                      <span className="truncate">
-                        {transaction.categoriaNome}
-                      </span>
-                      {showAccount && accountName && (
-                        <span aria-hidden="true" className="shrink-0">
-                          ·
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {showAccount && accountName && (
-                    <>
-                      <EntityTile
-                        kind={isCardPurchase ? "cartao" : "conta"}
-                        entity={
-                          isCardPurchase
+                <span className="flex min-w-0 max-w-full flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                  {(showAccount && accountName) || (showCategory && transaction.categoriaNome) ? (
+                    <EntityTile
+                      kind={
+                        showAccount && accountName
+                          ? isCardPurchase
+                            ? "cartao"
+                            : "conta"
+                          : "categoria"
+                      }
+                      entity={
+                        showAccount && accountName
+                          ? isCardPurchase
                             ? {
                                 id: transaction.cartaoId,
                                 nome: transaction.cartaoNome,
@@ -523,13 +536,34 @@ export const TransactionRow = memo(function TransactionRow({
                                 cor: transaction.contaCor,
                                 icone: transaction.contaIcone,
                               }
-                        }
-                        size="xxs"
-                        plain
-                        className="shrink-0"
-                      />
-                      <span className="truncate">{accountName}</span>
+                          : {
+                              id: transaction.categoriaId,
+                              nome: transaction.categoriaNome,
+                              cor: categoryColor,
+                              icone: transaction.categoriaIcone,
+                            }
+                      }
+                      size="xxs"
+                      plain
+                      className="shrink-0"
+                    />
+                  ) : null}
+                  {showCategory && transaction.categoriaNome && (
+                    <>
+                      <span className="line-clamp-2 min-w-0 max-w-full break-words lg:line-clamp-1">
+                        {transaction.categoriaNome}
+                      </span>
+                      {showAccount && accountName && (
+                        <span aria-hidden="true" className="shrink-0">
+                          ·
+                        </span>
+                      )}
                     </>
+                  )}
+                  {showAccount && accountName && (
+                    <span className="line-clamp-2 min-w-0 max-w-full break-words lg:line-clamp-1">
+                      {accountName}
+                    </span>
                   )}
                 </span>
               )}
@@ -553,7 +587,7 @@ export const TransactionRow = memo(function TransactionRow({
               )}
               {budgetCycle && (
                 <>
-                  <span aria-hidden="true">·</span>
+                  {hasContact && <span aria-hidden="true">·</span>}
                   <span className="inline-flex min-w-0 items-center gap-1">
                     <EntityTile
                       kind="orcamento"
@@ -576,63 +610,56 @@ export const TransactionRow = memo(function TransactionRow({
               )}
             </span>
           )}
-        </div>
+              <span className="mt-1.5 flex min-h-4 items-center gap-1.5 pb-1">
+                {titleBadges}
+              </span>
+            </div>
 
-        <div className="flex min-w-[6.25rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
-          <span
-            className={cn(
-              "tabular whitespace-nowrap text-base font-semibold leading-5 sm:text-lg",
-              valueColor,
+            {!isCardPurchase ? (
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onTogglePaid(transaction, !paid);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                disabled={selectionMode}
+                aria-pressed={paid}
+                aria-label={
+                  paid ? "Marcar como não pago" : "Marcar como pago"
+                }
+                title={
+                  paid ? "Pago — clique para desfazer" : "Pendente — clique para pagar"
+                }
+                className={cn(
+                  "relative flex h-7 shrink-0 items-center gap-1 text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  statusMeta.tone,
+                  selectionMode && "opacity-60",
+                )}
+              >
+                {paid ? (
+                  <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ThumbsDown className="h-4 w-4" aria-hidden="true" />
+                )}
+                {statusMeta.label}
+              </button>
+            ) : (
+              <span
+                className={cn(
+                  "flex h-7 shrink-0 items-center gap-1 text-xs font-medium",
+                  statusMeta.tone,
+                )}
+              >
+                {paid ? (
+                  <ThumbsUp className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <ThumbsDown className="h-4 w-4" aria-hidden="true" />
+                )}
+                {statusMeta.label}
+              </span>
             )}
-          >
-            {sign}
-            {formatCurrency(transaction.valor)}
-          </span>
-
-          {!isCardPurchase ? (
-            <button
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                onTogglePaid(transaction, !paid);
-              }}
-              onPointerDown={(event) => event.stopPropagation()}
-              disabled={selectionMode}
-              aria-pressed={paid}
-              aria-label={
-                paid ? "Marcar como não pago" : "Marcar como pago"
-              }
-              title={
-                paid ? "Pago — clique para desfazer" : "Pendente — clique para pagar"
-              }
-              className={cn(
-                "relative flex h-7 items-center gap-1 text-xs font-medium transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                statusMeta.tone,
-                selectionMode && "opacity-60",
-              )}
-            >
-              {paid ? (
-                <ThumbsUp className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ThumbsDown className="h-4 w-4" aria-hidden="true" />
-              )}
-              {statusMeta.label}
-            </button>
-          ) : (
-            <span
-              className={cn(
-                "flex h-7 items-center gap-1 text-xs font-medium",
-                statusMeta.tone,
-              )}
-            >
-              {paid ? (
-                <ThumbsUp className="h-4 w-4" aria-hidden="true" />
-              ) : (
-                <ThumbsDown className="h-4 w-4" aria-hidden="true" />
-              )}
-              {statusMeta.label}
-            </span>
-          )}
+          </div>
         </div>
       </div>
     </div>

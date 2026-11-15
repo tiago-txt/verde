@@ -51,7 +51,7 @@ export function CardInvoiceRow({
   ].join(", ");
 
   return (
-    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-3 px-0 text-left transition-colors lg:hover:bg-forest-container/60">
+    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 pl-2.5 pr-0 text-left transition-colors max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60">
       <button
         type="button"
         onClick={() => onOpen(event)}
@@ -68,7 +68,7 @@ export function CardInvoiceRow({
           }}
           dashed={!isPaid}
           plain
-          className="h-10 w-10"
+          className="h-9 w-9 sm:h-10 sm:w-10"
         />
 
         <span className="min-w-0 flex-1">
@@ -80,7 +80,7 @@ export function CardInvoiceRow({
                 : `Fatura ${formatMonthTitle(event.inicio.slice(0, 7))}`}
             </span>
           </span>
-          <span className="mt-0.5 flex min-w-0 items-center gap-1 overflow-hidden text-[13px] text-muted-foreground">
+          <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-1 gap-y-0.5 overflow-hidden text-xs text-muted-foreground sm:text-sm">
             {isPaid ? (
               pagador ? (
                 <>
@@ -162,12 +162,12 @@ export function CardInvoiceRow({
         </span>
       </button>
 
-      <div className="flex min-w-[6.25rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
+      <div className="flex min-w-[5.75rem] shrink-0 flex-col items-end justify-center gap-0.5 sm:min-w-[7.5rem]">
         <span
           className={cn(
-            "tabular whitespace-nowrap text-base font-semibold leading-5 sm:text-lg",
+            "tabular whitespace-nowrap text-sm font-semibold leading-5 sm:text-lg",
             isPaid
-              ? "text-primary"
+              ? "text-clay"
               : isOverdue
                 ? "text-clay"
                 : "text-on-surface",

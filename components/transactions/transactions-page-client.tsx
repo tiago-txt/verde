@@ -954,7 +954,7 @@ export function TransactionsPageClient({
   );
 
   return (
-    <div className="space-y-4 pb-[3.25rem] lg:pb-0">
+    <div className="space-y-4 pb-20 lg:pb-0">
       {forecastAlert && (
         <ForecastBanner
           userId={userId}
@@ -1288,7 +1288,7 @@ export function TransactionsPageClient({
                   </div>
                 </div>
 
-                <div className="px-0 pt-1 sm:px-4 lg:divide-y lg:divide-border/40">
+                <div className="divide-y divide-border/40 px-0 pt-1 sm:px-4">
                   {group.items.map((transaction) => (
                     <TransactionRow
                       key={transaction.id}

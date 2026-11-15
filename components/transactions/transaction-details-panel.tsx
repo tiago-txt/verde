@@ -28,6 +28,7 @@ import { FormError } from "@/components/form-feedback";
 import type { TransactionDetail } from "@/lib/db/queries/transactions";
 import type { RecurrenceFrequency } from "@/lib/db/schema";
 import { faturaDaCompra } from "@/lib/finance/cards";
+import { categoryTileColor } from "@/lib/finance/investment-category";
 import { formatCurrency, formatDate, formatMonthShort } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -125,6 +126,11 @@ export function TransactionDetailsPanel({
       : null;
   const sign =
     detail.tipo === "receita" ? "+" : detail.tipo === "despesa" ? "−" : "";
+  const categoryColor = categoryTileColor({
+    nome: detail.categoriaNome,
+    tipo: detail.tipo,
+    cor: detail.categoriaCor,
+  });
   const valueColor = isTransfer
     ? "text-muted-foreground"
     : detail.tipo === "receita"
@@ -262,7 +268,7 @@ export function TransactionDetailsPanel({
                         id: detail.categoriaId,
                         nome: detail.categoriaNome,
                         icone: detail.categoriaIcone,
-                        cor: detail.categoriaCor,
+                        cor: categoryColor,
                       }}
                       size="xs"
                     />

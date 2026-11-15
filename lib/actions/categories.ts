@@ -5,12 +5,21 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
 import { scopedDb } from "@/lib/db/scoped";
-import { categories, transactions } from "@/lib/db/schema";
+import {
+  budgetCategories,
+  budgetCycleExceptions,
+  budgetVersions,
+  budgets,
+  categories,
+  recurrences,
+  transactions,
+} from "@/lib/db/schema";
 import {
   countChildrenForCategory,
   countTransactionsForCategory,
   getCategoryById,
 } from "@/lib/db/queries/categories";
+import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import {
   categoryInputSchema,
   type CategoryInput,
@@ -19,8 +28,14 @@ import { idSchema } from "@/lib/validation/common";
 import type { ActionResult } from "./result";
 
 function revalidateCategories() {
+  invalidateForecastCache();
   revalidatePath("/");
   revalidatePath("/lancamentos");
+  revalidatePath("/limite-de-gastos");
+  revalidatePath("/relatorios");
+  revalidatePath("/previsao");
+  revalidatePath("/contas");
+  revalidatePath("/cartoes", "layout");
   revalidatePath("/configuracoes");
   revalidatePath("/configuracoes/categorias");
 }
@@ -309,4 +324,231 @@ export async function deleteCategoryAction(input: {
 
   revalidateCategories();
   return { ok: true };
+}
+
+/**
+ * Funde uma categoria de origem em outra de destino.
+ *
+ * Move lançamentos (inclusive arquivados), orçamentos e modelos de recorrência.
+ * Em orçamentos que já cobrem as duas categorias, remove a duplicidade. A
+ * categoria de origem é excluída ao final; o histórico anterior é preservado.
+ */
+export async function mergeCategoriesAction(input: {
+  sourceId: string;
+  targetId: string;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+
+  const parsed = z
+    .object({ sourceId: idSchema, targetId: idSchema })
+    .safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Categorias inválidas." };
+  }
+
+  const { sourceId, targetId } = parsed.data;
+  if (sourceId === targetId) {
+    return {
+      ok: false,
+      error: "Escolha uma categoria de destino diferente.",
+    };
+  }
+
+  const source = db
+    .select()
+    .from(categories)
+    .where(
+      and(
+        eq(categories.id, sourceId),
+        ws(categories.workspaceId),
+      ),
+    )
+    .get();
+  if (!source) return { ok: false, error: "Categoria de origem não encontrada." };
+
+  const target = db
+    .select()
+    .from(categories)
+    .where(
+      and(
+        eq(categories.id, targetId),
+        ws(categories.workspaceId),
+        isNull(categories.deletedAt),
+      ),
+    )
+    .get();
+  if (!target) {
+    return { ok: false, error: "Categoria de destino não encontrada." };
+  }
+
+  if (source.isSystem) {
+    return {
+      ok: false,
+      code: "SYSTEM_CATEGORY",
+      error: "Categoria de sistema não pode ser mesclada.",
+    };
+  }
+  if (source.tipo !== target.tipo) {
+    return {
+      ok: false,
+      error: "As categorias precisam ser do mesmo tipo.",
+    };
+  }
+
+  const childCount = countChildrenForCategory(workspaceId, sourceId);
+  if (childCount > 0) {
+    return {
+      ok: false,
+      code: "HAS_CHILDREN",
+      error:
+        "Esta categoria possui subcategorias. Mescle ou mova as subcategorias primeiro.",
+    };
+  }
+
+  const moved = db.transaction((tx) => {
+    const updatedTransactions = tx
+      .update(transactions)
+      .set({ categoriaId: targetId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(transactions.categoriaId, sourceId),
+          eq(transactions.workspaceId, workspaceId),
+        ),
+      )
+      .run();
+
+    // Campo legado (Etapa 1). É NOT NULL e tem cascade: precisa ser atualizado
+    // antes de excluir a categoria de origem.
+    tx.update(budgets)
+      .set({ categoriaId: targetId, updatedAt: new Date() })
+      .where(
+        and(
+          eq(budgets.categoriaId, sourceId),
+          eq(budgets.workspaceId, workspaceId),
+        ),
+      )
+      .run();
+
+    const budgetCategoryRows = tx
+      .select()
+      .from(budgetCategories)
+      .where(ws(budgetCategories.workspaceId))
+      .all();
+    const budgetsWithTarget = new Set(
+      budgetCategoryRows
+        .filter((row) => row.categoryId === targetId)
+        .map((row) => row.budgetId),
+    );
+
+    for (const row of budgetCategoryRows.filter(
+      (item) => item.categoryId === sourceId,
+    )) {
+      if (budgetsWithTarget.has(row.budgetId)) {
+        // O orçamento já cobre a categoria de destino: remove a duplicidade.
+        tx.delete(budgetCategories)
+          .where(
+            and(
+              eq(budgetCategories.workspaceId, workspaceId),
+              eq(budgetCategories.budgetId, row.budgetId),
+              eq(budgetCategories.categoryId, sourceId),
+            ),
+          )
+          .run();
+        continue;
+      }
+
+      tx.update(budgetCategories)
+        .set({ categoryId: targetId })
+        .where(
+          and(
+            eq(budgetCategories.workspaceId, workspaceId),
+            eq(budgetCategories.budgetId, row.budgetId),
+            eq(budgetCategories.categoryId, sourceId),
+          ),
+        )
+        .run();
+      budgetsWithTarget.add(row.budgetId);
+    }
+
+    const versions = tx
+      .select({
+        id: budgetVersions.id,
+        categoriaIds: budgetVersions.categoriaIds,
+      })
+      .from(budgetVersions)
+      .where(ws(budgetVersions.workspaceId))
+      .all();
+    for (const version of versions) {
+      if (!version.categoriaIds.includes(sourceId)) continue;
+      const next = [
+        ...new Set(
+          version.categoriaIds.map((id) =>
+            id === sourceId ? targetId : id,
+          ),
+        ),
+      ];
+      tx.update(budgetVersions)
+        .set({ categoriaIds: next, updatedAt: new Date() })
+        .where(eq(budgetVersions.id, version.id))
+        .run();
+    }
+
+    const exceptions = tx
+      .select({
+        id: budgetCycleExceptions.id,
+        dados: budgetCycleExceptions.dados,
+      })
+      .from(budgetCycleExceptions)
+      .where(ws(budgetCycleExceptions.workspaceId))
+      .all();
+    for (const exception of exceptions) {
+      const ids = exception.dados?.categoriaIds;
+      if (!Array.isArray(ids) || !ids.includes(sourceId)) continue;
+      const next = [
+        ...new Set(ids.map((id) => (id === sourceId ? targetId : id))),
+      ];
+      tx.update(budgetCycleExceptions)
+        .set({
+          dados: { ...exception.dados, categoriaIds: next },
+          updatedAt: new Date(),
+        })
+        .where(eq(budgetCycleExceptions.id, exception.id))
+        .run();
+    }
+
+    const recurring = tx
+      .select({
+        id: recurrences.id,
+        template: recurrences.template,
+      })
+      .from(recurrences)
+      .where(ws(recurrences.workspaceId))
+      .all();
+    for (const recurrence of recurring) {
+      if (recurrence.template.categoriaId !== sourceId) continue;
+      tx.update(recurrences)
+        .set({
+          template: { ...recurrence.template, categoriaId: targetId },
+          updatedAt: new Date(),
+        })
+        .where(eq(recurrences.id, recurrence.id))
+        .run();
+    }
+
+    tx.delete(categories)
+      .where(
+        and(
+          eq(categories.id, sourceId),
+          eq(categories.workspaceId, workspaceId),
+        ),
+      )
+      .run();
+
+    return updatedTransactions.changes;
+  });
+
+  revalidateCategories();
+  return { ok: true, id: targetId, count: moved };
 }
