@@ -159,3 +159,21 @@ export const transactionUpdateSchema = transactionFields
 
 export type CreateTransactionInput = z.infer<typeof createTransactionSchema>;
 export type UpdateTransactionInput = z.infer<typeof transactionUpdateSchema>;
+
+/** Converte lançamentos existentes em uma única série de recorrência. */
+export const createRecurrenceFromTransactionsSchema = z.object({
+  ids: z
+    .array(idSchema)
+    .min(1, "Selecione ao menos um lançamento")
+    .max(500, "Selecione no máximo 500 lançamentos")
+    .refine(
+      (ids) => new Set(ids).size === ids.length,
+      "Lançamentos duplicados na seleção",
+    ),
+  frequencia: z.enum(RECURRENCE_FREQUENCIES),
+  dataFim: isoDateSchema.nullable().optional(),
+});
+
+export type CreateRecurrenceFromTransactionsInput = z.infer<
+  typeof createRecurrenceFromTransactionsSchema
+>;

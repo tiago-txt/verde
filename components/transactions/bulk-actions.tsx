@@ -5,6 +5,7 @@ import {
   Check,
   CheckCheck,
   Loader2,
+  Repeat,
   Tags,
   Target,
   Trash2,
@@ -20,9 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { NativeSelect } from "@/components/ui/native-select";
 import { FormError } from "@/components/form-feedback";
+import { inferRecurrenceFrequency } from "@/lib/finance/recurrence-detection";
+import type { RecurrenceFrequency } from "@/lib/db/schema";
 import { CategoryPicker } from "./category-picker";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 
@@ -36,6 +40,7 @@ export function BulkActionsBar({
   onTag,
   onBudgetOffset,
   onDelete,
+  onRecurrence,
   onExit,
 }: {
   selectedCount: number;
@@ -47,6 +52,7 @@ export function BulkActionsBar({
   onTag: () => void;
   onBudgetOffset: () => void;
   onDelete: () => void;
+  onRecurrence: () => void;
   onExit: () => void;
 }) {
   return (
@@ -84,6 +90,10 @@ export function BulkActionsBar({
       <Button type="button" variant="outline" onClick={onBudgetOffset}>
         <Target className="h-4 w-4" />
         Orçamento
+      </Button>
+      <Button type="button" variant="outline" onClick={onRecurrence}>
+        <Repeat className="h-4 w-4" />
+        Recorrência
       </Button>
       <Button
         type="button"
@@ -390,6 +400,124 @@ export function BulkDeleteDialog({
           >
             {pending && <Loader2 className="h-4 w-4 animate-spin" />}
             Excluir
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function BulkRecurrenceDialog({
+  open,
+  onOpenChange,
+  count,
+  dates,
+  onConfirm,
+  pending,
+  error,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  count: number;
+  dates: string[];
+  onConfirm: (
+    frequencia: RecurrenceFrequency,
+    dataFim: string | null,
+  ) => void;
+  pending: boolean;
+  error: string | null;
+}) {
+  const [frequencia, setFrequencia] = useState<RecurrenceFrequency>("mensal");
+  const [dataFim, setDataFim] = useState("");
+
+  const suggested = inferRecurrenceFrequency(dates);
+  const firstDate = dates.length > 0 ? [...dates].sort()[0] : null;
+  const latestDate =
+    dates.length > 0 ? [...dates].sort().at(-1) ?? null : null;
+
+  useEffect(() => {
+    if (!open) {
+      setFrequencia("mensal");
+      setDataFim("");
+      return;
+    }
+    setFrequencia(inferRecurrenceFrequency(dates) ?? "mensal");
+  }, [open, dates]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Criar recorrência</DialogTitle>
+          <DialogDescription>
+            Os {count} lançamento(s) selecionados serão vinculados a uma única
+            série. As próximas ocorrências serão criadas automaticamente a
+            partir da data mais recente.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="bulk-recurrence-frequency">Frequência</Label>
+            <NativeSelect
+              id="bulk-recurrence-frequency"
+              value={frequencia}
+              onChange={(event) =>
+                setFrequencia(event.target.value as RecurrenceFrequency)
+              }
+            >
+              <option value="mensal">Mensal</option>
+              <option value="semanal">Semanal</option>
+              <option value="anual">Anual</option>
+            </NativeSelect>
+            {suggested && suggested !== frequencia && (
+              <p className="text-xs text-muted-foreground">
+                As datas selecionadas sugerem uma frequência{" "}
+                {suggested === "mensal"
+                  ? "mensal"
+                  : suggested === "semanal"
+                    ? "semanal"
+                    : "anual"}
+                .
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="bulk-recurrence-end">
+              Data final (opcional)
+            </Label>
+            <Input
+              id="bulk-recurrence-end"
+              type="date"
+              value={dataFim}
+              min={latestDate ?? firstDate ?? undefined}
+              onChange={(event) => setDataFim(event.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Deixe em branco para repetir indefinidamente.
+            </p>
+          </div>
+        </div>
+
+        <FormError message={error} />
+
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={pending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onConfirm(frequencia, dataFim || null)}
+            disabled={count === 0 || pending}
+          >
+            {pending && <Loader2 className="h-4 w-4 animate-spin" />}
+            Criar recorrência
           </Button>
         </DialogFooter>
       </DialogContent>

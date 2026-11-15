@@ -4,12 +4,13 @@ import { and, eq, gte, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { addDaysISO } from "@/lib/dates";
+import { addDaysISO, todayISO } from "@/lib/dates";
 import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   categories,
   creditCards,
+  RECURRENCE_FREQUENCIES,
   recurrences,
   tags,
   transactionTags,
@@ -31,8 +32,10 @@ import {
 } from "@/lib/finance/scopes";
 import { idSchema } from "@/lib/validation/common";
 import {
+  createRecurrenceFromTransactionsSchema,
   createTransactionSchema,
   transactionUpdateSchema,
+  type CreateRecurrenceFromTransactionsInput,
   type TransactionFormValues,
   type UpdateTransactionInput,
 } from "@/lib/validation/transactions";
@@ -1310,4 +1313,174 @@ export async function bulkDeleteTransactionsAction(input: {
   revalidateTransactions();
   revalidatePath("/configuracoes/categorias");
   return { ok: true, count: result.changes };
+}
+
+/**
+ * Transforma lançamentos existentes em uma recorrência única. A ocorrência
+ * mais recente vira o modelo das próximas; as demais são vinculadas à série.
+ */
+export async function createRecurrenceFromTransactionsAction(
+  input: CreateRecurrenceFromTransactionsInput,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+
+  const parsed = createRecurrenceFromTransactionsSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "Seleção inválida.");
+  }
+
+  const rows = db
+    .select()
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        inArray(transactions.id, parsed.data.ids),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all();
+
+  if (rows.length !== parsed.data.ids.length) {
+    return fail("Alguns lançamentos selecionados não foram encontrados.");
+  }
+
+  if (rows.some((row) => row.faturaChave)) {
+    return fail(
+      "Pagamentos de fatura não podem virar recorrência. Desfaça o pagamento primeiro.",
+    );
+  }
+  if (rows.some((row) => row.parcelaGrupoId)) {
+    return fail(
+      "Lançamentos parcelados não podem virar recorrência. Edite a compra parcelada em vez disso.",
+    );
+  }
+  if (rows.some((row) => row.recorrenciaId)) {
+    return fail(
+      "Um dos lançamentos já pertence a uma recorrência. Edite a série existente.",
+    );
+  }
+  if (rows.some((row) => row.valor <= 0)) {
+    return fail("Lançamentos com valor zerado não podem virar recorrência.");
+  }
+
+  const latest = [...rows].sort((a, b) => a.data.localeCompare(b.data)).at(-1);
+  if (!latest) return fail("Selecione ao menos um lançamento.");
+
+  const sameSeries = rows.every(
+    (row) =>
+      row.tipo === latest.tipo &&
+      row.valor === latest.valor &&
+      row.contaId === latest.contaId &&
+      row.cartaoId === latest.cartaoId &&
+      row.contaDestinoId === latest.contaDestinoId &&
+      row.categoriaId === latest.categoriaId,
+  );
+  if (!sameSeries) {
+    return fail(
+      "Os lançamentos precisam ter o mesmo tipo, valor, conta/cartão, conta de destino e categoria.",
+    );
+  }
+
+  // A unique (workspace, recorrência, data) impede duas ocorrências no mesmo dia.
+  if (new Set(rows.map((row) => row.data)).size !== rows.length) {
+    return fail("Selecione no máximo um lançamento por data.");
+  }
+
+  if (parsed.data.dataFim && parsed.data.dataFim < latest.data) {
+    return fail("A data final precisa ser depois da primeira ocorrência.");
+  }
+
+  const latestTags = db
+    .select({ tagId: transactionTags.tagId })
+    .from(transactionTags)
+    .where(
+      and(
+        eq(transactionTags.workspaceId, workspaceId),
+        eq(transactionTags.transactionId, latest.id),
+      ),
+    )
+    .all()
+    .map((row) => row.tagId);
+
+  const card = latest.cartaoId
+    ? getCardById(workspaceId, latest.cartaoId)
+    : null;
+  const cardSnapshot = latest.cartaoId
+    ? {
+        cartaoFechamento:
+          latest.cartaoFechamento ?? card?.diaFechamento ?? null,
+        cartaoVencimento:
+          latest.cartaoVencimento ?? card?.diaVencimento ?? null,
+        cartaoFechamentoCompra:
+          latest.cartaoFechamentoCompra ?? card?.fechamentoCompra ?? null,
+      }
+    : {
+        cartaoFechamento: null,
+        cartaoVencimento: null,
+        cartaoFechamentoCompra: null,
+      };
+
+  const recurrenceId = crypto.randomUUID();
+  const template: RecurrenceTemplate = {
+    tipo: latest.tipo,
+    descricao: latest.descricao,
+    valor: latest.valor,
+    contaId: latest.cartaoId ? null : latest.contaId,
+    cartaoId: latest.cartaoId,
+    contaDestinoId:
+      latest.tipo === "transferencia" ? latest.contaDestinoId : null,
+    categoriaId: latest.categoriaId,
+    observacao: latest.observacao,
+    tagIds: latestTags,
+    pago: false,
+    orcamentoDeslocamento: latest.orcamentoDeslocamento ?? 0,
+    ...cardSnapshot,
+  };
+
+  try {
+    db.transaction((tx) => {
+      tx.insert(recurrences)
+        .values({
+          id: recurrenceId,
+          workspaceId,
+          frequencia: parsed.data.frequencia,
+          dataInicio: latest.data,
+          dataFim: parsed.data.dataFim ?? null,
+          ativo: true,
+          template,
+        })
+        .run();
+
+      tx.update(transactions)
+        .set({ recorrenciaId: recurrenceId, updatedAt: new Date() })
+        .where(
+          and(
+            eq(transactions.workspaceId, workspaceId),
+            inArray(transactions.id, parsed.data.ids),
+          ),
+        )
+        .run();
+    });
+  } catch (error) {
+    console.error("[verde] erro ao criar recorrência em lote:", error);
+    return fail(
+      error instanceof Error
+        ? error.message
+        : "Não foi possível criar a recorrência.",
+    );
+  }
+
+  try {
+    ensureRecurrencesForMonth(workspaceId, todayISO().slice(0, 7));
+  } catch (error) {
+    // As ocorrências existentes já foram vinculadas; a geração é idempotente
+    // e será tentada novamente ao abrir a tela de lançamentos.
+    console.error("[verde] erro ao gerar recorrência em lote:", error);
+  }
+
+  revalidateTransactions();
+  return { ok: true, id: recurrenceId, count: rows.length };
 }

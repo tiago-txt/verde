@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -47,8 +47,12 @@ import {
 } from "@/lib/finance/spreadsheet-import";
 import type { SpreadsheetImportRequestInput } from "@/lib/validation/import";
 import { sha256Hex } from "@/lib/finance/sha256";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDate } from "@/lib/format";
 import { todayISO } from "@/lib/dates";
+import {
+  detectRecurrencesFromSpreadsheet,
+  type RecurrenceCandidate,
+} from "@/lib/finance/recurrence-detection";
 
 export type SpreadsheetImportOptions = {
   accounts: Array<{
@@ -305,6 +309,12 @@ export function SpreadsheetImport({
   const [reimportarHash, setReimportarHash] = useState(false);
   const [considerHistoricalAsPaid, setConsiderHistoricalAsPaid] =
     useState(false);
+  const [recurrenceCandidates, setRecurrenceCandidates] = useState<
+    RecurrenceCandidate[]
+  >([]);
+  const [selectedRecurrenceKeys, setSelectedRecurrenceKeys] = useState<
+    Set<string>
+  >(new Set());
 
   const [preview, setPreview] = useState<SpreadsheetPreviewResult | null>(null);
   const [imported, setImported] = useState<string | null>(null);
@@ -312,6 +322,17 @@ export function SpreadsheetImport({
 
   const accountOptions = options.accounts.filter((item) => !item.arquivada);
   const cardOptions = options.cards;
+
+  useEffect(() => {
+    if (!analysis) {
+      setRecurrenceCandidates([]);
+      setSelectedRecurrenceKeys(new Set());
+      return;
+    }
+    const candidates = detectRecurrencesFromSpreadsheet(analysis.rows);
+    setRecurrenceCandidates(candidates);
+    setSelectedRecurrenceKeys(new Set(candidates.map((item) => item.key)));
+  }, [analysis]);
 
   const categoryMemo = useMemo(() => analysis?.categories ?? [], [analysis]);
   const invoiceTotals = useMemo(
@@ -1132,6 +1153,14 @@ export function SpreadsheetImport({
       considerarFaturasPagasAte: considerHistoricalAsPaid
         ? todayISO()
         : null,
+      recurrences: recurrenceCandidates
+        .filter((candidate) => selectedRecurrenceKeys.has(candidate.key))
+        .map((candidate) => ({
+          key: candidate.key,
+          frequencia: candidate.frequencia,
+          dataInicio: candidate.ultimaData,
+          dataFim: null,
+        })),
     };
 
     return {
@@ -1838,6 +1867,94 @@ export function SpreadsheetImport({
                     {renderPaymentTable(paymentGroups, true)}
                   </div>
                 )}
+              </section>
+            )}
+
+            {recurrenceCandidates.length > 0 && (
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold">
+                  Recorrências detectadas ({recurrenceCandidates.length})
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Séries com mesma origem, descrição, categoria e valor em
+                  intervalos regulares. Marque as que devem virar uma
+                  recorrência editável em lote. As ocorrências importadas serão
+                  vinculadas à série.
+                </p>
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full min-w-[860px] text-left text-xs">
+                    <thead className="sticky top-0 bg-card text-muted-foreground">
+                      <tr>
+                        <th className="p-2 font-medium">Usar</th>
+                        <th className="p-2 font-medium">Descrição</th>
+                        <th className="p-2 font-medium">Valor</th>
+                        <th className="p-2 font-medium">Frequência</th>
+                        <th className="p-2 font-medium">Ocorrências</th>
+                        <th className="p-2 font-medium">Período</th>
+                        <th className="p-2 font-medium">Próxima</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recurrenceCandidates.map((candidate) => (
+                        <tr
+                          key={candidate.key}
+                          className="border-t border-border"
+                        >
+                          <td className="p-2">
+                            <Checkbox
+                              checked={selectedRecurrenceKeys.has(
+                                candidate.key,
+                              )}
+                              onCheckedChange={(checked) =>
+                                setSelectedRecurrenceKeys((current) => {
+                                  const next = new Set(current);
+                                  if (checked === true) {
+                                    next.add(candidate.key);
+                                  } else {
+                                    next.delete(candidate.key);
+                                  }
+                                  return next;
+                                })
+                              }
+                              aria-label={`Criar recorrência para ${candidate.descricao}`}
+                            />
+                          </td>
+                          <td className="p-2">
+                            <span className="font-medium">
+                              {candidate.descricao}
+                            </span>
+                            <span className="block text-muted-foreground">
+                              {candidate.origemNome}
+                              {candidate.categoriaNome
+                                ? ` · ${candidate.categoriaNome}`
+                                : ""}
+                            </span>
+                          </td>
+                          <td className="p-2">
+                            {cents(candidate.valorCentavos)}
+                          </td>
+                          <td className="p-2">
+                            <Badge variant="secondary">
+                              {candidate.frequencia === "mensal"
+                                ? "Mensal"
+                                : candidate.frequencia === "semanal"
+                                  ? "Semanal"
+                                  : "Anual"}
+                            </Badge>
+                          </td>
+                          <td className="p-2">{candidate.ocorrencias}</td>
+                          <td className="p-2">
+                            {formatDate(candidate.primeiraData)} a{" "}
+                            {formatDate(candidate.ultimaData)}
+                          </td>
+                          <td className="p-2">
+                            {formatDate(candidate.proximaData)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </section>
             )}
 

@@ -187,6 +187,17 @@ export const spreadsheetDecisionsSchema = z.object({
   reimportarHash: z.boolean().optional(),
   /** Considera pagas as faturas importadas com vencimento até esta data. */
   considerarFaturasPagasAte: isoDateSchema.nullable().optional(),
+  recurrences: z
+    .array(
+      z.object({
+        key: z.string().trim().min(1).max(600),
+        frequencia: z.enum(["mensal", "semanal", "anual"]),
+        dataInicio: isoDateSchema.nullable().optional(),
+        dataFim: isoDateSchema.nullable().optional(),
+      }),
+    )
+    .max(5_000)
+    .optional(),
 });
 
 export const spreadsheetImportRequestSchema = z.object({

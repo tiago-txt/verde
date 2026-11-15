@@ -13,6 +13,7 @@ import {
   categories,
   creditCards,
   importBatches,
+  recurrences,
   tags,
   transactionTags,
   transactions,
@@ -29,6 +30,7 @@ import {
   type SpreadsheetSheet,
 } from "@/lib/finance/spreadsheet-import";
 import type { SpreadsheetImportRequestInput } from "@/lib/validation/import";
+import { detectRecurrencesFromSpreadsheet } from "@/lib/finance/recurrence-detection";
 import { getCardInvoiceDetail, listCardInvoiceEventsForMonth } from "./queries/cards";
 import type { CardInvoiceFilters } from "@/lib/finance/cards";
 import { getLatestImportBatch } from "./queries/data-export";
@@ -179,8 +181,10 @@ function setCurrent(target: TestUser | null) {
     : null;
 }
 
-function buildRequest(): SpreadsheetImportRequestInput {
-  const analysis = analyzeSpreadsheet(SHEETS);
+function buildRequest(
+  sheets: SpreadsheetSheet[] = SHEETS,
+): SpreadsheetImportRequestInput {
+  const analysis = analyzeSpreadsheet(sheets);
   const paymentRows = analysis.rows.filter(
     (row) =>
       row.specialKind === "pagamento_fatura" ||
@@ -654,5 +658,84 @@ describe("importação de planilha", () => {
       )
       .get();
     expect(payment?.cartaoDestinoId).toBe(amazonId);
+  });
+
+  it("cria recorrência e vincula as ocorrências importadas", async () => {
+    const sheets: SpreadsheetSheet[] = [
+      {
+        name: "Conta",
+        headers: [
+          "Data",
+          "Descrição",
+          "Categoria",
+          "Valor",
+          "Situação",
+          "Tags",
+          "Informações adicionais",
+        ],
+        rows: [
+          ["10.01.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+          ["10.02.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+          ["10.03.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+        ],
+      },
+    ];
+
+    const request = buildRequest(sheets);
+    const analysis = analyzeSpreadsheet(sheets);
+    const candidates = detectRecurrencesFromSpreadsheet(analysis.rows);
+    expect(candidates).toHaveLength(1);
+    request.decisions.recurrences = candidates.map((candidate) => ({
+      key: candidate.key,
+      frequencia: candidate.frequencia,
+      dataInicio: candidate.ultimaData,
+      dataFim: null,
+    }));
+
+    const result = await importSpreadsheetImportAction(request);
+    if (!result.ok) throw new Error(result.error);
+
+    const recurrence = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.workspaceId, user.workspaceId))
+      .get();
+    expect(recurrence).toMatchObject({
+      frequencia: "mensal",
+      dataInicio: "2024-03-10",
+      dataFim: null,
+      ativo: true,
+    });
+    expect(recurrence?.template).toMatchObject({
+      tipo: "despesa",
+      descricao: "Aluguel",
+      valor: 150_000,
+    });
+
+    const rents = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.descricao, "Aluguel"),
+        ),
+      )
+      .all();
+    const imported = rents.filter(
+      (row) => row.importBatchId === result.batchId,
+    );
+    expect(imported).toHaveLength(3);
+    expect(new Set(imported.map((row) => row.recorrenciaId))).toEqual(
+      new Set([recurrence?.id]),
+    );
+
+    // As próximas ocorrências são geradas a partir da última importada.
+    expect(
+      rents.some(
+        (row) =>
+          row.recorrenciaId === recurrence?.id && row.data > "2024-03-10",
+      ),
+    ).toBe(true);
   });
 });

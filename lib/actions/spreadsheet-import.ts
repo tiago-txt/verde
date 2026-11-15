@@ -9,15 +9,23 @@ import {
   categories,
   creditCards,
   importBatches,
+  recurrences,
   tags,
   transactionTags,
   transactions,
   type ImportBatchCounts,
+  type RecurrenceTemplate,
 } from "@/lib/db/schema";
 import { getSystemCategoryIds } from "@/lib/db/queries/categories";
 import { findImportBatchByHash } from "@/lib/db/queries/data-export";
 import { invalidateForecastCache } from "@/lib/db/queries/forecast";
+import { ensureRecurrencesForMonth } from "@/lib/db/queries/transactions";
+import { todayISO } from "@/lib/dates";
 import { formatCurrency } from "@/lib/format";
+import {
+  detectRecurrencesFromSpreadsheet,
+  type RecurrenceCandidate,
+} from "@/lib/finance/recurrence-detection";
 import {
   faturaDaCompra,
   type CardCycleConfig,
@@ -1590,6 +1598,19 @@ export async function previewSpreadsheetImportAction(
   }
 
   const plan = preparePlan(user.workspaceId, parsed.data);
+  const detectedRecurrenceKeys = new Set(
+    detectRecurrencesFromSpreadsheet(parsed.data.rows).map(
+      (candidate) => candidate.key,
+    ),
+  );
+  const invalidRecurrence = (parsed.data.decisions.recurrences ?? []).find(
+    (decision) => !detectedRecurrenceKeys.has(decision.key),
+  );
+  if (invalidRecurrence) {
+    return fail(
+      "Uma recorrência selecionada não foi encontrada nas linhas da planilha.",
+    );
+  }
   const existingBatch = findImportBatchByHash(
     user.workspaceId,
     parsed.data.fileHash,
@@ -1624,6 +1645,31 @@ export async function importSpreadsheetImportAction(
     return fail("Nenhuma linha válida para importar.");
   }
 
+  const detectedRecurrences = detectRecurrencesFromSpreadsheet(
+    parsed.data.rows,
+  );
+  const detectedByKey = new Map(
+    detectedRecurrences.map((candidate) => [candidate.key, candidate]),
+  );
+  const selectedRecurrences: Array<{
+    candidate: RecurrenceCandidate;
+    decision: NonNullable<
+      SpreadsheetImportRequestInput["decisions"]["recurrences"]
+    >[number];
+  }> = [];
+  const selectedRecurrenceKeys = new Set<string>();
+  for (const decision of parsed.data.decisions.recurrences ?? []) {
+    if (selectedRecurrenceKeys.has(decision.key)) continue;
+    const candidate = detectedByKey.get(decision.key);
+    if (!candidate) {
+      return fail(
+        "Uma recorrência selecionada não foi encontrada nas linhas importadas. Volte à pré-visualização e selecione novamente.",
+      );
+    }
+    selectedRecurrenceKeys.add(decision.key);
+    selectedRecurrences.push({ candidate, decision });
+  }
+
   const existingBatch = findImportBatchByHash(
     workspaceId,
     parsed.data.fileHash,
@@ -1655,6 +1701,7 @@ export async function importSpreadsheetImportAction(
       const categoryIds = new Map<string, string>();
       const tagIds = new Map<string, string>();
       const involvedCardIds = new Set<string>();
+      const transactionIdByRowId = new Map<string, string>();
 
       // Reaproveita os IDs existentes carregados no contexto do plano.
       for (const creation of plan.accountsToCreate.values()) {
@@ -1795,7 +1842,76 @@ export async function importSpreadsheetImportAction(
             .onConflictDoNothing()
             .run();
         }
+        transactionIdByRowId.set(row.rowId, id);
         imported += 1;
+      }
+
+      for (const { candidate, decision } of selectedRecurrences) {
+        const candidatePlanRows = candidate.rowIds
+          .map((rowId) => plan.rows.find((row) => row.rowId === rowId))
+          .filter((row): row is (typeof plan.rows)[number] => Boolean(row))
+          .sort((a, b) => a.data.localeCompare(b.data));
+        const latest = candidatePlanRows.at(-1);
+        if (!latest) continue;
+
+        const linkedIds = candidate.rowIds
+          .map((rowId) => transactionIdByRowId.get(rowId))
+          .filter((id): id is string => Boolean(id));
+        if (linkedIds.length === 0) continue;
+
+        const contaId = latest.contaRef
+          ? resolveRef(latest.contaRef, accountIds)
+          : null;
+        const cartaoId = latest.cartaoRef
+          ? resolveRef(latest.cartaoRef, cardIds)
+          : null;
+        const contaDestinoId = latest.contaDestinoRef
+          ? resolveRef(latest.contaDestinoRef, accountIds)
+          : null;
+        const categoriaId = latest.categoriaRef
+          ? resolveRef(latest.categoriaRef, categoryIds)
+          : null;
+        const templateTagIds = latest.tagRefs
+          .map((ref) => resolveRef(ref, tagIds))
+          .filter((id): id is string => Boolean(id));
+
+        const template: RecurrenceTemplate = {
+          tipo: latest.tipo,
+          descricao: latest.descricao,
+          valor: latest.valor,
+          contaId: cartaoId ? null : contaId,
+          cartaoId,
+          contaDestinoId:
+            latest.tipo === "transferencia" ? contaDestinoId : null,
+          categoriaId,
+          observacao: latest.observacao,
+          tagIds: templateTagIds,
+          pago: false,
+          orcamentoDeslocamento: 0,
+        };
+
+        const recurrenceId = crypto.randomUUID();
+        tx.insert(recurrences)
+          .values({
+            id: recurrenceId,
+            workspaceId,
+            frequencia: decision.frequencia ?? candidate.frequencia,
+            dataInicio: decision.dataInicio ?? latest.data,
+            dataFim: decision.dataFim ?? null,
+            ativo: true,
+            template,
+          })
+          .run();
+
+        tx.update(transactions)
+          .set({ recorrenciaId: recurrenceId, updatedAt: now })
+          .where(
+            and(
+              eq(transactions.workspaceId, workspaceId),
+              inArray(transactions.id, linkedIds),
+            ),
+          )
+          .run();
       }
 
       if (parsed.data.decisions.considerarFaturasPagasAte) {
@@ -1839,6 +1955,16 @@ export async function importSpreadsheetImportAction(
         ? `Não foi possível importar a planilha: ${error.message}`
         : "Não foi possível importar a planilha.",
     );
+  }
+
+  if (selectedRecurrences.length > 0) {
+    try {
+      ensureRecurrencesForMonth(workspaceId, todayISO().slice(0, 7));
+    } catch (error) {
+      // A recorrência e as ocorrências importadas já foram gravadas; a
+      // geração é idempotente e será tentada ao abrir a tela de lançamentos.
+      console.error("[verde] erro ao gerar recorrências importadas:", error);
+    }
   }
 
   revalidateAfterDataChange();
