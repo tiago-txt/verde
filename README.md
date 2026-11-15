@@ -35,15 +35,19 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   próprios. O `workspace_id` vem sempre da sessão no servidor; IDs de outro
   workspace respondem como “não encontrado”. O admin gerencia usuários, mas
   **não** vê os dados financeiros de ninguém.
-- **Contas** (`/contas`): CRUD, saldo atual (pagos) e previsto (inclui não pagos),
-  transferências, arquivamento e exclusão bloqueada quando há lançamentos.
+- **Contas** (`/contas`): CRUD, saldo atual (pagos até hoje) e previsto
+  (inclui não pagos e deltas de fatura/orçamento). Os totais da tela somam
+  **todas** as contas não excluídas, inclusive arquivadas e de investimento;
+  o dashboard usa outro recorte (sem arquivadas). Transferências, arquivamento e
+  exclusão bloqueada quando há lançamentos.
 - **Categorias e tags** (`/configuracoes/categorias`): despesa/receita, um nível
   de subcategoria, arquivamento, exclusão com movimentação de lançamentos e tags.
 - **Lançamentos** (`/lancamentos`): despesa, receita e transferência; lista mensal
   agrupada por dia; valor em centavos; pagamento otimista; duplicar e excluir.
 - **Tela de Lançamentos completa**: filtros no servidor (origem, tipo, categorias,
   tags e status), busca com debounce, mês/ano na URL, cabeçalho “Hoje/Ontem/Amanhã”,
-  saldo do dia real sem filtros, painel lateral no desktop / tela cheia no mobile,
+  saldo do dia **previsto** (o realizado até hoje entra apenas como abertura do
+  rodapé), painel lateral no desktop / tela cheia no mobile,
   navegação por teclado entre lançamentos, seleção múltipla com ações em lote,
   exportação CSV e “marcar vencidos como pagos”.
 - **Calendário de data**: digitação dd/MM/yyyy com máscara, calendário em popover
@@ -65,7 +69,12 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   ajustar valor/categorias/fechamento ou excluir só um mês, com restauração.
   Quando o envelope estoura ou é consumido, a linha permanece visível com
   reserva R$ 0,00, barra vermelha e o resultado final; ela nunca some por
-  `restante <= 0`.
+  `restante <= 0`. A reserva é o **restante** do ciclo (`limite − gasto`) na
+  data de início (ou um ciclo antes, com antecedência); a sobra é o mesmo
+  restante no fechamento, quando maior que zero. `sobra_policy` define o destino:
+  `liberar` (padrão) devolve ao saldo livre, `rolar` soma ao limite do ciclo
+  seguinte e `realocar` envia ao orçamento de destino no ciclo seguinte. O
+  rótulo visual atual é “Sobra do orçamento anterior” em verde.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
   pagamento de fatura por transferência (parcial ou total, com desfazer). Na
@@ -99,16 +108,53 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   senha temporária força a troca em `/trocar-senha`.
 - **Cadastro público opcional**: desligado por padrão (`ALLOW_SIGNUP=false`);
   quando ligado, habilita `/cadastro` com validação de e-mail e senha forte.
-- **PWA**: manifest, ícones 192/512/maskable, atalhos iOS, service worker com
-  cache apenas de assets e página offline; nova versão avisa e atualiza sob
-  demanda, sem cachear respostas autenticadas ou APIs. O logout limpa caches e
-  storages locais para não vazar estado entre usuários no mesmo aparelho.
-- **Seed demo opcional** (`SEED_DEMO=true`): 3 meses de contas, recorrências,
-  parcelas, transferências, 2 cartões com faturas e um pagamento de fatura.
+- **PWA**: manifest, ícones 192/512/maskable e `apple-touch-icon` (o manifest
+  não declara `shortcuts`), service worker com cache apenas de assets e página
+  offline; nova versão avisa e atualiza sob demanda, sem cachear respostas
+  autenticadas ou APIs. O logout limpa caches e storages locais para não vazar
+  estado entre usuários no mesmo aparelho.
+- **Seed demo opcional** (`SEED_DEMO=true`): 12 meses de evolução (3 meses
+  recentes + 9 anteriores), contas, recorrências, parcelas, transferências,
+  2 cartões com faturas e um pagamento de fatura.
 - **Conta de demonstração para testadores**: em
   **Configurações → Usuários**, o admin pode criar uma conta demo. Cada clique
   gera um workspace isolado com os mesmos dados de exemplo e credenciais
   próprias (e-mail e senha), sem afetar os dados reais.
+
+### Modelo contábil: saldo × previsto
+
+O Verde usa **regime de caixa com saldo projetado**: o que conta é o dia em que
+o dinheiro entra ou sai da **conta**. O detalhamento por tela está em
+[`docs/comportamento.md`](docs/comportamento.md).
+
+- **Saldo (atual)**: foto de hoje = saldo inicial + lançamentos **pagos** com
+  data até hoje. Não muda ao navegar entre meses nem com filtros. Compra no
+  cartão não entra; pagamento de fatura pago reduz a conta.
+- **Previsto de um mês**: saldo atual + lançamentos de conta com data até o fim
+  do mês que ainda não entraram no saldo de hoje + **restante** das faturas que
+  vencem até o fim do mês + provisões/sobras de orçamento. O previsto acumula os
+  meses anteriores; para um mês passado, o app devolve o realizado no último dia.
+- **Marcar pago/não pago** troca o item entre “a pagar” e “realizado”; em regra,
+  não muda o previsto do mês.
+- **Cartão**: a compra não mexe na conta. A fatura pesa no previsto na data de
+  **vencimento**, só pelo restante (`total − pagamentos vinculados`, nunca abaixo
+  de zero). O pagamento é uma transferência conta→cartão vinculada à fatura.
+
+Os recortes de conta diferem de propósito entre telas:
+
+- `/` mostra **saldo total** = contas operacionais + investimentos, **sem**
+  contas arquivadas, na data de hoje; o “previsto até fim do mês” usa
+  `getMonthProjection`.
+- `/contas` soma **todas** as contas não excluídas (inclusive arquivadas e
+  investimentos) no saldo atual e no previsto; o previsto considera os deltas de
+  fatura/orçamento e pode divergir da projeção mensal quando há crédito de
+  fatura.
+- `/lancamentos` mostra o **saldo do dia previsto** (`getMonthBalances`), não um
+  saldo realizado dia a dia; as faturas virtuais entram depois por
+  `aplicarEventosAoSalsoDia`. O rodapé usa a abertura realizada do mês + o resumo
+  do mês e, sem filtros, usa a projeção como “previsto”. Com filtros, a projeção
+  é desligada e o previsto é recalculado só com o recorte.
+- `/previsao` projeta a série diária a partir do saldo atual do escopo escolhido.
 
 ### Regras de fatura de cartão
 
@@ -279,7 +325,8 @@ Acesse `http://localhost:3000`. No primeiro boot, o usuário definido em
 
 Para visualizar o app populado, defina `SEED_DEMO=true` no `.env` antes do
 primeiro boot (ou apague `data/verde.db` e suba de novo). O seed é idempotente e
-cria 3 meses de contas, recorrências, parcelas e transferências.
+cria 12 meses de evolução (3 recentes + 9 anteriores), contas, recorrências,
+parcelas e transferências.
 
 ### Scripts
 
@@ -565,7 +612,7 @@ npm test
 npm run build
 ```
 
-Testes atuais (294): formatação/parse de BRL, datas/meses, máscara e parsing
+Testes atuais (520): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
 geração de recorrências (mensal/bimestral/semanal/anual, dia 31, bissexto, data fim e
@@ -608,6 +655,13 @@ conta fora do escopo, estimativas ligadas/desligadas, simulação antes/depois,
 parcela máxima segura, resumo mensal/virada de ano, consistência com saldo do dia,
 Zod, cache e preferências isoladas por workspace, e rejeição de conta/cartão/
 categoria de outro workspace.
+
+Os **37 testes `*.golden.test.ts`** congelam o modelo aprovado pelo dono:
+caso de referência (382,00 / 50,00 / 466,26 e faturas de dezembro), alternância
+pago/não pago, faturas por data e FIFO, orçamento com `sobra_policy`, previsão
+com estimativas ligadas/desligadas, rodapé/saldo do dia e a linha-resumo de
+importação. Eles **não devem ser editados para passar**; o detalhamento está em
+[`docs/comportamento.md`](docs/comportamento.md).
 
 Decisões de segurança já aplicadas:
 

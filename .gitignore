@@ -17,6 +17,11 @@ data/*
 *.db-shm
 *.db-wal
 
+# dados reais/exportados do dono
+verde-backup*.json
+*.xlsx
+movimentacoes*
+
 # testes e logs
 coverage/
 *.log
