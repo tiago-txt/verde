@@ -44,10 +44,10 @@ describe("validação de lançamentos", () => {
     );
   });
 
-  it("rejeita valor zero ou negativo", () => {
+  it("aceita valor zero e rejeita negativo", () => {
     expect(
       createTransactionSchema.safeParse(validTransaction({ valor: 0 })).success,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       createTransactionSchema.safeParse(validTransaction({ valor: -100 }))
         .success,

@@ -1362,10 +1362,6 @@ export async function createRecurrenceFromTransactionsAction(
       "Um dos lançamentos já pertence a uma recorrência. Edite a série existente.",
     );
   }
-  if (rows.some((row) => row.valor <= 0)) {
-    return fail("Lançamentos com valor zerado não podem virar recorrência.");
-  }
-
   const latest = [...rows].sort((a, b) => a.data.localeCompare(b.data)).at(-1);
   if (!latest) return fail("Selecione ao menos um lançamento.");
 

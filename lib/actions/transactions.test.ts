@@ -266,4 +266,25 @@ describe("recorrência a partir de lançamentos existentes", () => {
     if (result.ok) return;
     expect(result.error).toContain("um lançamento por data");
   });
+
+  it("permite criar recorrência com valor zero", async () => {
+    const ids = [
+      insertTransaction({ data: "2024-01-10", valor: 0 }),
+      insertTransaction({ data: "2024-02-10", valor: 0 }),
+      insertTransaction({ data: "2024-03-10", valor: 0 }),
+    ];
+
+    const result = await createRecurrenceFromTransactionsAction({
+      ids,
+      frequencia: "mensal",
+    });
+
+    expect(result).toMatchObject({ ok: true });
+    const recurrence = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.workspaceId, user.workspaceId))
+      .get();
+    expect(recurrence?.template.valor).toBe(0);
+  });
 });

@@ -15,7 +15,7 @@ const transactionFields = z.object({
   valor: z
     .number()
     .int("Valor inválido")
-    .positive("O valor deve ser maior que zero"),
+    .min(0, "O valor não pode ser negativo"),
   data: isoDateSchema,
   pago: z.boolean(),
   contaId: idSchema.nullable(),
