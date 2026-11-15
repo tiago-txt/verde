@@ -52,7 +52,7 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Categorias de sistema “Outros”**: uma para despesa e uma para receita,
   protegidas contra exclusão/arquivamento. Categoria é opcional no lançamento e
   resolve automaticamente para Outros; transferências permanecem sem categoria.
-- **Recorrência fixa** (mensal/semanal/anual): geração idempotente sob demanda,
+- **Recorrência fixa** (mensal/bimestral/semanal/anual): geração idempotente sob demanda,
   inclusive 12 meses à frente; meses curtos e anos bissextos tratados.
 - **Parcelamento** (2–60x): total dividido com resto na primeira parcela ou valor
   por parcela; todas as parcelas geradas na criação.
@@ -537,7 +537,7 @@ npm run build
 Testes atuais (294): formatação/parse de BRL, datas/meses, máscara e parsing
 dd/MM/yyyy, grade do calendário, rótulos Hoje/Ontem/Amanhã, sessão assinada,
 saldo atual/previsto e saldo do dia (transferências, não pagos e cartão),
-geração de recorrências (mensal/semanal/anual, dia 31, bissexto, data fim e
+geração de recorrências (mensal/bimestral/semanal/anual, dia 31, bissexto, data fim e
 idempotência), parcelamento (resto de centavos e soma), escopos de
 edição/exclusão, parsing/validação dos filtros da URL, resumo mensal com e sem
 filtros, resolução/proteção das categorias “Outros” e planejamento de ações em

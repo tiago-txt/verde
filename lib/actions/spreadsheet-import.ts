@@ -91,6 +91,7 @@ type CardCreation = {
   nome: string;
   diaFechamento: number;
   diaVencimento: number;
+  limite: number;
   contaPagamentoRef: string | null;
   arquivado: boolean;
 };
@@ -399,6 +400,9 @@ function preparePlan(
       transfer,
     ]),
   );
+  const zerosByRow = new Map(
+    (input.decisions.zeros ?? []).map((zero) => [zero.rowId, zero]),
+  );
   const categoryDecisionByKey = new Map(
     input.decisions.categories.map((category) => [category.key, category]),
   );
@@ -499,6 +503,7 @@ function preparePlan(
         nome: name,
         diaFechamento: decision.diaFechamento ?? 1,
         diaVencimento: decision.diaVencimento ?? 10,
+        limite: decision.limite ?? 0,
         contaPagamentoRef: null,
         arquivado: false,
       });
@@ -578,6 +583,7 @@ function preparePlan(
         nome: name,
         diaFechamento: decision.diaFechamento ?? 1,
         diaVencimento: decision.diaVencimento ?? 10,
+        limite: 0,
         contaPagamentoRef,
         arquivado: true,
       });
@@ -768,7 +774,42 @@ function preparePlan(
     });
 
     if (specialKind === "zero" || row.valorCentavos === 0) {
-      ignore(row, "Valor zero.");
+      const zeroDecision = zerosByRow.get(row.id);
+      if (!zeroDecision || zeroDecision.action === "ignorar") {
+        ignore(row, "Valor zero.");
+        continue;
+      }
+
+      const tipo = zeroDecision.action;
+      const categoryKey = `${tipo}:${normalizeEntityName(row.categoriaNome ?? "")}`;
+      // Se a categoria original é de outro tipo, usa a categoria de sistema
+      // em vez de exigir uma decisão que não apareceu na etapa anterior.
+      const categoriaRef =
+        categoryByKey.has(categoryKey) ||
+        categoryDecisionByKey.has(categoryKey)
+          ? resolveCategory(row.categoriaNome, tipo)
+          : systemCategories[tipo];
+      addRow(row, {
+        data: row.data,
+        descricao: row.descricao,
+        tipo,
+        valor: 0,
+        pago: row.pago,
+        contaRef: origin.kind === "conta" ? origin.ref : null,
+        cartaoRef: origin.kind === "cartao" ? origin.ref : null,
+        contaDestinoRef: null,
+        cartaoDestinoRef: null,
+        categoriaRef,
+        faturaChave: origin.kind === "cartao" ? row.faturaChave : null,
+        faturaChaveOverride: null,
+        observacao: row.observacao,
+        parcelaAtual: row.parcelaAtual,
+        parcelaTotal: row.parcelaTotal,
+        parcelaGrupoId: row.parcelaGrupoId,
+        tagRefs: row.tags
+          .map((tag) => resolveTag(tag))
+          .filter((tag): tag is string => Boolean(tag)),
+      });
       continue;
     }
 
@@ -1738,7 +1779,7 @@ export async function importSpreadsheetImportAction(
             workspaceId,
             nome: creation.nome,
             bandeira: "outra",
-            limite: 0,
+            limite: creation.limite,
             diaFechamento: creation.diaFechamento,
             diaVencimento: creation.diaVencimento,
             fechamentoCompra: "proxima_fatura",

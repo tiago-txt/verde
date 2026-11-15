@@ -62,6 +62,16 @@ describe("detector de recorrências", () => {
     ).toBe("anual");
   });
 
+  it("detecta recorrência bimestral", () => {
+    const candidates = detectRecurrences([
+      row("1", "2026-01-10"),
+      row("2", "2026-03-10"),
+      row("3", "2026-05-10"),
+    ]);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.frequencia).toBe("bimestral");
+  });
+
   it("exige pelo menos três ocorrências", () => {
     expect(
       detectRecurrences([row("1", "2026-01-10"), row("2", "2026-02-10")]),
@@ -179,6 +189,45 @@ describe("detector de recorrências", () => {
     const candidates = detectRecurrencesFromSpreadsheet(rows);
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.rowIds).toEqual(["1", "2", "3"]);
+  });
+
+  it("inclui investimentos e reservas na detecção", () => {
+    const base = {
+      id: "1",
+      sheetName: "Conta",
+      sheetKind: "conta" as const,
+      sourceRow: 2,
+      data: "2026-01-10",
+      descricao: "DCA - BTC",
+      valorCentavos: 3_200,
+      tipo: "despesa" as const,
+      categoriaNome: "Investimentos",
+      pago: true,
+      origemNome: "Conta",
+      faturaChave: null,
+      cartaoNome: null,
+      tags: [],
+      observacao: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+      parcelaGrupoId: null,
+      specialKind: "investimento" as const,
+      warnings: [],
+      duplicateKey: "",
+    } satisfies CanonicalSpreadsheetRow;
+    const rows: CanonicalSpreadsheetRow[] = [
+      base,
+      { ...base, id: "2", sourceRow: 3, data: "2026-02-10", valorCentavos: 3_500 },
+      { ...base, id: "3", sourceRow: 4, data: "2026-03-10", valorCentavos: 3_000 },
+    ];
+    const candidates = detectRecurrencesFromSpreadsheet(rows);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      descricao: "DCA - BTC",
+      frequencia: "mensal",
+      valorCentavos: 3_000,
+      valorMaximo: 3_500,
+    });
   });
 });
 

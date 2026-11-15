@@ -47,7 +47,12 @@ export type RecurrenceCandidate = {
 
 // Anual antes de mensal: uma série de 12 em 12 meses também caberia na grade
 // mensal com saltos, mas o intervalo anual é a leitura mais específica.
-const FREQUENCIES: RecurrenceFrequency[] = ["anual", "mensal", "semanal"];
+const FREQUENCIES: RecurrenceFrequency[] = [
+  "anual",
+  "bimestral",
+  "mensal",
+  "semanal",
+];
 
 function expectedDate(
   start: string,
@@ -57,6 +62,8 @@ function expectedDate(
   switch (frequencia) {
     case "mensal":
       return addMonthsClamped(start, index);
+    case "bimestral":
+      return addMonthsClamped(start, index * 2);
     case "semanal":
       return addDaysISO(start, index * 7);
     case "anual":
@@ -141,6 +148,15 @@ function matchesFrequencyAllowingGaps(
           date === expectedDate(start, frequencia, months)
         );
       }
+      case "bimestral": {
+        const months = monthDifference(start, date);
+        return (
+          months !== null &&
+          months > 0 &&
+          months % 2 === 0 &&
+          date === expectedDate(start, frequencia, months / 2)
+        );
+      }
       case "semanal": {
         const days = dayDifference(start, date);
         return (
@@ -161,7 +177,7 @@ function matchesFrequencyAllowingGaps(
 
   const differences = consecutiveDifferences(
     dates,
-    frequencia === "mensal"
+    frequencia === "mensal" || frequencia === "bimestral"
       ? monthDifference
       : frequencia === "semanal"
         ? dayDifference
@@ -171,7 +187,7 @@ function matchesFrequencyAllowingGaps(
   if (!differences) return false;
   return hasCadence(
     differences,
-    frequencia === "semanal" ? 7 : 1,
+    frequencia === "semanal" ? 7 : frequencia === "bimestral" ? 2 : 1,
   );
 }
 
@@ -303,7 +319,9 @@ export function detectRecurrencesFromSpreadsheet(
     rows
       .filter(
         (row) =>
-          row.specialKind === null &&
+          // Investimentos/reservas também são despesas/receitas recorrentes;
+          // continuam tendo tratamento próprio na conciliação da importação.
+          (row.specialKind === null || row.specialKind === "investimento") &&
           row.parcelaAtual === null &&
           row.valorCentavos > 0 &&
           (row.tipo === "despesa" || row.tipo === "receita"),

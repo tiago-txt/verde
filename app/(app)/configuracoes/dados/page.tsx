@@ -33,6 +33,7 @@ export default async function DadosPage() {
     cards: listCardsForFilter(user.workspaceId).map((card) => ({
       id: card.id,
       nome: card.nome,
+      limite: card.limite,
       arquivado: card.arquivado,
       diaFechamento: card.diaFechamento,
       diaVencimento: card.diaVencimento,

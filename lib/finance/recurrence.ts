@@ -43,6 +43,9 @@ export function generateRecurrenceDates(spec: RecurrenceSpec): string[] {
       case "mensal":
         date = addMonthsClamped(spec.dataInicio, index);
         break;
+      case "bimestral":
+        date = addMonthsClamped(spec.dataInicio, index * 2);
+        break;
       case "semanal":
         date = addDaysISO(spec.dataInicio, index * 7);
         break;

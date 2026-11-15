@@ -373,7 +373,7 @@ function realEvent(
 
 type ActiveRecurrence = {
   id: string;
-  frequencia: "mensal" | "semanal" | "anual";
+  frequencia: "mensal" | "bimestral" | "semanal" | "anual";
   dataInicio: string;
   dataFim: string | null;
   template: RecurrenceTemplate;

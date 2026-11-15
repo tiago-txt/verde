@@ -24,6 +24,21 @@ describe("geração de recorrências", () => {
     ).toEqual(["2024-01-31", "2024-02-29", "2024-03-31"]);
   });
 
+  it("bimestral soma 2 meses", () => {
+    expect(
+      generateRecurrenceDates({
+        frequencia: "bimestral",
+        dataInicio: "2026-01-10",
+        dataFim: "2026-07-10",
+      }),
+    ).toEqual([
+      "2026-01-10",
+      "2026-03-10",
+      "2026-05-10",
+      "2026-07-10",
+    ]);
+  });
+
   it("semanal soma 7 dias", () => {
     expect(
       generateRecurrenceDates({

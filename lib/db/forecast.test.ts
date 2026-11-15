@@ -93,7 +93,7 @@ async function transaction(options: {
   cartaoId?: string | null;
   categoriaId?: string | null;
   repeticao?: "nenhuma" | "fixa";
-  frequencia?: "mensal" | "semanal" | "anual";
+  frequencia?: "mensal" | "bimestral" | "semanal" | "anual";
 }) {
   setCurrent(user);
   const result = await createTransactionAction({    tipo: options.tipo ?? "despesa",

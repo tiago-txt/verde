@@ -1672,6 +1672,7 @@ export function TransactionFormDialog({
                               {...register("frequencia")}
                             >
                               <option value="mensal">Mensal</option>
+                              <option value="bimestral">Bimestral (2 meses)</option>
                               <option value="semanal">Semanal</option>
                               <option value="anual">Anual</option>
                             </NativeSelect>

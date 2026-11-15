@@ -467,6 +467,7 @@ export function BulkRecurrenceDialog({
               }
             >
               <option value="mensal">Mensal</option>
+              <option value="bimestral">Bimestral (2 meses)</option>
               <option value="semanal">Semanal</option>
               <option value="anual">Anual</option>
             </NativeSelect>
@@ -475,9 +476,11 @@ export function BulkRecurrenceDialog({
                 As datas selecionadas sugerem uma frequência{" "}
                 {suggested === "mensal"
                   ? "mensal"
-                  : suggested === "semanal"
-                    ? "semanal"
-                    : "anual"}
+                  : suggested === "bimestral"
+                    ? "bimestral"
+                    : suggested === "semanal"
+                      ? "semanal"
+                      : "anual"}
                 .
               </p>
             )}

@@ -38,7 +38,12 @@ export type CategoryType = (typeof CATEGORY_TYPES)[number];
 export const TRANSACTION_TYPES = ["despesa", "receita", "transferencia"] as const;
 export type TransactionType = (typeof TRANSACTION_TYPES)[number];
 
-export const RECURRENCE_FREQUENCIES = ["mensal", "semanal", "anual"] as const;
+export const RECURRENCE_FREQUENCIES = [
+  "mensal",
+  "bimestral",
+  "semanal",
+  "anual",
+] as const;
 export type RecurrenceFrequency = (typeof RECURRENCE_FREQUENCIES)[number];
 
 export const CARD_BRANDS = [

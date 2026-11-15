@@ -444,7 +444,7 @@ export const TransactionRow = memo(function TransactionRow({
           </div>
 
           {hasSecondary && (
-            <span className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-[13px] text-muted-foreground">
+            <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden text-[13px] text-muted-foreground">
               {isTransfer ? (
                 <>
                   <EntityTile
@@ -492,7 +492,7 @@ export const TransactionRow = memo(function TransactionRow({
                   </span>
                 </>
               ) : (
-                <span className="inline-flex min-w-0 items-center gap-1.5">
+                <span className="inline-flex min-w-0 items-center gap-2">
                   {showCategory && transaction.categoriaNome && (
                     <>
                       <span className="truncate">
@@ -552,27 +552,27 @@ export const TransactionRow = memo(function TransactionRow({
                 </>
               )}
               {budgetCycle && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span className="inline-flex min-w-0 items-center gap-1">
-                    <EntityTile
-                      kind="orcamento"
-                      entity={{
-                        id: transaction.orcamentoNome,
-                        nome: transaction.orcamentoNome,
-                        cor: transaction.orcamentoCor,
-                        icone: transaction.orcamentoIcone,
-                      }}
-                      size="xxs"
-                      plain
-                      className="shrink-0 rounded-[6px]"
-                    />
-                    <span className="truncate">
-                      {transaction.orcamentoNome ?? "Orçamento"}{" "}
-                      {formatMonthShort(budgetCycle)}
-                    </span>
+                <span className="inline-flex min-w-0 items-center gap-1.5">
+                  <span aria-hidden="true" className="shrink-0">
+                    ·
                   </span>
-                </>
+                  <EntityTile
+                    kind="orcamento"
+                    entity={{
+                      id: transaction.orcamentoNome,
+                      nome: transaction.orcamentoNome,
+                      cor: transaction.orcamentoCor,
+                      icone: transaction.orcamentoIcone,
+                    }}
+                    size="xxs"
+                    plain
+                    className="shrink-0 rounded-[6px]"
+                  />
+                  <span className="truncate">
+                    {transaction.orcamentoNome ?? "Orçamento"}{" "}
+                    {formatMonthShort(budgetCycle)}
+                  </span>
+                </span>
               )}
             </span>
           )}

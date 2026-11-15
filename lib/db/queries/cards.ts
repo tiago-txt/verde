@@ -49,6 +49,7 @@ export type CardOption = {
   bandeira: string;
   cor: string;
   icone: string;
+  limite: number;
   arquivado: boolean;
   diaFechamento: number;
   diaVencimento: number;
@@ -851,6 +852,7 @@ export function listCardsForFilter(workspaceId: string): CardOption[] {
       bandeira: creditCards.bandeira,
       cor: creditCards.cor,
       icone: creditCards.icone,
+      limite: creditCards.limite,
       arquivado: creditCards.arquivado,
       diaFechamento: creditCards.diaFechamento,
       diaVencimento: creditCards.diaVencimento,

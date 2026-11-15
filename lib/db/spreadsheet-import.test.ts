@@ -210,6 +210,7 @@ function buildRequest(
           createCard: true,
           diaFechamento: 10,
           diaVencimento: 17,
+          limite: 500_000,
         },
       ],
       categories: analysis.categories.map((category) => ({
@@ -325,6 +326,7 @@ describe("importação de planilha", () => {
     expect(card?.arquivado).toBe(false);
     expect(card?.contaPagamentoId).toBe(account?.id);
     expect(card?.icone).toBe("CreditCard");
+    expect(card?.limite).toBe(500_000);
 
     const historical = testDb.db
       .select()
@@ -809,5 +811,55 @@ describe("importação de planilha", () => {
       )
       .all();
     expect(generated.some((row) => row.data === "2026-12-10")).toBe(true);
+  });
+
+  it("inclui lançamentos com valor zero quando escolhidos", async () => {
+    const sheets: SpreadsheetSheet[] = [
+      {
+        name: "Conta",
+        headers: [
+          "Data",
+          "Descrição",
+          "Categoria",
+          "Valor",
+          "Situação",
+          "Tags",
+          "Informações adicionais",
+        ],
+        rows: [
+          ["10.01.2024", "Aluguel", "Moradia", -1500, "Pago", "", ""],
+          ["10.02.2024", "Aluguel", "Moradia", 0, "Pago", "", ""],
+          ["10.03.2024", "Aluguel", "Moradia", 0, "Não pago", "", ""],
+        ],
+      },
+    ];
+
+    const request = buildRequest(sheets);
+    const analysis = analyzeSpreadsheet(sheets);
+    expect(analysis.zeros).toHaveLength(2);
+    request.decisions.zeros = analysis.zeros.map((row, index) => ({
+      rowId: row.id,
+      action: index === 0 ? ("despesa" as const) : ("receita" as const),
+    }));
+
+    const result = await importSpreadsheetImportAction(request);
+    if (!result.ok) throw new Error(result.error);
+
+    const zeros = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.workspaceId, user.workspaceId),
+          eq(transactions.valor, 0),
+          eq(transactions.importBatchId, result.batchId),
+        ),
+      )
+      .orderBy(transactions.data)
+      .all();
+
+    expect(zeros).toHaveLength(2);
+    expect(zeros[0]).toMatchObject({ tipo: "despesa", valor: 0, pago: true });
+    expect(zeros[1]).toMatchObject({ tipo: "receita", valor: 0, pago: false });
   });
 });

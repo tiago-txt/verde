@@ -33,6 +33,7 @@ import { cn } from "@/lib/utils";
 
 const FREQUENCY_LABELS: Record<RecurrenceFrequency, string> = {
   mensal: "mensal",
+  bimestral: "bimestral",
   semanal: "semanal",
   anual: "anual",
 };

@@ -19,6 +19,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { CurrencyInput } from "@/components/currency-input";
 import { FormError } from "@/components/form-feedback";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -68,6 +69,7 @@ export type SpreadsheetImportOptions = {
   cards: Array<{
     id: string;
     nome: string;
+    limite: number;
     arquivado: boolean;
     diaFechamento: number;
     diaVencimento: number;
@@ -90,6 +92,7 @@ type OriginState = {
   name: string;
   diaFechamento: number;
   diaVencimento: number;
+  limite: number;
 };
 
 type CategoryState = {
@@ -164,6 +167,7 @@ function defaultOrigin(sheetName: string, kind: SheetKind): OriginState {
     name: sheetName,
     diaFechamento: 1,
     diaVencimento: 10,
+    limite: 0,
   };
 }
 
@@ -309,6 +313,12 @@ export function SpreadsheetImport({
   const [transferState, setTransferState] = useState<
     Record<string, TransferState>
   >({});
+  const [zeroState, setZeroState] = useState<
+    Record<string, "despesa" | "receita" | "ignorar">
+  >({});
+  const [bulkFechamento, setBulkFechamento] = useState(1);
+  const [bulkVencimento, setBulkVencimento] = useState(10);
+  const [bulkLimite, setBulkLimite] = useState(0);
   const [ignoreDuplicateRows, setIgnoreDuplicateRows] = useState(false);
   const [reimportarHash, setReimportarHash] = useState(false);
   const [considerHistoricalAsPaid, setConsiderHistoricalAsPaid] =
@@ -351,8 +361,10 @@ export function SpreadsheetImport({
     if (!analysis) {
       setRecurrenceCandidates([]);
       setSelectedRecurrenceKeys(new Set());
+      setZeroState({});
       return;
     }
+    setZeroState({});
     const candidates = detectRecurrencesFromSpreadsheet(analysis.rows);
     setRecurrenceCandidates(candidates);
     // Por padrão, só marcamos séries com ocorrência recente. Séries antigas
@@ -808,6 +820,44 @@ export function SpreadsheetImport({
     );
   }
 
+  function zeroFor(rowId: string): "despesa" | "receita" | "ignorar" {
+    return zeroState[rowId] ?? "ignorar";
+  }
+
+  function setAllZeros(action: "despesa" | "receita" | "ignorar") {
+    if (!analysis) return;
+    setZeroState(
+      Object.fromEntries(analysis.zeros.map((row) => [row.id, action])),
+    );
+  }
+
+  function applyCardDefaults() {
+    if (!analysis) return;
+    setOrigins((current) => {
+      const next = { ...current };
+      for (const sheet of analysis.sheets) {
+        const kind: SheetKind | null =
+          sheetKinds[sheet.name] ??
+          (sheet.kind === "desconhecida" ? null : sheet.kind);
+        if (kind !== "cartao") continue;
+        const origin = current[sheet.name] ?? defaultOrigin(sheet.name, "cartao");
+        if (origin.kind !== "cartao" || origin.mode !== "new") continue;
+        next[sheet.name] = {
+          ...origin,
+          diaFechamento: bulkFechamento,
+          diaVencimento: bulkVencimento,
+          limite: bulkLimite,
+        };
+      }
+      return next;
+    });
+    toast({
+      description:
+        "Fechamento, vencimento e limite aplicados aos cartões novos.",
+      tone: "info",
+    });
+  }
+
   async function handleFile(file: File | null) {
     setPreview(null);
     setImported(null);
@@ -1017,6 +1067,7 @@ export function SpreadsheetImport({
           createCard: true,
           diaFechamento: origin.diaFechamento,
           diaVencimento: origin.diaVencimento,
+          limite: origin.limite,
         };
       }),
       categories: analysis.categories.map((category) => {
@@ -1179,6 +1230,10 @@ export function SpreadsheetImport({
           contaDestinoId: decision.contaDestinoId || null,
         };
       }),
+      zeros: (analysis.zeros ?? []).map((row) => ({
+        rowId: row.id,
+        action: zeroFor(row.id),
+      })),
       ignoreRowIds: [],
       ignoreDuplicateRows,
       reimportarHash,
@@ -1498,14 +1553,86 @@ export function SpreadsheetImport({
           <div className="space-y-5">
             <section className="space-y-2">
               <h3 className="text-sm font-semibold">Origens</h3>
+              <div className="flex flex-wrap items-end gap-2 rounded-md border border-border p-2">
+                <span className="text-xs font-medium">
+                  Aplicar aos cartões novos:
+                </span>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="bulk-fechamento"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Fechamento
+                  </Label>
+                  <Input
+                    id="bulk-fechamento"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={bulkFechamento}
+                    onChange={(event) =>
+                      setBulkFechamento(
+                        Math.min(
+                          31,
+                          Math.max(1, Number(event.target.value) || 1),
+                        ),
+                      )
+                    }
+                    className="h-11 w-20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="bulk-vencimento"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Vencimento
+                  </Label>
+                  <Input
+                    id="bulk-vencimento"
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={bulkVencimento}
+                    onChange={(event) =>
+                      setBulkVencimento(
+                        Math.min(
+                          31,
+                          Math.max(1, Number(event.target.value) || 1),
+                        ),
+                      )
+                    }
+                    className="h-11 w-20"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">
+                    Limite
+                  </Label>
+                  <CurrencyInput
+                    value={bulkLimite}
+                    onChange={setBulkLimite}
+                    className="h-11 w-40"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11"
+                  onClick={applyCardDefaults}
+                >
+                  Aplicar a todos
+                </Button>
+              </div>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[760px] text-left text-xs">
+                <table className="w-full min-w-[900px] text-left text-xs">
                   <thead className="text-muted-foreground">
                     <tr>
                       <th className="p-2 font-medium">Aba</th>
                       <th className="p-2 font-medium">Destino</th>
                       <th className="p-2 font-medium">Conta/Cartão</th>
                       <th className="p-2 font-medium">Nome</th>
+                      <th className="p-2 font-medium">Limite</th>
                       <th className="p-2 font-medium">Fech./Venc.</th>
                     </tr>
                   </thead>
@@ -1636,6 +1763,36 @@ export function SpreadsheetImport({
                                 }
                                 aria-label={`Nome do destino da aba ${sheet.name}`}
                               />
+                            )}
+                          </td>
+                          <td className="p-2">
+                            {origin.kind === "cartao" &&
+                            origin.mode === "new" ? (
+                              <CurrencyInput
+                                value={origin.limite}
+                                onChange={(limite) =>
+                                  setOrigins((current) => ({
+                                    ...current,
+                                    [sheet.name]: {
+                                      ...origin,
+                                      limite,
+                                    },
+                                  }))
+                                }
+                                aria-label={`Limite do cartão ${origin.name}`}
+                                className="w-32"
+                              />
+                            ) : origin.kind === "cartao" &&
+                              origin.mode === "existing" ? (
+                              <span className="text-muted-foreground">
+                                {formatCurrency(
+                                  cardOptions.find(
+                                    (card) => card.id === origin.cardId,
+                                  )?.limite ?? 0,
+                                )}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
                             )}
                           </td>
                           <td className="p-2">
@@ -2084,9 +2241,11 @@ export function SpreadsheetImport({
                             <Badge variant="secondary">
                               {candidate.frequencia === "mensal"
                                 ? "Mensal"
-                                : candidate.frequencia === "semanal"
-                                  ? "Semanal"
-                                  : "Anual"}
+                                : candidate.frequencia === "bimestral"
+                                  ? "Bimestral"
+                                  : candidate.frequencia === "semanal"
+                                    ? "Semanal"
+                                    : "Anual"}
                             </Badge>
                           </td>
                           <td className="p-2">{candidate.ocorrencias}</td>
@@ -2461,9 +2620,101 @@ export function SpreadsheetImport({
             )}
 
             {analysis.zeros.length > 0 && (
-              <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
-                {analysis.zeros.length} linha(s) com valor zero serão ignoradas.
-              </p>
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold">
+                  Lançamentos com valor zero ({analysis.zeros.length})
+                </h3>
+                <p className="text-xs text-muted-foreground">
+                  Por padrão são ignorados. Para manter o registro contábil,
+                  escolha incluir como despesa ou receita. O valor continua zero
+                  e não entra no saldo.
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 text-xs sm:h-8"
+                    onClick={() => setAllZeros("despesa")}
+                  >
+                    Incluir todos como despesa
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-11 text-xs sm:h-8"
+                    onClick={() => setAllZeros("receita")}
+                  >
+                    Incluir todos como receita
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-11 text-xs sm:h-8"
+                    onClick={() => setAllZeros("ignorar")}
+                  >
+                    Ignorar todos
+                  </Button>
+                  <span className="self-center text-xs text-muted-foreground">
+                    {
+                      analysis.zeros.filter(
+                        (row) => zeroFor(row.id) !== "ignorar",
+                      ).length
+                    }{" "}
+                    selecionado(s)
+                  </span>
+                </div>
+                <div className="max-h-64 overflow-auto">
+                  <table className="w-full min-w-[760px] text-left text-xs">
+                    <thead className="sticky top-0 bg-card text-muted-foreground">
+                      <tr>
+                        <th className="p-2 font-medium">Aba/linha</th>
+                        <th className="p-2 font-medium">Data</th>
+                        <th className="p-2 font-medium">Descrição</th>
+                        <th className="p-2 font-medium">Categoria</th>
+                        <th className="p-2 font-medium">Ação</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {analysis.zeros.map((row) => (
+                        <tr key={row.id} className="border-t border-border">
+                          <td className="p-2">
+                            {row.sheetName} / {row.sourceRow}
+                          </td>
+                          <td className="p-2">{formatDate(row.data)}</td>
+                          <td className="p-2">{row.descricao}</td>
+                          <td className="p-2">
+                            {row.categoriaNome ?? "—"}
+                          </td>
+                          <td className="p-2">
+                            <NativeSelect
+                              value={zeroFor(row.id)}
+                              onChange={(event) =>
+                                setZeroState((current) => ({
+                                  ...current,
+                                  [row.id]: event.target
+                                    .value as "despesa" | "receita" | "ignorar",
+                                }))
+                              }
+                              aria-label={`Ação da linha zero ${row.descricao}`}
+                            >
+                              <option value="ignorar">Ignorar</option>
+                              <option value="despesa">
+                                Incluir como despesa
+                              </option>
+                              <option value="receita">
+                                Incluir como receita
+                              </option>
+                            </NativeSelect>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             )}
             {analysis.correcoes.length > 0 && (
               <p className="text-xs text-muted-foreground">

@@ -107,6 +107,7 @@ export const spreadsheetDecisionsSchema = z.object({
         createCard: z.boolean().optional(),
         diaFechamento: z.number().int().min(1).max(31).optional(),
         diaVencimento: z.number().int().min(1).max(31).optional(),
+        limite: z.number().int().min(0).optional(),
         saldoInicial: z.number().int().optional(),
         aplicarSaldoInicial: z.boolean().optional(),
       }),
@@ -182,6 +183,15 @@ export const spreadsheetDecisionsSchema = z.object({
       }),
     )
     .max(10_000),
+  zeros: z
+    .array(
+      z.object({
+        rowId: z.string().trim().min(1).max(400),
+        action: z.enum(["despesa", "receita", "ignorar"]),
+      }),
+    )
+    .max(50_000)
+    .optional(),
   ignoreRowIds: z.array(z.string().trim().min(1).max(400)).max(50_000),
   ignoreDuplicateRows: z.boolean().optional(),
   reimportarHash: z.boolean().optional(),
@@ -191,7 +201,7 @@ export const spreadsheetDecisionsSchema = z.object({
     .array(
       z.object({
         key: z.string().trim().min(1).max(600),
-        frequencia: z.enum(["mensal", "semanal", "anual"]),
+        frequencia: z.enum(["mensal", "bimestral", "semanal", "anual"]),
         dataInicio: isoDateSchema.nullable().optional(),
         dataFim: isoDateSchema.nullable().optional(),
       }),
