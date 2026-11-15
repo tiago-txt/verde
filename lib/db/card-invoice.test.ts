@@ -8,9 +8,10 @@ import {
   type TestDatabase,
   type TestUser,
 } from "./testing";
-import { users, transactions, type User } from "./schema";
+import { users, transactions, creditCards, type User } from "./schema";
 import { createAccountAction } from "@/lib/actions/accounts";
 import { createCardAction, payInvoiceAction } from "@/lib/actions/cards";
+import { mergeCardsAction } from "@/lib/actions/cards";
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { deleteTransactionAction } from "@/lib/actions/transactions";
 import {
@@ -474,5 +475,59 @@ describe("fatura como evento único", () => {
         (item) => item.descricao === "Compra com fatura explícita",
       ),
     ).toBe(false);
+  });
+
+  it("incorpora compras e pagamentos de um cartão histórico no cartão correto", async () => {
+    const fixture = await setupInvoice();
+    await payInvoiceAction({
+      cartaoId: fixture.cardId,
+      faturaChave: fixture.faturaChave,
+      contaId: fixture.accountId,
+      valor: 20_000,
+      data: todayISO(),
+    });
+
+    const target = await createCardAction({
+      nome: "Cartão correto",
+      bandeira: "visa",
+      limite: 500_000,
+      diaFechamento: 10,
+      diaVencimento: 17,
+      contaPagamentoId: fixture.accountId,
+      cor: "#818cf8",
+      icone: "CreditCard",
+    });
+    if (!target.ok || !target.id) throw new Error("cartão destino");
+
+    const merged = await mergeCardsAction({
+      sourceId: fixture.cardId,
+      targetId: target.id,
+    });
+    expect(merged.ok).toBe(true);
+
+    const targetInvoice = listCardInvoiceEventsForMonth(
+      user.workspaceId,
+      fixture.faturaChave,
+      FILTERS,
+    ).find((event) => event.cartaoId === target.id);
+    expect(targetInvoice).toMatchObject({
+      total: 20_000,
+      pago: 20_000,
+      status: "paga",
+    });
+
+    const movedPurchase = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.descricao, "Compra no cartão"))
+      .get();
+    expect(movedPurchase?.cartaoId).toBe(target.id);
+
+    const source = testDb.db
+      .select()
+      .from(creditCards)
+      .where(eq(creditCards.id, fixture.cardId))
+      .get();
+    expect(source?.deletedAt).not.toBeNull();
   });
 });

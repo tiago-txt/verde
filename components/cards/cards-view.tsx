@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   Archive,
   ArchiveRestore,
+  ArrowRightLeft,
   CreditCard,
   MoreVertical,
   Pencil,
@@ -30,12 +31,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { EmptyState } from "@/components/empty-state";
+import { Label } from "@/components/ui/label";
+import { NativeSelect } from "@/components/ui/native-select";
 import { useToast } from "@/components/ui/toast";
 import { BudgetProgress, budgetTone } from "@/components/budgets/budget-progress";
 import { CardFormDialog } from "./card-form-dialog";
 import {
   createCardAction,
   deleteCardAction,
+  mergeCardsAction,
   setCardArchivedAction,
   updateCardAction,
 } from "@/lib/actions/cards";
@@ -81,8 +85,11 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<CreditCardRow | null>(null);
   const [deleting, setDeleting] = useState<CardWithInvoice | null>(null);
+  const [merging, setMerging] = useState<CardWithInvoice | null>(null);
+  const [mergeTargetId, setMergeTargetId] = useState("");
 
   const visible = showArchived ? cards : cards.filter((card) => !card.arquivado);
+  const mergeTargets = cards.filter((card) => card.id !== merging?.id);
 
   function run(action: () => Promise<{ ok: boolean; error?: string }>, success: string) {
     startTransition(async () => {
@@ -254,6 +261,15 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
                         {card.arquivado ? <ArchiveRestore /> : <Archive />}
                         {card.arquivado ? "Desarquivar" : "Arquivar"}
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onSelect={() => {
+                          setMerging(card);
+                          setMergeTargetId("");
+                        }}
+                      >
+                        <ArrowRightLeft />
+                        Incorporar em outro cartão
+                      </DropdownMenuItem>
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="text-destructive focus:text-destructive"
@@ -396,6 +412,77 @@ export function CardsView({ cards, accounts }: CardsViewProps) {
               }}
             >
               Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={Boolean(merging)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMerging(null);
+            setMergeTargetId("");
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Incorporar cartão</DialogTitle>
+            <DialogDescription>
+              Todos os lançamentos e pagamentos de “{merging?.nome}” serão
+              movidos para o cartão escolhido. O cartão de origem será
+              arquivado. Use isto para juntar um cartão histórico ao cartão
+              correto.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="merge-card-target">
+              Cartão de destino
+            </Label>
+            <NativeSelect
+              id="merge-card-target"
+              value={mergeTargetId}
+              onChange={(event) => setMergeTargetId(event.target.value)}
+            >
+              <option value="">Selecione</option>
+              {mergeTargets.map((card) => (
+                <option key={card.id} value={card.id}>
+                  {card.nome}
+                  {card.arquivado ? " (arquivado)" : ""}
+                </option>
+              ))}
+            </NativeSelect>
+            <p className="text-xs text-muted-foreground">
+              {merging?.comprasCount
+                ? `Serão movidos ${merging.comprasCount} lançamento(s) e todos os pagamentos vinculados.`
+                : "Não há lançamentos vinculados a este cartão."}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setMerging(null);
+                setMergeTargetId("");
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              disabled={!mergeTargetId || !merging}
+              onClick={() => {
+                if (!merging || !mergeTargetId) return;
+                const sourceId = merging.id;
+                const targetId = mergeTargetId;
+                setMerging(null);
+                setMergeTargetId("");
+                run(
+                  () => mergeCardsAction({ sourceId, targetId }),
+                  "Cartões incorporados.",
+                );
+              }}
+            >
+              Incorporar
             </Button>
           </DialogFooter>
         </DialogContent>

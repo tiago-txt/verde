@@ -365,6 +365,103 @@ export async function deleteCardAction(input: {
   return { ok: true };
 }
 
+export async function mergeCardsAction(input: {
+  sourceId: string;
+  targetId: string;
+}): Promise<ActionResult> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+
+  const parsed = z
+    .object({ sourceId: idSchema, targetId: idSchema })
+    .refine((value) => value.sourceId !== value.targetId, {
+      message: "Escolha um cartão de destino diferente.",
+      path: ["targetId"],
+    })
+    .safeParse(input);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "Cartões inválidos.");
+  }
+
+  const source = db
+    .select()
+    .from(creditCards)
+    .where(
+      and(
+        eq(creditCards.id, parsed.data.sourceId),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
+    .get();
+  if (!source) return fail("Cartão de origem não encontrado.");
+
+  const target = db
+    .select()
+    .from(creditCards)
+    .where(
+      and(
+        eq(creditCards.id, parsed.data.targetId),
+        ws(creditCards.workspaceId),
+        isNull(creditCards.deletedAt),
+      ),
+    )
+    .get();
+  if (!target) return fail("Cartão de destino não encontrado.");
+
+  const now = new Date();
+  let moved = 0;
+  db.transaction((tx) => {
+    const purchases = tx
+      .update(transactions)
+      .set({ cartaoId: target.id, updatedAt: now })
+      .where(
+        and(
+          ws(transactions.workspaceId),
+          eq(transactions.cartaoId, source.id),
+        ),
+      )
+      .run();
+    const payments = tx
+      .update(transactions)
+      .set({ cartaoDestinoId: target.id, updatedAt: now })
+      .where(
+        and(
+          ws(transactions.workspaceId),
+          eq(transactions.cartaoDestinoId, source.id),
+        ),
+      )
+      .run();
+    moved = purchases.changes + payments.changes;
+
+    if (!target.contaPagamentoId && source.contaPagamentoId) {
+      tx.update(creditCards)
+        .set({ contaPagamentoId: source.contaPagamentoId, updatedAt: now })
+        .where(
+          and(
+            eq(creditCards.id, target.id),
+            ws(creditCards.workspaceId),
+          ),
+        )
+        .run();
+    }
+
+    tx.update(creditCards)
+      .set({ arquivado: true, deletedAt: now, updatedAt: now })
+      .where(
+        and(
+          eq(creditCards.id, source.id),
+          ws(creditCards.workspaceId),
+        ),
+      )
+      .run();
+  });
+
+  revalidateCards(target.id);
+  revalidateCards(source.id);
+  return { ok: true, id: target.id, count: moved };
+}
+
 export async function payInvoiceAction(
   input: PayInvoiceInput,
 ): Promise<ActionResult> {

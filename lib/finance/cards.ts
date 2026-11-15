@@ -228,11 +228,22 @@ export function montarResumoFatura(
   };
 }
 
-/** Soma dos saldos devedores de todas as faturas (inclui futuras parcelas). */
+/**
+ * Limite usado = saldo devedor líquido das faturas. Créditos de faturas
+ * pagas a mais abatem o restante de outras faturas, em vez de ficarem presos
+ * na fatura antiga. O resultado nunca fica negativo.
+ */
 export function calcularLimiteUsado(
-  faturas: Pick<CardInvoiceSummary, "restante">[],
+  faturas: Array<
+    Pick<CardInvoiceSummary, "restante"> & { credito?: number }
+  >,
 ): number {
-  return faturas.reduce((sum, fatura) => sum + Math.max(0, fatura.restante), 0);
+  const liquido = faturas.reduce(
+    (sum, fatura) =>
+      sum + Math.max(0, fatura.restante) - Math.max(0, fatura.credito ?? 0),
+    0,
+  );
+  return Math.max(0, liquido);
 }
 
 export type CardDebtPurchase = {
@@ -283,15 +294,19 @@ export function splitCardDebt(
   let currentInvoice = 0;
   let futureInstallments = 0;
   let futurePurchases = 0;
+  let creditCarry = 0;
 
-  for (const [invoice, items] of byInvoice) {
+  const invoiceKeys = [...byInvoice.keys()].sort((a, b) => a.localeCompare(b));
+  for (const invoice of invoiceKeys) {
+    const items = byInvoice.get(invoice) ?? [];
     const ordered = [...items].sort(
       (a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id),
     );
     const remaining = ordered.map((item) =>
       item.tipo === "despesa" ? item.valor : -item.valor,
     );
-    let available = Math.max(0, paidByInvoice.get(invoice) ?? 0);
+    let available =
+      Math.max(0, paidByInvoice.get(invoice) ?? 0) + creditCarry;
 
     // Estornos abatem primeiro as compras mais antigas da fatura.
     for (let index = 0; index < remaining.length; index += 1) {
@@ -315,6 +330,9 @@ export function splitCardDebt(
       remaining[index] = value - applied;
       available -= applied;
     }
+
+    // Pagamento que sobrou nesta fatura vira crédito para as próximas.
+    creditCarry = Math.max(0, available);
 
     for (let index = 0; index < ordered.length; index += 1) {
       const item = ordered[index] as CardDebtPurchase;

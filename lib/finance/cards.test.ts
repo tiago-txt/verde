@@ -206,6 +206,19 @@ describe("limite usado e disponível", () => {
     expect(limiteDisponivel(20000, 15000)).toBe(5000);
     expect(limiteDisponivel(10000, 15000)).toBe(-5000);
   });
+
+  it("abate créditos de faturas pagas a mais", () => {
+    expect(
+      calcularLimiteUsado([
+        { restante: 0, credito: 2000 },
+        { restante: 10000, credito: 0 },
+        { restante: 5000, credito: 0 },
+      ]),
+    ).toBe(13000);
+    expect(
+      calcularLimiteUsado([{ restante: 0, credito: 5000 }]),
+    ).toBe(0);
+  });
 });
 
 describe("parcelamento no cartão", () => {

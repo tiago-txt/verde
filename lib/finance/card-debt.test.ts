@@ -71,6 +71,19 @@ describe("dívida do cartão na data de referência", () => {
     );
     expect(debt.current).toBe(52_300);
   });
+
+  it("crédito de fatura paga a mais abate a próxima fatura", () => {
+    const debt = splitCardDebt(
+      [compraNu, compraFutura],
+      new Map([["2026-12", 60_000]]),
+      "2026-12-13",
+      "2026-12",
+    );
+    expect(debt.currentInvoice).toBe(0);
+    expect(debt.futureInstallments).toBe(0);
+    expect(debt.current).toBe(0);
+    expect(debt.future).toBe(72_300);
+  });
 });
 
 describe("saldo das contas na data de referência", () => {
