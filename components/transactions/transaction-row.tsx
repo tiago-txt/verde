@@ -444,7 +444,7 @@ export const TransactionRow = memo(function TransactionRow({
           </div>
 
           {hasSecondary && (
-            <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 overflow-hidden text-[13px] text-muted-foreground">
+            <span className="mt-2 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5 overflow-hidden text-[13px] text-muted-foreground">
               {isTransfer ? (
                 <>
                   <EntityTile
@@ -492,7 +492,7 @@ export const TransactionRow = memo(function TransactionRow({
                   </span>
                 </>
               ) : (
-                <span className="inline-flex min-w-0 items-center gap-2">
+                <span className="inline-flex min-w-0 items-center gap-2.5">
                   {showCategory && transaction.categoriaNome && (
                     <>
                       <span className="truncate">
@@ -552,7 +552,7 @@ export const TransactionRow = memo(function TransactionRow({
                 </>
               )}
               {budgetCycle && (
-                <span className="inline-flex min-w-0 items-center gap-1.5">
+                <span className="inline-flex min-w-0 items-center gap-2">
                   <span aria-hidden="true" className="shrink-0">
                     ·
                   </span>
