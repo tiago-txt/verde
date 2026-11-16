@@ -20,6 +20,8 @@ type ScopeDialogProps = {
   mode: "edit" | "delete";
   transaction: TransactionListItem | null;
   onSelect: (scope: Scope) => void;
+  /** Alcances oferecidos; por padrão, os três. */
+  scopes?: Scope[];
 };
 
 export function ScopeDialog({
@@ -28,6 +30,7 @@ export function ScopeDialog({
   mode,
   transaction,
   onSelect,
+  scopes = ["single", "future", "all"],
 }: ScopeDialogProps) {
   if (!transaction) return null;
 
@@ -62,39 +65,43 @@ export function ScopeDialog({
         </DialogHeader>
 
         <div className="space-y-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
-            onClick={() => onSelect("single")}
-          >
-            <CalendarDays className="h-4 w-4" />
-            <span>
-              <span className="block font-medium">{singleLabel}</span>
-              <span className="block text-xs font-normal text-muted-foreground">
-                Apenas a ocorrência de {formatDate(transaction.data)}.
+          {scopes.includes("single") && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              onClick={() => onSelect("single")}
+            >
+              <CalendarDays className="h-4 w-4" />
+              <span>
+                <span className="block font-medium">{singleLabel}</span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  Apenas a ocorrência de {formatDate(transaction.data)}.
+                </span>
               </span>
-            </span>
-          </Button>
+            </Button>
+          )}
 
-          <Button
-            type="button"
-            variant="outline"
-            className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
-            onClick={() => onSelect("future")}
-          >
-            <Repeat className="h-4 w-4" />
-            <span>
-              <span className="block font-medium">{futureLabel}</span>
-              <span className="block text-xs font-normal text-muted-foreground">
-                {isInstallment
-                  ? "Esta parcela e as seguintes."
-                  : "Esta data e todas as ocorrências futuras."}
+          {scopes.includes("future") && (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              onClick={() => onSelect("future")}
+            >
+              <Repeat className="h-4 w-4" />
+              <span>
+                <span className="block font-medium">{futureLabel}</span>
+                <span className="block text-xs font-normal text-muted-foreground">
+                  {isInstallment
+                    ? "Esta parcela e as seguintes."
+                    : "Esta data e todas as ocorrências futuras."}
+                </span>
               </span>
-            </span>
-          </Button>
+            </Button>
+          )}
 
-          {mode === "delete" && (
+          {scopes.includes("all") && (
             <Button
               type="button"
               variant="outline"

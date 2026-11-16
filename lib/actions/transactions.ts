@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
@@ -10,7 +10,6 @@ import {
   accounts,
   categories,
   creditCards,
-  RECURRENCE_FREQUENCIES,
   recurrences,
   tags,
   transactionTags,
@@ -26,6 +25,7 @@ import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import { idsForCategoryChange } from "@/lib/finance/batch";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import { buildInstallmentPlan } from "@/lib/finance/installments";
+import { generateRecurrenceDates } from "@/lib/finance/recurrence";
 import {
   selectFixedRecurrenceTransactions,
   selectInstallmentTransactions,
@@ -43,6 +43,47 @@ import type { ActionResult } from "./result";
 
 type Db = ReturnType<typeof scopedDb>["db"];
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
+type RecurrenceRow = typeof recurrences.$inferSelect;
+
+/** Encerra a série antes da ocorrência editada, sem tocar no passado. */
+function endRecurrenceBefore(
+  tx: Tx,
+  recurrence: RecurrenceRow,
+  anchorDate: string,
+  now: Date,
+): void {
+  const end = addDaysISO(anchorDate, -1);
+  const boundedEnd =
+    recurrence.dataFim && recurrence.dataFim < end ? recurrence.dataFim : end;
+  const values =
+    boundedEnd < recurrence.dataInicio
+      ? { ativo: false, updatedAt: now }
+      : { dataFim: boundedEnd, updatedAt: now };
+  tx.update(recurrences)
+    .set(values)
+    .where(
+      and(
+        eq(recurrences.id, recurrence.id),
+        eq(recurrences.workspaceId, recurrence.workspaceId),
+      ),
+    )
+    .run();
+}
+
+/** Próxima data da série depois da ocorrência editada (se houver). */
+function nextRecurrenceDateAfter(
+  recurrence: RecurrenceRow,
+  anchorDate: string,
+): string | null {
+  if (!recurrence.ativo) return null;
+  return (
+    generateRecurrenceDates({
+      frequencia: recurrence.frequencia,
+      dataInicio: recurrence.dataInicio,
+      dataFim: recurrence.dataFim,
+    }).find((date) => date > anchorDate) ?? null
+  );
+}
 
 function fail(error: string, code?: string): ActionResult {
   return { ok: false, error, code };
@@ -480,6 +521,13 @@ export async function updateTransactionAction(
     );
   }
 
+  const isConversion =
+    (isFixed && data.repeticao === "parcelada") ||
+    (isInstallment && data.repeticao === "fixa");
+  if (isConversion && data.scope !== "future") {
+    return fail("A conversão vale desta ocorrência em diante.");
+  }
+
   const categoriaId = resolveCategoryId(
     { tipo: data.tipo, categoriaId: data.categoriaId },
     getSystemCategoryIds(workspaceId),
@@ -549,6 +597,7 @@ export async function updateTransactionAction(
       ? { ...updateValues, pago: isCard ? false : data.pago }
       : updateValues;
 
+  let convertedToFixed = false;
   try {
     db.transaction((tx) => {
       if (!isGrouped) {
@@ -668,6 +717,311 @@ export async function updateTransactionAction(
           )
           .run();
         replaceTags(tx, workspaceId, data.id, data.tagIds);
+        return;
+      }
+
+      if (isGrouped && data.repeticao === "nenhuma") {
+        const now = new Date();
+
+        if (isFixed) {
+          const recurrenceId = existing.recorrenciaId as string;
+          const recurrence = tx
+            .select()
+            .from(recurrences)
+            .where(
+              and(
+                eq(recurrences.id, recurrenceId),
+                eq(recurrences.workspaceId, workspaceId),
+              ),
+            )
+            .get();
+
+          if (data.scope === "all") {
+            const rows = tx
+              .select({ id: transactions.id })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.recorrenciaId, recurrenceId),
+                  eq(transactions.workspaceId, workspaceId),
+                  isNull(transactions.deletedAt),
+                ),
+              )
+              .all();
+            if (rows.length > 0) {
+              tx.update(transactions)
+                .set({ ...groupedUpdateValues, recorrenciaId: null })
+                .where(inArray(transactions.id, rows.map((row) => row.id)))
+                .run();
+              for (const row of rows) {
+                replaceTags(tx, workspaceId, row.id, data.tagIds);
+              }
+            }
+            if (recurrence) {
+              tx.update(recurrences)
+                .set({ ativo: false, updatedAt: now })
+                .where(eq(recurrences.id, recurrenceId))
+                .run();
+            }
+            return;
+          }
+
+          if (data.scope === "future") {
+            if (recurrence) {
+              endRecurrenceBefore(tx, recurrence, existing.data, now);
+            }
+            const rows = tx
+              .select({ id: transactions.id })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.recorrenciaId, recurrenceId),
+                  eq(transactions.workspaceId, workspaceId),
+                  gte(transactions.data, existing.data),
+                  isNull(transactions.deletedAt),
+                ),
+              )
+              .all();
+            if (rows.length > 0) {
+              tx.update(transactions)
+                .set({ ...groupedUpdateValues, recorrenciaId: null })
+                .where(inArray(transactions.id, rows.map((row) => row.id)))
+                .run();
+              for (const row of rows) {
+                replaceTags(tx, workspaceId, row.id, data.tagIds);
+              }
+            }
+            return;
+          }
+
+          // Só esta ocorrência: divide a série em antes/depois para que a
+          // geração idempotente não recrie a data destacada.
+          if (recurrence) {
+            const nextDate = nextRecurrenceDateAfter(recurrence, existing.data);
+            endRecurrenceBefore(tx, recurrence, existing.data, now);
+            if (nextDate) {
+              const nextRecurrenceId = crypto.randomUUID();
+              tx.insert(recurrences)
+                .values({
+                  id: nextRecurrenceId,
+                  workspaceId,
+                  frequencia: recurrence.frequencia,
+                  dataInicio: nextDate,
+                  dataFim: recurrence.dataFim,
+                  ativo: true,
+                  template: recurrence.template,
+                })
+                .run();
+              tx.update(transactions)
+                .set({ recorrenciaId: nextRecurrenceId })
+                .where(
+                  and(
+                    eq(transactions.recorrenciaId, recurrenceId),
+                    eq(transactions.workspaceId, workspaceId),
+                    gt(transactions.data, existing.data),
+                    isNull(transactions.deletedAt),
+                  ),
+                )
+                .run();
+            }
+          }
+          tx.update(transactions)
+            .set({ ...updateValuesWithDate, recorrenciaId: null })
+            .where(eq(transactions.id, data.id))
+            .run();
+          replaceTags(tx, workspaceId, data.id, data.tagIds);
+          return;
+        }
+
+        if (isInstallment) {
+          const groupId = existing.parcelaGrupoId as string;
+          const rows = tx
+            .select({
+              id: transactions.id,
+              parcelaAtual: transactions.parcelaAtual,
+            })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.parcelaGrupoId, groupId),
+                eq(transactions.workspaceId, workspaceId),
+                isNull(transactions.deletedAt),
+              ),
+            )
+            .all();
+          const ids =
+            data.scope === "single"
+              ? [data.id]
+              : selectInstallmentTransactions(
+                  rows.map((row) => ({
+                    id: row.id,
+                    data: existing.data,
+                    parcelaAtual: row.parcelaAtual,
+                  })),
+                  { id: data.id, parcelaAtual: existing.parcelaAtual ?? 1 },
+                  data.scope,
+                ).map((row) => row.id);
+
+          if (ids.length > 0) {
+            tx.update(transactions)
+              .set({
+                ...(data.scope === "single"
+                  ? updateValuesWithDate
+                  : groupedUpdateValues),
+                parcelaGrupoId: null,
+                parcelaAtual: null,
+                parcelaTotal: null,
+              })
+              .where(inArray(transactions.id, ids))
+              .run();
+            for (const transactionId of ids) {
+              replaceTags(tx, workspaceId, transactionId, data.tagIds);
+            }
+          }
+          return;
+        }
+      }
+
+      if (isFixed && data.repeticao === "parcelada") {
+        const now = new Date();
+        const recurrenceId = existing.recorrenciaId as string;
+        const recurrence = tx
+          .select()
+          .from(recurrences)
+          .where(
+            and(
+              eq(recurrences.id, recurrenceId),
+              eq(recurrences.workspaceId, workspaceId),
+            ),
+          )
+          .get();
+        if (recurrence) {
+          endRecurrenceBefore(tx, recurrence, existing.data, now);
+        }
+
+        // As ocorrências futuras antigas dão lugar às parcelas novas.
+        tx.update(transactions)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(transactions.recorrenciaId, recurrenceId),
+              eq(transactions.workspaceId, workspaceId),
+              gt(transactions.data, existing.data),
+              isNull(transactions.deletedAt),
+            ),
+          )
+          .run();
+
+        const plan = buildInstallmentPlan({
+          valorCents: data.valor,
+          parcelas: data.parcelas,
+          dataInicio: existing.data,
+          baseValor: data.baseValor,
+        });
+        const [first, ...rest] = plan;
+        if (!first) return;
+        const groupId = crypto.randomUUID();
+
+        tx.update(transactions)
+          .set({
+            ...updateValues,
+            valor: first.valor,
+            data: first.data,
+            pago: isCard ? false : data.pago,
+            recorrenciaId: null,
+            parcelaGrupoId: groupId,
+            parcelaAtual: first.numero,
+            parcelaTotal: plan.length,
+          })
+          .where(eq(transactions.id, data.id))
+          .run();
+        replaceTags(tx, workspaceId, data.id, data.tagIds);
+
+        for (const item of rest) {
+          const installmentId = crypto.randomUUID();
+          tx.insert(transactions)
+            .values({
+              id: installmentId,
+              workspaceId,
+              tipo: data.tipo,
+              descricao: data.descricao,
+              valor: item.valor,
+              data: item.data,
+              pago: false,
+              contaId,
+              cartaoId,
+              contaDestinoId: null,
+              categoriaId,
+              observacao,
+              parcelaGrupoId: groupId,
+              parcelaAtual: item.numero,
+              parcelaTotal: plan.length,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
+            })
+            .run();
+          insertTags(tx, workspaceId, installmentId, data.tagIds);
+        }
+        return;
+      }
+
+      if (isInstallment && data.repeticao === "fixa") {
+        const now = new Date();
+        const groupId = existing.parcelaGrupoId as string;
+
+        // As parcelas seguintes viram a série fixa a partir desta.
+        tx.update(transactions)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(
+            and(
+              eq(transactions.parcelaGrupoId, groupId),
+              eq(transactions.workspaceId, workspaceId),
+              gt(transactions.parcelaAtual, existing.parcelaAtual ?? 1),
+              isNull(transactions.deletedAt),
+            ),
+          )
+          .run();
+
+        const recurrenceId = crypto.randomUUID();
+        const template: RecurrenceTemplate = {
+          tipo: data.tipo,
+          descricao: data.descricao,
+          valor: data.valor,
+          contaId,
+          cartaoId,
+          contaDestinoId,
+          categoriaId,
+          observacao,
+          tagIds: data.tagIds,
+          pago: false,
+          orcamentoDeslocamento,
+          ...cardSnapshot,
+        };
+        tx.insert(recurrences)
+          .values({
+            id: recurrenceId,
+            workspaceId,
+            frequencia: data.frequencia,
+            dataInicio: existing.data,
+            dataFim: data.dataFim,
+            ativo: true,
+            template,
+          })
+          .run();
+
+        tx.update(transactions)
+          .set({
+            ...updateValues,
+            pago: isCard ? false : data.pago,
+            recorrenciaId: recurrenceId,
+            parcelaGrupoId: null,
+            parcelaAtual: null,
+            parcelaTotal: null,
+          })
+          .where(eq(transactions.id, data.id))
+          .run();
+        replaceTags(tx, workspaceId, data.id, data.tagIds);
+        convertedToFixed = true;
         return;
       }
 
@@ -813,7 +1167,7 @@ export async function updateTransactionAction(
     );
   }
 
-  if (!isGrouped && data.repeticao === "fixa") {
+  if ((!isGrouped && data.repeticao === "fixa") || convertedToFixed) {
     try {
       ensureRecurrencesForMonth(workspaceId, data.data.slice(0, 7));
     } catch (error) {

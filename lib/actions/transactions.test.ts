@@ -444,3 +444,312 @@ describe("conversão de lançamento avulso em fixa/parcelada", () => {
     expect(testDb.db.select().from(recurrences).all()).toHaveLength(0);
   });
 });
+
+describe("edição da série: destacar, converter e encerrar", () => {
+  async function createFixedSeries() {
+    const id = insertTransaction({ data: "2024-01-10" });
+    const result = await updateTransactionAction(
+      updateInput(id, { repeticao: "fixa", frequencia: "mensal" }),
+    );
+    expect(result.ok).toBe(true);
+    const edited = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    return { id, recurrenceId: edited?.recorrenciaId as string };
+  }
+
+  async function createInstallmentSeries() {
+    const id = insertTransaction({ data: "2024-01-10", valor: 100_000 });
+    const result = await updateTransactionAction(
+      updateInput(id, {
+        repeticao: "parcelada",
+        parcelas: 3,
+        baseValor: "total",
+        valor: 100_000,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    const edited = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    return { id, groupId: edited?.parcelaGrupoId as string };
+  }
+
+  function byDate(recurrenceId: string, data: string) {
+    return testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.recorrenciaId, recurrenceId),
+          eq(transactions.data, data),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+  }
+
+  it("destaca só a ocorrência e mantém a série seguinte numa nova recorrência", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+    expect(march).toBeTruthy();
+
+    const result = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-03-10",
+        descricao: "Exceção de março",
+        repeticao: "nenhuma",
+        scope: "single",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const detached = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, march!.id))
+      .get();
+    expect(detached).toMatchObject({
+      descricao: "Exceção de março",
+      recorrenciaId: null,
+      parcelaGrupoId: null,
+    });
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.dataFim).toBe("2024-03-09");
+
+    const renewed = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.workspaceId, user.workspaceId))
+      .all()
+      .find((row) => row.id !== recurrenceId);
+    expect(renewed).toMatchObject({
+      dataInicio: "2024-04-10",
+      frequencia: "mensal",
+      ativo: true,
+    });
+
+    expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
+    expect(byDate(renewed!.id, "2024-04-10")).toBeTruthy();
+  });
+
+  it("torna avulsas esta e as próximas ocorrências e encerra a série", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+
+    const result = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-03-10",
+        descricao: "Avulsa de março",
+        repeticao: "nenhuma",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.dataFim).toBe("2024-03-09");
+
+    expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
+    expect(byDate(recurrenceId, "2024-03-10")).toBeUndefined();
+    expect(byDate(recurrenceId, "2024-04-10")).toBeUndefined();
+
+    const marchRow = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, march!.id))
+      .get();
+    expect(marchRow).toMatchObject({
+      descricao: "Avulsa de março",
+      recorrenciaId: null,
+    });
+  });
+
+  it("destaca as próximas parcelas sem tocar nas anteriores", async () => {
+    const { groupId } = await createInstallmentSeries();
+    const february = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+    expect(february).toBeTruthy();
+
+    const result = await updateTransactionAction(
+      updateInput(february!.id, {
+        data: february!.data,
+        descricao: "Parcela destacada",
+        repeticao: "nenhuma",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const group = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.parcelaGrupoId, groupId))
+      .all();
+    expect(group).toHaveLength(1);
+    expect(group[0]?.parcelaAtual).toBe(1);
+
+    const detached = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, february!.id))
+      .get();
+    expect(detached).toMatchObject({
+      descricao: "Parcela destacada",
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+  });
+
+  it("converte a série fixa em parcelas a partir da ocorrência editada", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+
+    const result = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-03-10",
+        repeticao: "parcelada",
+        parcelas: 3,
+        baseValor: "parcela",
+        valor: 150_000,
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.dataFim).toBe("2024-03-09");
+
+    const converted = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, march!.id))
+      .get();
+    expect(converted).toMatchObject({
+      recorrenciaId: null,
+      parcelaAtual: 1,
+      parcelaTotal: 3,
+      valor: 150_000,
+    });
+    expect(converted?.parcelaGrupoId).toBeTruthy();
+
+    const group = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === converted?.parcelaGrupoId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(group).toHaveLength(3);
+    expect(group.map((row) => row.data)).toEqual([
+      "2024-03-10",
+      "2024-04-10",
+      "2024-05-10",
+    ]);
+    expect(group.map((row) => row.valor)).toEqual([150_000, 150_000, 150_000]);
+    expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
+  });
+
+  it("converte as próximas parcelas em série fixa", async () => {
+    const { groupId } = await createInstallmentSeries();
+    const february = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(february!.id, {
+        data: february!.data,
+        descricao: "Série fixa",
+        valor: 120_000,
+        repeticao: "fixa",
+        frequencia: "mensal",
+        dataFim: null,
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const converted = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, february!.id))
+      .get();
+    expect(converted).toMatchObject({
+      descricao: "Série fixa",
+      valor: 120_000,
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+    expect(converted?.recorrenciaId).toBeTruthy();
+
+    const recurrence = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, converted!.recorrenciaId as string))
+      .get();
+    expect(recurrence).toMatchObject({
+      frequencia: "mensal",
+      dataInicio: february!.data,
+      ativo: true,
+    });
+
+    const remainingGroup = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .all();
+    expect(remainingGroup).toHaveLength(1);
+    expect(remainingGroup[0]?.parcelaAtual).toBe(1);
+
+    expect(byDate(recurrence!.id, "2024-03-10")).toBeTruthy();
+    expect(
+      testDb.db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.parcelaGrupoId, groupId),
+            eq(transactions.parcelaAtual, 3),
+          ),
+        )
+        .get()?.deletedAt,
+    ).toBeTruthy();
+  });
+});

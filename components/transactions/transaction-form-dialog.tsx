@@ -126,11 +126,15 @@ function buildDefaults(
       categoriaId: transaction.categoriaId,
       tagIds: transaction.tags.map((tag) => tag.id),
       observacao: transaction.observacao ?? "",
-      repeticao: "nenhuma",
+      repeticao: transaction.recorrenciaId
+        ? "fixa"
+        : transaction.parcelaGrupoId
+          ? "parcelada"
+          : "nenhuma",
       frequencia: "mensal",
       dataFim: null,
       parcelas: 2,
-      baseValor: "total",
+      baseValor: transaction.recorrenciaId ? "parcela" : "total",
       orcamentoDeslocamento: transaction.orcamentoDeslocamento ?? 0,
     };
   }
@@ -358,7 +362,15 @@ export function TransactionFormDialog({
   const isGrouped = Boolean(
     transaction?.recorrenciaId || transaction?.parcelaGrupoId,
   );
+  const isFixed = Boolean(transaction?.recorrenciaId);
   const isInstallment = Boolean(transaction?.parcelaGrupoId);
+  const isConversion =
+    mode === "edit" &&
+    ((isFixed && repeticao === "parcelada") ||
+      (isInstallment && repeticao === "fixa"));
+  const isKeepFixed = mode === "edit" && isFixed && repeticao === "fixa";
+  const isKeepInstallment =
+    mode === "edit" && isInstallment && repeticao === "parcelada";
   const canChangeType = mode === "create" || !isGrouped;
   const canChangeDate = mode === "create" || !isGrouped;
   const paidLocked = mode === "edit" && isGrouped && scope !== "single";
@@ -506,15 +518,39 @@ export function TransactionFormDialog({
   ]);
 
   const repetitionChipLabel =
-    repeticao === "fixa"
-      ? `Fixa · ${frequencia}`
-      : repeticao === "parcelada"
-        ? `Parcela 1/${parcelas || "?"}`
-        : mode === "edit" && isInstallment
-          ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
-          : mode === "edit" && transaction?.recorrenciaId
-            ? "Recorrente"
-            : "Repetir";
+    mode === "edit" && isGrouped
+      ? repeticao === "nenhuma"
+        ? "Tornar avulsa"
+        : isFixed && repeticao === "parcelada"
+          ? "Converter em parcelada"
+          : isInstallment && repeticao === "fixa"
+            ? "Converter em fixa"
+            : isInstallment
+              ? `Parcela ${transaction?.parcelaAtual}/${transaction?.parcelaTotal}`
+              : "Recorrente"
+      : repeticao === "fixa"
+        ? `Fixa · ${frequencia}`
+        : repeticao === "parcelada"
+          ? `Parcela 1/${parcelas || "?"}`
+          : "Repetir";
+
+  const repetitionOptions =
+    mode === "edit" && isGrouped
+      ? isFixed
+        ? ([
+            { value: "fixa", label: "Manter fixa" },
+            { value: "nenhuma", label: "Tornar avulsa" },
+            { value: "parcelada", label: "Converter em parcelada" },
+          ] as const)
+        : ([
+            { value: "parcelada", label: "Manter parcelada" },
+            { value: "nenhuma", label: "Tornar avulsa" },
+            { value: "fixa", label: "Converter em fixa" },
+          ] as const)
+      : (["nenhuma", "fixa", "parcelada"] as const).map((value) => ({
+          value,
+          label: REPETITION_LABELS[value],
+        }));
 
   function handleTypeChange(next: TransactionType) {
     setValue("tipo", next, { shouldValidate: true });
@@ -676,7 +712,7 @@ export function TransactionFormDialog({
     const pending = pendingSave;
     setScopePromptOpen(false);
     setPendingSave(null);
-    if (!pending || choice === "all") return;
+    if (!pending) return;
     void save(pending.values, pending.keepOpen, choice);
   }
 
@@ -1536,13 +1572,10 @@ export function TransactionFormDialog({
                   }
                   open={activeChip === "repetir"}
                   onClick={() => toggleChip("repetir")}
-                  disabled={mode === "edit" && isGrouped}
                   title={
-                    mode === "edit" && isGrouped
-                      ? "A recorrência é alterada pelo escopo escolhido"
-                      : mode === "edit"
-                        ? "Transformar em fixa ou parcelada a partir deste lançamento"
-                        : "Repetir"
+                    mode === "edit"
+                      ? "Alterar a repetição ou o parcelamento"
+                      : "Repetir"
                   }
                 />
                 <AdvancedChip
@@ -1629,160 +1662,176 @@ export function TransactionFormDialog({
               </div>
 
               <div className="col-span-2 sm:col-span-6">
-                {(mode === "create" || !isGrouped) && (
-                  <Accordion open={activeChip === "repetir"}>
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {(
-                          ["nenhuma", "fixa", "parcelada"] as const
-                        ).map((option) => (
-                          <button
-                            key={option}
-                            type="button"
-                            onClick={() =>
-                              setValue("repeticao", option, {
-                                shouldValidate: true,
-                              })
-                            }
-                            disabled={
-                              option === "parcelada" &&
-                              tipo === "transferencia"
-                            }
-                            className={cn(
-                              "h-9 rounded-md border px-2 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40",
-                              repeticao === option
-                                ? "border-primary/50 bg-primary/10 text-primary"
-                                : "border-border text-muted-foreground hover:bg-accent",
-                            )}
-                          >
-                            {REPETITION_LABELS[option]}
-                          </button>
-                        ))}
-                      </div>
+                <Accordion open={activeChip === "repetir"}>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {repetitionOptions.map((option) => (
+                        <button
+                          key={option.value}
+                          type="button"
+                          onClick={() =>
+                            setValue("repeticao", option.value, {
+                              shouldValidate: true,
+                            })
+                          }
+                          disabled={
+                            option.value === "parcelada" &&
+                            tipo === "transferencia"
+                          }
+                          className={cn(
+                            "min-h-9 rounded-md border px-2 py-1.5 text-xs font-medium leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                            repeticao === option.value
+                              ? "border-primary/50 bg-primary/10 text-primary"
+                              : "border-border text-muted-foreground hover:bg-accent",
+                          )}
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
 
-                      {repeticao === "fixa" && (
+                    {mode === "edit" && isGrouped && repeticao === "nenhuma" && (
+                      <p className="text-xs text-muted-foreground">
+                        {isInstallment
+                          ? "A parcela será separada do parcelamento. O alcance é escolhido ao salvar."
+                          : "A ocorrência será separada da série. O alcance é escolhido ao salvar."}
+                      </p>
+                    )}
+
+                    {isKeepFixed && (
+                      <p className="text-xs text-muted-foreground">
+                        A série continua com a frequência e o fim atuais.
+                      </p>
+                    )}
+
+                    {isKeepInstallment && (
+                      <p className="text-xs text-muted-foreground">
+                        O parcelamento atual será mantido.
+                      </p>
+                    )}
+
+                    {repeticao === "fixa" && !isKeepFixed && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div className="space-y-1">
+                          <FieldLabel htmlFor="transaction-frequencia">
+                            Frequência
+                          </FieldLabel>
+                          <NativeSelect
+                            id="transaction-frequencia"
+                            className="h-10"
+                            {...register("frequencia")}
+                          >
+                            <option value="mensal">Mensal</option>
+                            <option value="bimestral">Bimestral (2 meses)</option>
+                            <option value="semanal">Semanal</option>
+                            <option value="anual">Anual</option>
+                          </NativeSelect>
+                        </div>
+                        <div className="space-y-1">
+                          <FieldLabel htmlFor="transaction-data-fim">
+                            Data final
+                          </FieldLabel>
+                          <Controller
+                            control={control}
+                            name="dataFim"
+                            render={({ field }) => (
+                              <DatePicker
+                                id="transaction-data-fim"
+                                value={field.value ?? ""}
+                                onChange={(iso) =>
+                                  field.onChange(iso || null)
+                                }
+                                className="h-10"
+                              />
+                            )}
+                          />
+                          <FieldError
+                            message={formState.errors.dataFim?.message}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {repeticao === "parcelada" && !isKeepInstallment && (
+                      <div className="space-y-2">
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
-                            <FieldLabel htmlFor="transaction-frequencia">
-                              Frequência
+                            <FieldLabel htmlFor="transaction-parcelas">
+                              Parcelas
                             </FieldLabel>
-                            <NativeSelect
-                              id="transaction-frequencia"
+                            <Input
+                              id="transaction-parcelas"
+                              type="number"
+                              min={2}
+                              max={60}
+                              inputMode="numeric"
                               className="h-10"
-                              {...register("frequencia")}
-                            >
-                              <option value="mensal">Mensal</option>
-                              <option value="bimestral">Bimestral (2 meses)</option>
-                              <option value="semanal">Semanal</option>
-                              <option value="anual">Anual</option>
-                            </NativeSelect>
-                          </div>
-                          <div className="space-y-1">
-                            <FieldLabel htmlFor="transaction-data-fim">
-                              Data final
-                            </FieldLabel>
-                            <Controller
-                              control={control}
-                              name="dataFim"
-                              render={({ field }) => (
-                                <DatePicker
-                                  id="transaction-data-fim"
-                                  value={field.value ?? ""}
-                                  onChange={(iso) =>
-                                    field.onChange(iso || null)
-                                  }
-                                  className="h-10"
-                                />
-                              )}
+                              {...register("parcelas", {
+                                valueAsNumber: true,
+                              })}
                             />
                             <FieldError
-                              message={formState.errors.dataFim?.message}
+                              message={formState.errors.parcelas?.message}
                             />
                           </div>
-                        </div>
-                      )}
-
-                      {repeticao === "parcelada" && (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1">
-                              <FieldLabel htmlFor="transaction-parcelas">
-                                Parcelas
-                              </FieldLabel>
-                              <Input
-                                id="transaction-parcelas"
-                                type="number"
-                                min={2}
-                                max={60}
-                                inputMode="numeric"
-                                className="h-10"
-                                {...register("parcelas", {
-                                  valueAsNumber: true,
-                                })}
-                              />
-                              <FieldError
-                                message={formState.errors.parcelas?.message}
-                              />
-                            </div>
-                            <div className="space-y-1">
-                              <FieldLabel>Valor é</FieldLabel>
-                              <div className="grid grid-cols-2 gap-1">
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setValue("baseValor", "total", {
-                                      shouldValidate: true,
-                                    })
-                                  }
-                                  className={cn(
-                                    "h-10 rounded-md border px-1 text-xs font-medium",
-                                    baseValor === "total"
-                                      ? "border-primary/50 bg-primary/10 text-primary"
-                                      : "border-border text-muted-foreground hover:bg-accent",
-                                  )}
-                                >
-                                  Total
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setValue("baseValor", "parcela", {
-                                      shouldValidate: true,
-                                    })
-                                  }
-                                  className={cn(
-                                    "h-10 rounded-md border px-1 text-xs font-medium",
-                                    baseValor === "parcela"
-                                      ? "border-primary/50 bg-primary/10 text-primary"
-                                      : "border-border text-muted-foreground hover:bg-accent",
-                                  )}
-                                >
-                                  Parcela
-                                </button>
-                              </div>
+                          <div className="space-y-1">
+                            <FieldLabel>Valor é</FieldLabel>
+                            <div className="grid grid-cols-2 gap-1">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setValue("baseValor", "total", {
+                                    shouldValidate: true,
+                                  })
+                                }
+                                className={cn(
+                                  "h-10 rounded-md border px-1 text-xs font-medium",
+                                  baseValor === "total"
+                                    ? "border-primary/50 bg-primary/10 text-primary"
+                                    : "border-border text-muted-foreground hover:bg-accent",
+                                )}
+                              >
+                                Total
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setValue("baseValor", "parcela", {
+                                    shouldValidate: true,
+                                  })
+                                }
+                                className={cn(
+                                  "h-10 rounded-md border px-1 text-xs font-medium",
+                                  baseValor === "parcela"
+                                    ? "border-primary/50 bg-primary/10 text-primary"
+                                    : "border-border text-muted-foreground hover:bg-accent",
+                                )}
+                              >
+                                Parcela
+                              </button>
                             </div>
                           </div>
-
-                          {installmentPreview ? (
-                            <p className="text-xs text-muted-foreground">
-                              {parcelas}x de{" "}
-                              {formatCurrency(installmentPreview.rest)}
-                              {installmentPreview.first !==
-                                installmentPreview.rest &&
-                                ` (1ª ${formatCurrency(installmentPreview.first)})`}{" "}
-                              · total{" "}
-                              {formatCurrency(installmentPreview.total)}
-                            </p>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              Informe valor e parcelas válidos.
-                            </p>
-                          )}
                         </div>
-                      )}
-                    </div>
-                  </Accordion>
-                )}
+
+                        {installmentPreview ? (
+                          <p className="text-xs text-muted-foreground">
+                            {parcelas}x de{" "}
+                            {formatCurrency(installmentPreview.rest)}
+                            {installmentPreview.first !==
+                              installmentPreview.rest &&
+                              ` (1ª ${formatCurrency(installmentPreview.first)})`}{" "}
+                            · total{" "}
+                            {formatCurrency(installmentPreview.total)}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground">
+                            Informe valor e parcelas válidos.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </Accordion>
 
                 <Accordion open={activeChip === "obs"}>
                   <div className="space-y-1">
@@ -2031,6 +2080,7 @@ export function TransactionFormDialog({
           }}
           mode="edit"
           transaction={transaction}
+          scopes={isConversion ? ["future"] : undefined}
           onSelect={handleSaveScope}
         />
       )}
