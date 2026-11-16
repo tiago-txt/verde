@@ -47,6 +47,7 @@ type BudgetsViewProps = {
   incluirArquivados: boolean;
   initialBudgetId: string | null;
   initialDetailBudgetId: string | null;
+  returnTo: string | null;
   excludedCycles: { budgetId: string; nome: string }[];
 };
 
@@ -75,6 +76,7 @@ export function BudgetsView({
   incluirArquivados,
   initialBudgetId,
   initialDetailBudgetId,
+  returnTo,
   excludedCycles,
 }: BudgetsViewProps) {
   const router = useRouter();
@@ -93,6 +95,8 @@ export function BudgetsView({
   const openedInitial = useRef(false);
   const openedInitialDetail = useRef(false);
   const detailOriginScroll = useRef(0);
+  const returnAfterForm = useRef(false);
+  const scopePending = useRef(false);
 
   const totals = useMemo(() => {
     return details.reduce(
@@ -119,9 +123,10 @@ export function BudgetsView({
     );
     if (!detail) return;
     openedInitial.current = true;
+    returnAfterForm.current = Boolean(returnTo);
     setEditing(detail.resumo);
     setFormOpen(true);
-  }, [initialBudgetId, details]);
+  }, [initialBudgetId, details, returnTo]);
 
   useEffect(() => {
     if (!initialDetailBudgetId || openedInitialDetail.current) return;
@@ -169,6 +174,14 @@ export function BudgetsView({
     router.push(`/limite-de-gastos?${params.toString()}`);
   }
 
+  /** Volta para a tela de origem quando a edição foi aberta por um retorno. */
+  function finishFormReturn() {
+    if (!returnAfterForm.current || !returnTo) return;
+    returnAfterForm.current = false;
+    scopePending.current = false;
+    router.replace(returnTo, { scroll: false });
+  }
+
   async function handleFormSubmit(
     values: BudgetFormValues,
     changed: boolean,
@@ -183,6 +196,7 @@ export function BudgetsView({
     }
 
     if (changed) {
+      scopePending.current = true;
       setPendingValues(values);
       setScopeError(null);
       setScopeOpen(true);
@@ -217,11 +231,17 @@ export function BudgetsView({
             : "Orçamento atualizado.",
         tone: "success",
       });
-      router.refresh();
+      if (returnAfterForm.current) {
+        finishFormReturn();
+      } else {
+        router.refresh();
+      }
     });
   }
 
   function openEdit(budget: BudgetWithCategories) {
+    returnAfterForm.current = false;
+    scopePending.current = false;
     setEditing(budget);
     setFormOpen(true);
   }
@@ -255,6 +275,8 @@ export function BudgetsView({
         <Button
           type="button"
           onClick={() => {
+            returnAfterForm.current = false;
+            scopePending.current = false;
             setEditing(null);
             setFormOpen(true);
           }}
@@ -372,6 +394,8 @@ export function BudgetsView({
             action={
               <Button
                 onClick={() => {
+                  returnAfterForm.current = false;
+                  scopePending.current = false;
                   setEditing(null);
                   setFormOpen(true);
                 }}
@@ -499,6 +523,7 @@ export function BudgetsView({
         open={formOpen}
         onOpenChange={(open) => {
           setFormOpen(open);
+          if (!open && !scopePending.current) finishFormReturn();
         }}
         budget={editing}
         formData={formData}
@@ -510,7 +535,11 @@ export function BudgetsView({
         open={scopeOpen}
         onOpenChange={(open) => {
           setScopeOpen(open);
-          if (!open) setPendingValues(null);
+          if (!open) {
+            setPendingValues(null);
+            scopePending.current = false;
+            finishFormReturn();
+          }
         }}
         budgetNome={editing?.nome ?? "orçamento"}
         ciclo={ciclo}

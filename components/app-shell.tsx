@@ -25,6 +25,7 @@ import { MobileMoreSheet } from "@/components/mobile-more-sheet";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
+import { useRememberedNav } from "@/lib/hooks/use-remembered-nav";
 import { cn } from "@/lib/utils";
 
 type NavItem = {
@@ -72,6 +73,7 @@ type AppShellProps = {
 export function AppShell({ user, children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const rememberNav = useRememberedNav(user.userId);
   const [collapsed, setCollapsed] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const sidebarKey = `verde:${user.userId}:sidebar-collapsed`;
@@ -206,6 +208,7 @@ export function AppShell({ user, children }: AppShellProps) {
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={(event) => rememberNav(event, item.href)}
                 aria-current={active ? "page" : undefined}
                 title={collapsed ? item.label : undefined}
                 className={cn(
@@ -237,6 +240,7 @@ export function AppShell({ user, children }: AppShellProps) {
         >
           <Link
             href="/configuracoes"
+            onClick={(event) => rememberNav(event, "/configuracoes")}
             aria-current={
               pathname.startsWith("/configuracoes") ? "page" : undefined
             }
@@ -293,6 +297,7 @@ export function AppShell({ user, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 prefetch={false}
+                onClick={(event) => rememberNav(event, item.href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",
@@ -329,6 +334,7 @@ export function AppShell({ user, children }: AppShellProps) {
                 key={item.href}
                 href={item.href}
                 prefetch={false}
+                onClick={(event) => rememberNav(event, item.href)}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "relative flex min-w-0 flex-col items-center justify-center gap-0.5 px-1 text-center text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring",

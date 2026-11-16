@@ -8,6 +8,7 @@ import {
   listExcludedBudgetCycles,
 } from "@/lib/db/queries/budgets";
 import { currentMonth, isValidMonthKey } from "@/lib/dates";
+import { sanitizeReturnTo } from "@/lib/navigation/last-screen";
 import { idSchema } from "@/lib/validation/common";
 
 export const metadata: Metadata = { title: "Orçamentos" };
@@ -37,6 +38,9 @@ export default async function LimiteDeGastosPage({
     rawDetailBudget && idSchema.safeParse(rawDetailBudget).success
       ? rawDetailBudget
       : null;
+  const returnTo = sanitizeReturnTo(
+    typeof params.voltar === "string" ? params.voltar : null,
+  );
 
   const details = listBudgetCycleDetails(user.workspaceId, ciclo, {
     incluirArquivados,
@@ -64,6 +68,7 @@ export default async function LimiteDeGastosPage({
       incluirArquivados={incluirArquivados}
       initialBudgetId={initialBudgetId}
       initialDetailBudgetId={initialDetailBudgetId}
+      returnTo={returnTo}
       excludedCycles={excludedCycles}
     />
   );

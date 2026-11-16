@@ -6,6 +6,7 @@ import {
   canRestoreLastScreen,
   stableScreen,
 } from "@/lib/navigation/last-screen";
+import { rememberScreen } from "@/lib/navigation/screen-memory";
 
 type StoredScreen = {
   path: string;
@@ -65,6 +66,7 @@ function Tracker({ userId }: { userId: string }) {
 
   useEffect(() => {
     if (!canRestoreLastScreen(pathname)) return;
+    rememberScreen(userId, pathname, search);
     if (pathname === "/") {
       const stored = readStoredScreen(key);
       if (stored && stored.path !== "/") return;
@@ -80,11 +82,12 @@ function Tracker({ userId }: { userId: string }) {
     } catch {
       // Sem localStorage, a restauração simplesmente não acontece.
     }
-  }, [pathname, search, key]);
+  }, [pathname, search, key, userId]);
 
   useEffect(() => {
     function save() {
       if (!canRestoreLastScreen(pathname)) return;
+      rememberScreen(userId, pathname, search);
       if (pathname === "/") {
         const stored = readStoredScreen(key);
         if (stored && stored.path !== "/") return;
@@ -112,7 +115,7 @@ function Tracker({ userId }: { userId: string }) {
       window.removeEventListener("pagehide", save);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [pathname, search, key]);
+  }, [pathname, search, key, userId]);
 
   return null;
 }

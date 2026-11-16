@@ -22,12 +22,13 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { clearClientState } from "@/components/auth/logout-button";
 import { logoutAction } from "@/lib/actions/auth";
 import { getInitials } from "@/lib/format";
+import { useRememberedNav } from "@/lib/hooks/use-remembered-nav";
 import { cn } from "@/lib/utils";
 
 type MobileMoreSheetProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  user: { nome: string; email: string; isAdmin: boolean };
+  user: { userId: string; nome: string; email: string; isAdmin: boolean };
 };
 
 const ITEMS: { href: string; label: string; icon: LucideIcon }[] = [
@@ -46,6 +47,7 @@ export function MobileMoreSheet({
   onOpenChange,
   user,
 }: MobileMoreSheetProps) {
+  const rememberNav = useRememberedNav(user.userId, () => onOpenChange(false));
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85dvh] overflow-y-auto">
@@ -83,7 +85,7 @@ export function MobileMoreSheet({
                 key={item.href}
                 href={item.href}
                 prefetch={false}
-                onClick={() => onOpenChange(false)}
+                onClick={(event) => rememberNav(event, item.href)}
                 className={cellClass}
               >
                 <Icon className="h-6 w-6" aria-hidden="true" />
@@ -100,7 +102,7 @@ export function MobileMoreSheet({
           <Link
             href="/configuracoes/perfil"
             prefetch={false}
-            onClick={() => onOpenChange(false)}
+            onClick={(event) => rememberNav(event, "/configuracoes/perfil")}
             className={cellClass}
           >
             <UserRound className="h-6 w-6" aria-hidden="true" />

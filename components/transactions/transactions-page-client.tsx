@@ -78,6 +78,10 @@ const TransactionDetailsPanel = dynamic(
 );
 import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
+import {
+  rememberBudgetEventScroll,
+  takeBudgetEventScroll,
+} from "@/lib/navigation/scroll-return";
 import { withScreenParams } from "@/lib/navigation/overlays";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import dynamic from "next/dynamic";
@@ -316,6 +320,7 @@ export function TransactionsPageClient({
 
   const [selectedBudgetEvent, setSelectedBudgetEvent] =
     useState<BudgetEventView | null>(null);
+  const budgetEventOriginScroll = useRef(0);
   const [invoiceTarget, setInvoiceTarget] = useState<{
     cartaoId: string;
     faturaChave: string;
@@ -384,6 +389,16 @@ export function TransactionsPageClient({
     const event = budgetEvents.find((item) => item.id === initialBudgetEventId);
     if (!event) return;
     openedInitialBudgetEvent.current = true;
+    const savedScroll = takeBudgetEventScroll();
+    if (savedScroll !== null) {
+      const max = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      const scroll = Math.min(savedScroll, max);
+      window.scrollTo(0, scroll);
+      budgetEventOriginScroll.current = scroll;
+    }
     setSelectedBudgetEvent(event);
   }, [initialBudgetEventId, budgetEvents]);
 
@@ -1472,7 +1487,10 @@ export function TransactionsPageClient({
                     <BudgetEventRow
                       key={event.id}
                       event={event}
-                      onOpen={setSelectedBudgetEvent}
+                      onOpen={(next) => {
+                        budgetEventOriginScroll.current = window.scrollY;
+                        setSelectedBudgetEvent(next);
+                      }}
                     />
                   ))}
 
@@ -1642,10 +1660,11 @@ export function TransactionsPageClient({
         onEdit={() => {
           if (!selectedBudgetEvent) return;
           const { ciclo, id } = selectedBudgetEvent.resumo;
+          rememberBudgetEventScroll(budgetEventOriginScroll.current);
           setSelectedBudgetEvent(null);
-          router.push(
-            `/limite-de-gastos?ciclo=${ciclo}&orcamento=${id}`,
-          );
+          const params = new URLSearchParams({ ciclo, orcamento: id });
+          if (budgetEventReturnTo) params.set("voltar", budgetEventReturnTo);
+          router.push(`/limite-de-gastos?${params.toString()}`);
         }}
       />
 
