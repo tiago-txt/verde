@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -9,7 +9,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  CreditCard,
   Loader2,
   Plus,
   ReceiptText,
@@ -46,10 +45,11 @@ const TransactionFormDialog = dynamic(
     ),
   { ssr: false },
 );
-import type { CardInvoiceDetail } from "@/lib/db/queries/cards";
+import type { CardInvoiceDetail, CardPurchaseItem } from "@/lib/db/queries/cards";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { addMonths, todayISO } from "@/lib/dates";
 import { intervaloDaFatura } from "@/lib/finance/cards";
+import { categoryTileColor } from "@/lib/finance/investment-category";
 import { formatCurrency, formatDate, formatMonthTitle, formatMonthShort } from "@/lib/format";
 import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
@@ -69,6 +69,65 @@ const STATUS_LABELS = {
   parcial: "parcial",
   paga: "paga",
 } as const;
+
+function PurchaseLinkContent({ purchase }: { purchase: CardPurchaseItem }) {
+  const { pending } = useLinkStatus();
+  const categoryColor = categoryTileColor({
+    nome: purchase.categoriaNome,
+    tipo: purchase.tipo,
+    cor: purchase.categoriaCor,
+  });
+
+  return (
+    <>
+      <EntityTile
+        kind="categoria"
+        entity={{
+          id: purchase.categoriaId,
+          nome: purchase.categoriaNome,
+          cor: categoryColor,
+          icone: purchase.categoriaIcone,
+        }}
+        size="sm"
+        plain
+        className="h-9 w-9"
+      />
+      <span className="min-w-0 flex-1">
+        <span className="flex flex-wrap items-center gap-1.5">
+          <span className="truncate text-sm font-medium">
+            {purchase.descricao}
+          </span>
+          {purchase.parcelaAtual && purchase.parcelaTotal && (
+            <Badge variant="secondary" className="px-1.5 py-0 text-xs">
+              {purchase.parcelaAtual}/{purchase.parcelaTotal}
+            </Badge>
+          )}
+        </span>
+        <span className="block text-xs text-muted-foreground">
+          {purchase.categoriaNome ?? "Outros"}
+        </span>
+      </span>
+      <span
+        className={cn(
+          "tabular shrink-0 text-sm font-semibold",
+          purchase.tipo === "receita" ? "text-success" : "text-destructive",
+        )}
+      >
+        {purchase.tipo === "receita" ? "+" : "−"}
+        {formatCurrency(purchase.valor)}
+      </span>
+      {pending && (
+        <span
+          className="absolute inset-0 z-10 flex items-center justify-center gap-2 bg-background/65"
+          role="status"
+        >
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span className="sr-only">Abrindo compra</span>
+        </span>
+      )}
+    </>
+  );
+}
 
 export function CardDetailView({
   detail,
@@ -471,37 +530,9 @@ export function CardDetailView({
                   <Link
                     key={purchase.id}
                     href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&editar=${purchase.id}&dias=31`}
-                    className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40"
+                    className="relative flex items-center gap-3 px-4 py-2.5 transition-[transform,background-color] hover:bg-accent/40 active:scale-[0.99] active:bg-accent/60"
                   >
-                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted">
-                      <CreditCard className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="flex flex-wrap items-center gap-1.5">
-                        <span className="truncate text-sm font-medium">
-                          {purchase.descricao}
-                        </span>
-                        {purchase.parcelaAtual && purchase.parcelaTotal && (
-                          <Badge variant="secondary" className="px-1.5 py-0 text-xs">
-                            {purchase.parcelaAtual}/{purchase.parcelaTotal}
-                          </Badge>
-                        )}
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        {purchase.categoriaNome ?? "Outros"}
-                      </span>
-                    </span>
-                    <span
-                      className={cn(
-                        "tabular shrink-0 text-sm font-semibold",
-                        purchase.tipo === "receita"
-                          ? "text-success"
-                          : "text-destructive",
-                      )}
-                    >
-                      {purchase.tipo === "receita" ? "+" : "−"}
-                      {formatCurrency(purchase.valor)}
-                    </span>
+                    <PurchaseLinkContent purchase={purchase} />
                   </Link>
                 ))}
               </div>

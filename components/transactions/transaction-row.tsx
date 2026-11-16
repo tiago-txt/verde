@@ -284,7 +284,7 @@ export const TransactionRow = memo(function TransactionRow({
         onPointerCancelCapture={clearLongPress}
         style={{ touchAction: "pan-y" }}
         className={cn(
-          "relative flex min-h-16 items-center gap-2.5 border-l-2 bg-background py-0 pl-2 outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:min-h-[68px] sm:gap-3",
+          "relative flex min-h-16 items-center gap-2.5 border-l-2 bg-background py-0 pl-2 outline-none transition-[transform,background-color] duration-150 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring active:scale-[0.99] active:bg-accent/40 max-sm:py-1 sm:min-h-[68px] sm:gap-3",
           typeIndicator,
           selected && "bg-primary/10",
           !selectionMode && !selected && "lg:hover:bg-forest-container/60",
