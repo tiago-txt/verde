@@ -140,7 +140,7 @@ O dono usa \*\*regime de caixa com saldo projetado\*\*: o que conta é o dia em 
 
 \## 7. PROIBIDO (resumo)
 
-float para dinheiro · query fora de `scopedDb` · `workspace\_id` vindo do cliente · migration destrutiva ou editada · regra financeira em componente · compra de cartão mexendo no saldo da conta · pagamento de fatura contado como despesa · despesa em âmbar · hexadecimal ou `px` arbitrário · fonte/imagem/CDN externa · novo estilo de modal/toast/pastilha · remover/pular/enfraquecer teste · editar golden test · dados reais no repositório · commit/push · dependência nova sem aval · texto em inglês · afirmar que testou sem ter rodado.
+float para dinheiro · query fora de `scopedDb` · `workspace\_id` vindo do cliente · migration destrutiva ou editada · regra financeira em componente · compra de cartão mexendo no saldo da conta · pagamento de fatura contado como despesa · despesa em âmbar · hexadecimal ou `px` arbitrário · fonte/imagem/CDN externa · novo estilo de modal/toast/pastilha · remover/pular/enfraquecer teste · editar golden test · dados reais no repositório · commit/push · apenas sugira o commit · dependência nova sem aval · texto em inglês · afirmar que testou sem ter rodado.
 
 
 

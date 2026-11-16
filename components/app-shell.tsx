@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Brand } from "@/components/brand";
 import { MobileMoreSheet } from "@/components/mobile-more-sheet";
+import { NavigationProgress } from "@/components/navigation-progress";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "@/components/user-menu";
 import { cn } from "@/lib/utils";
@@ -137,6 +138,7 @@ export function AppShell({ user, children }: AppShellProps) {
 
   return (
     <div className="relative min-h-dvh bg-background">
+      <NavigationProgress />
       <div
         aria-hidden="true"
         className="deco-pattern-page azulejo azulejo-mask pointer-events-none fixed inset-0 z-0 hidden lg:block"

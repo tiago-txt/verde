@@ -114,6 +114,11 @@ export default async function LancamentosPage({
       today={today}
       overdueIds={overdueIds}
       initialNew={params.novo === "1"}
+      initialEditTransaction={
+        typeof params.editar === "string"
+          ? getTransactionDetail(workspaceId, params.editar)
+          : null
+      }
       userId={user.id}
       forecastAlert={forecastAlert}
       cardBasis={cardBasis}

@@ -195,6 +195,7 @@ type TransactionsPageClientProps = {
   today: string;
   overdueIds: string[];
   initialNew: boolean;
+  initialEditTransaction: TransactionListItem | null;
   userId: string;
   forecastAlert: ForecastBannerData | null;
   cardBasis: CardBasis;
@@ -222,6 +223,7 @@ export function TransactionsPageClient({
   today,
   overdueIds,
   initialNew,
+  initialEditTransaction,
   userId,
   forecastAlert,
   cardBasis,
@@ -348,6 +350,20 @@ export function TransactionsPageClient({
   useEffect(() => {
     if (initialNew) setCreateOpen(true);
   }, [initialNew]);
+
+  const handledInitialEdit = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      !initialEditTransaction ||
+      handledInitialEdit.current === initialEditTransaction.id
+    ) {
+      return;
+    }
+    if (initialEditTransaction.faturaChave) return;
+
+    handledInitialEdit.current = initialEditTransaction.id;
+    setEditing({ transaction: initialEditTransaction, scope: "single" });
+  }, [initialEditTransaction]);
 
   useEffect(() => {
     setSelectedIds((current) => {

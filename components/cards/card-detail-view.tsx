@@ -470,7 +470,7 @@ export function CardDetailView({
                 {purchases.map((purchase) => (
                   <Link
                     key={purchase.id}
-                    href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&detalhe=${purchase.id}&dias=31`}
+                    href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&editar=${purchase.id}&dias=31`}
                     className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent/40"
                   >
                     <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-muted">
