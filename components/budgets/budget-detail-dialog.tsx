@@ -43,6 +43,8 @@ type BudgetDetailDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onEdit?: () => void;
+  /** Destino ao fechar a edição de uma compra; padrão: detalhe em Orçamentos. */
+  transactionReturnTo?: string;
 };
 
 export function BudgetDetailDialog({
@@ -50,6 +52,7 @@ export function BudgetDetailDialog({
   open,
   onOpenChange,
   onEdit,
+  transactionReturnTo,
 }: BudgetDetailDialogProps) {
   const router = useRouter();
   const { toast } = useToast();
@@ -74,6 +77,11 @@ export function BudgetDetailDialog({
   if (!detail) return null;
 
   const summary = detail.resumo;
+  const budgetReturnTo =
+    transactionReturnTo ??
+    `/limite-de-gastos?ciclo=${summary.ciclo}&abrirOrcamento=${summary.id}${
+      summary.arquivado ? "&arquivados=1" : ""
+    }`;
   const percent =
     summary.limite > 0
       ? Math.round((summary.gasto / summary.limite) * 100)
@@ -238,8 +246,7 @@ export function BudgetDetailDialog({
                   {detail.transactions.map((transaction) => (
                     <Link
                       key={transaction.id}
-                      href={`/lancamentos?mes=${transaction.data.slice(0, 7)}&detalhe=${transaction.id}&dias=31`}
-                      onClick={() => onOpenChange(false)}
+                      href={`/lancamentos?mes=${transaction.data.slice(0, 7)}&editar=${transaction.id}&dias=31&voltar=${encodeURIComponent(budgetReturnTo)}`}
                       className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-accent"
                     >
                       <span className="min-w-0">

@@ -18,6 +18,7 @@ import { monthRange, todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
 import { parseTransactionFilters } from "@/lib/finance/filters";
 import { sanitizeReturnTo } from "@/lib/navigation/last-screen";
+import { parseBudgetEventOverlay, parseInvoiceOverlay } from "@/lib/navigation/overlays";
 import { summarizeResult } from "@/lib/finance/result";
 
 export const metadata: Metadata = { title: "Lançamentos" };
@@ -34,6 +35,11 @@ export default async function LancamentosPage({
   const returnTo = sanitizeReturnTo(
     typeof params.voltar === "string" ? params.voltar : null,
   );
+  const initialInvoice = parseInvoiceOverlay(
+    params.abrirFatura,
+    params.faturaChave,
+  );
+  const initialBudgetEventId = parseBudgetEventOverlay(params.abrirEvento);
   const workspaceId = user.workspaceId;
 
   ensureRecurrencesForMonth(workspaceId, filters.mes);
@@ -124,6 +130,8 @@ export default async function LancamentosPage({
           : null
       }
       returnTo={returnTo}
+      initialInvoice={initialInvoice}
+      initialBudgetEventId={initialBudgetEventId}
       userId={user.id}
       forecastAlert={forecastAlert}
       cardBasis={cardBasis}

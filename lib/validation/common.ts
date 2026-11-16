@@ -18,6 +18,13 @@ export const monthKeySchema = z
   .string()
   .refine(isValidMonthKey, "Mês inválido (use YYYY-MM)");
 
+/** Identificador composto de evento de orçamento (`<budgetId>:<ciclo>:<tipo>`). */
+export const budgetEventIdSchema = z
+  .string()
+  .min(5)
+  .max(120)
+  .regex(/^[0-9A-Za-z:_-]+$/, "Evento de orçamento inválido");
+
 export const hexColorSchema = z
   .string()
   .regex(/^#[0-9a-f]{6}$/i, "Cor inválida");

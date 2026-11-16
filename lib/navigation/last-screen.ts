@@ -1,4 +1,14 @@
-export const TRANSIENT_SCREEN_PARAMS = ["detalhe", "editar", "novo"] as const;
+export const TRANSIENT_SCREEN_PARAMS = [
+  "detalhe",
+  "editar",
+  "novo",
+  "voltar",
+  "orcamento",
+  "abrirFatura",
+  "faturaChave",
+  "abrirOrcamento",
+  "abrirEvento",
+] as const;
 
 const RESTORE_EXCLUDED_PREFIXES = [
   "/login",

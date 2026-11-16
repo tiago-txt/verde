@@ -18,6 +18,38 @@ describe("última tela", () => {
     });
   });
 
+  it("não guarda overlays, retornos nem edição como última tela", () => {
+    expect(
+      stableScreen(
+        "/limite-de-gastos",
+        "ciclo=2026-11&abrirOrcamento=abc&orcamento=def&arquivados=1",
+      ),
+    ).toEqual({
+      path: "/limite-de-gastos",
+      search: "?ciclo=2026-11&arquivados=1",
+    });
+
+    expect(
+      stableScreen(
+        "/lancamentos",
+        "mes=2026-11&dias=31&abrirFatura=abc&faturaChave=2026-11&voltar=%2Fcartoes%2Fabc",
+      ),
+    ).toEqual({
+      path: "/lancamentos",
+      search: "?mes=2026-11&dias=31",
+    });
+
+    expect(
+      stableScreen(
+        "/lancamentos",
+        "mes=2026-11&abrirEvento=abc%3A2026-11%3Aprovisao",
+      ),
+    ).toEqual({
+      path: "/lancamentos",
+      search: "?mes=2026-11",
+    });
+  });
+
   it("mantém telas sem parâmetros", () => {
     expect(stableScreen("/cartoes", "")).toEqual({
       path: "/cartoes",

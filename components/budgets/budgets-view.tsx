@@ -42,6 +42,7 @@ type BudgetsViewProps = {
   formData: BudgetFormData;
   incluirArquivados: boolean;
   initialBudgetId: string | null;
+  initialDetailBudgetId: string | null;
   excludedCycles: { budgetId: string; nome: string }[];
 };
 
@@ -69,6 +70,7 @@ export function BudgetsView({
   formData,
   incluirArquivados,
   initialBudgetId,
+  initialDetailBudgetId,
   excludedCycles,
 }: BudgetsViewProps) {
   const router = useRouter();
@@ -85,6 +87,7 @@ export function BudgetsView({
     null,
   );
   const openedInitial = useRef(false);
+  const openedInitialDetail = useRef(false);
 
   const totals = useMemo(() => {
     return details.reduce(
@@ -114,6 +117,26 @@ export function BudgetsView({
     setEditing(detail.resumo);
     setFormOpen(true);
   }, [initialBudgetId, details]);
+
+  useEffect(() => {
+    if (!initialDetailBudgetId || openedInitialDetail.current) return;
+    const detail = details.find(
+      (item) => item.resumo.id === initialDetailBudgetId,
+    );
+    if (!detail) return;
+    openedInitialDetail.current = true;
+    setDetailId(initialDetailBudgetId);
+  }, [initialDetailBudgetId, details]);
+
+  /** Remove o parâmetro do detalhe, mantendo ciclo e filtro de arquivados. */
+  function clearDetailReturn() {
+    if (!openedInitialDetail.current) return;
+    openedInitialDetail.current = false;
+    const params = new URLSearchParams();
+    params.set("ciclo", ciclo);
+    if (incluirArquivados) params.set("arquivados", "1");
+    router.replace(`/limite-de-gastos?${params.toString()}`);
+  }
 
   function changeCycle(next: string) {
     const params = new URLSearchParams();
@@ -480,11 +503,15 @@ export function BudgetsView({
         detail={selectedDetail}
         open={Boolean(selectedDetail)}
         onOpenChange={(open) => {
-          if (!open) setDetailId(null);
+          if (!open) {
+            setDetailId(null);
+            clearDetailReturn();
+          }
         }}
         onEdit={() => {
           if (selectedDetail) {
             setDetailId(null);
+            clearDetailReturn();
             openEdit(selectedDetail.resumo);
           }
         }}

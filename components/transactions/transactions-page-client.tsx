@@ -78,6 +78,7 @@ const TransactionDetailsPanel = dynamic(
 );
 import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
+import { withScreenParams } from "@/lib/navigation/overlays";
 import { TransactionsSummaryFooter } from "./transactions-summary-footer";
 import dynamic from "next/dynamic";
 import { useToast } from "@/components/ui/toast";
@@ -197,6 +198,8 @@ type TransactionsPageClientProps = {
   initialNew: boolean;
   initialEditTransaction: TransactionListItem | null;
   returnTo: string | null;
+  initialInvoice: { cartaoId: string; faturaChave: string } | null;
+  initialBudgetEventId: string | null;
   userId: string;
   forecastAlert: ForecastBannerData | null;
   cardBasis: CardBasis;
@@ -226,6 +229,8 @@ export function TransactionsPageClient({
   initialNew,
   initialEditTransaction,
   returnTo,
+  initialInvoice,
+  initialBudgetEventId,
   userId,
   forecastAlert,
   cardBasis,
@@ -245,6 +250,7 @@ export function TransactionsPageClient({
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [stickyHeaderHeight, setStickyHeaderHeight] = useState(0);
+  const skipNextRefresh = useRef(false);
 
   useEffect(() => {
     const element = stickyHeaderRef.current;
@@ -300,6 +306,7 @@ export function TransactionsPageClient({
 
   useEffect(() => {
     function openNew() {
+      skipNextRefresh.current = false;
       setCreateOpen(true);
     }
     window.addEventListener("verde:new-transaction", openNew);
@@ -321,12 +328,14 @@ export function TransactionsPageClient({
   >([]);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const loadedInvoiceKey = useRef<string | null>(null);
 
   function loadInvoice(target: {
     cartaoId: string;
     faturaChave: string;
     pay: boolean;
   }) {
+    loadedInvoiceKey.current = null;
     setInvoiceTarget(target);
     setInvoiceDetail(null);
     setInvoiceError(null);
@@ -336,6 +345,7 @@ export function TransactionsPageClient({
         if (result.ok) {
           setInvoiceDetail(result.detail);
           setInvoiceAccounts(result.accounts);
+          loadedInvoiceKey.current = `${target.cartaoId}:${target.faturaChave}`;
         } else {
           setInvoiceError(result.error);
         }
@@ -349,20 +359,49 @@ export function TransactionsPageClient({
     loadInvoice({ ...invoiceTarget, pay: false });
   }
 
+  const openedInitialInvoice = useRef(false);
   useEffect(() => {
-    if (initialNew) setCreateOpen(true);
+    if (!initialInvoice) {
+      openedInitialInvoice.current = false;
+      return;
+    }
+    if (openedInitialInvoice.current) return;
+    // A edição aberta pelo retorno precisa ficar na frente da fatura.
+    if (initialEditTransaction && !initialEditTransaction.faturaChave) return;
+    openedInitialInvoice.current = true;
+    const targetKey = `${initialInvoice.cartaoId}:${initialInvoice.faturaChave}`;
+    if (loadedInvoiceKey.current === targetKey) return;
+    loadInvoice({ ...initialInvoice, pay: false });
+  }, [initialInvoice, initialEditTransaction]);
+
+  const openedInitialBudgetEvent = useRef(false);
+  useEffect(() => {
+    if (!initialBudgetEventId) {
+      openedInitialBudgetEvent.current = false;
+      return;
+    }
+    if (openedInitialBudgetEvent.current) return;
+    const event = budgetEvents.find((item) => item.id === initialBudgetEventId);
+    if (!event) return;
+    openedInitialBudgetEvent.current = true;
+    setSelectedBudgetEvent(event);
+  }, [initialBudgetEventId, budgetEvents]);
+
+  useEffect(() => {
+    if (initialNew) {
+      skipNextRefresh.current = false;
+      setCreateOpen(true);
+    }
   }, [initialNew]);
 
   const handledInitialEdit = useRef<string | null>(null);
   const returnAfterEdit = useRef<string | null>(null);
-  const skipNextRefresh = useRef(false);
   useEffect(() => {
-    if (
-      !initialEditTransaction ||
-      handledInitialEdit.current === initialEditTransaction.id
-    ) {
+    if (!initialEditTransaction) {
+      handledInitialEdit.current = null;
       return;
     }
+    if (handledInitialEdit.current === initialEditTransaction.id) return;
     if (initialEditTransaction.faturaChave) return;
 
     handledInitialEdit.current = initialEditTransaction.id;
@@ -575,6 +614,11 @@ export function TransactionsPageClient({
       return;
     }
     router.refresh();
+  }
+
+  function openCreate() {
+    skipNextRefresh.current = false;
+    setCreateOpen(true);
   }
 
   function handleEdit(transaction: TransactionListItem) {
@@ -958,6 +1002,19 @@ export function TransactionsPageClient({
     { ...filters, detalhe: null },
   ).toString()}`;
 
+  const invoiceReturnTo = invoiceTarget
+    ? withScreenParams(buildTransactionHref({ ...filters, detalhe: null }), {
+        abrirFatura: invoiceTarget.cartaoId,
+        faturaChave: invoiceTarget.faturaChave,
+      })
+    : undefined;
+
+  const budgetEventReturnTo = selectedBudgetEvent
+    ? withScreenParams(buildTransactionHref({ ...filters, detalhe: null }), {
+        abrirEvento: selectedBudgetEvent.id,
+      })
+    : undefined;
+
   function requestCategory(transaction: TransactionListItem) {
     setCategoryTarget(transaction);
     setFlash(null);
@@ -1130,7 +1187,7 @@ export function TransactionsPageClient({
           <Button
             type="button"
             className="hidden h-11 lg:inline-flex"
-            onClick={() => setCreateOpen(true)}
+            onClick={openCreate}
             aria-label="Novo lançamento"
           >
             <Plus className="h-4 w-4" />
@@ -1257,7 +1314,7 @@ export function TransactionsPageClient({
                   Limpar filtros
                 </Button>
               ) : (
-                <Button onClick={() => setCreateOpen(true)}>
+                <Button onClick={openCreate}>
                   <Plus className="h-4 w-4" />
                   Adicionar lançamento
                 </Button>
@@ -1490,9 +1547,16 @@ export function TransactionsPageClient({
         open={Boolean(invoiceTarget)}
         onOpenChange={(open) => {
           if (!open) {
+            const openedFromReturn = openedInitialInvoice.current;
             setInvoiceTarget(null);
             setInvoiceDetail(null);
             setInvoiceError(null);
+            if (openedFromReturn) {
+              openedInitialInvoice.current = false;
+              router.replace(
+                buildTransactionHref({ ...filters, detalhe: null }),
+              );
+            }
           }
         }}
       >
@@ -1519,6 +1583,7 @@ export function TransactionsPageClient({
                 formData={null}
                 accounts={invoiceAccounts}
                 initialPay={invoiceTarget?.pay ?? false}
+                purchaseReturnTo={invoiceReturnTo}
                 onChanged={reloadInvoice}
               />
             </div>
@@ -1536,8 +1601,17 @@ export function TransactionsPageClient({
             : null
         }
         open={Boolean(selectedBudgetEvent)}
+        transactionReturnTo={budgetEventReturnTo}
         onOpenChange={(open) => {
-          if (!open) setSelectedBudgetEvent(null);
+          if (!open) {
+            setSelectedBudgetEvent(null);
+            if (openedInitialBudgetEvent.current) {
+              openedInitialBudgetEvent.current = false;
+              router.replace(
+                buildTransactionHref({ ...filters, detalhe: null }),
+              );
+            }
+          }
         }}
         onEdit={() => {
           if (!selectedBudgetEvent) return;

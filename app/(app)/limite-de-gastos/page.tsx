@@ -30,6 +30,13 @@ export default async function LimiteDeGastosPage({
     : params.orcamento;
   const initialBudgetId =
     rawBudget && idSchema.safeParse(rawBudget).success ? rawBudget : null;
+  const rawDetailBudget = Array.isArray(params.abrirOrcamento)
+    ? params.abrirOrcamento[0]
+    : params.abrirOrcamento;
+  const initialDetailBudgetId =
+    rawDetailBudget && idSchema.safeParse(rawDetailBudget).success
+      ? rawDetailBudget
+      : null;
 
   const details = listBudgetCycleDetails(user.workspaceId, ciclo, {
     incluirArquivados,
@@ -37,6 +44,12 @@ export default async function LimiteDeGastosPage({
   if (
     initialBudgetId &&
     !details.some((detail) => detail.resumo.id === initialBudgetId)
+  ) {
+    notFound();
+  }
+  if (
+    initialDetailBudgetId &&
+    !details.some((detail) => detail.resumo.id === initialDetailBudgetId)
   ) {
     notFound();
   }
@@ -50,6 +63,7 @@ export default async function LimiteDeGastosPage({
       formData={formData}
       incluirArquivados={incluirArquivados}
       initialBudgetId={initialBudgetId}
+      initialDetailBudgetId={initialDetailBudgetId}
       excludedCycles={excludedCycles}
     />
   );
