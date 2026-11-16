@@ -14,6 +14,7 @@ import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { DecorationsToggle } from "@/components/decorations-toggle";
 import { SecondaryInfoToggle } from "@/components/settings/secondary-info-toggle";
+import { PwaInstallCard } from "@/components/pwa-install-card";
 import { FinancePreferences } from "@/components/settings/finance-preferences";
 import { LogoutButton } from "@/components/auth/logout-button";
 import { requireUser } from "@/lib/auth/current-user";
@@ -138,6 +139,8 @@ export default async function ConfiguracoesPage() {
             </div>
           </CardContent>
         </Card>
+
+        <PwaInstallCard />
 
         <Card>
           <CardHeader className="flex-row items-center gap-3 space-y-0">

@@ -189,6 +189,7 @@ export function CardDetailView({
   }, [detail.purchases]);
 
   const fatura = detail.fatura;
+  const purchaseReturnTo = `/cartoes/${detail.card.id}?fatura=${fatura.chave}`;
   const cycle = intervaloDaFatura(fatura.chave, detail.card);
   const tone = budgetTone(detail.limiteUsado, detail.card.limite);
   const ratio =
@@ -529,7 +530,7 @@ export function CardDetailView({
                 {purchases.map((purchase) => (
                   <Link
                     key={purchase.id}
-                    href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&editar=${purchase.id}&dias=31`}
+                    href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&editar=${purchase.id}&dias=31&voltar=${encodeURIComponent(purchaseReturnTo)}`}
                     className="relative flex items-center gap-3 px-4 py-2.5 transition-[transform,background-color] hover:bg-accent/40 active:scale-[0.99] active:bg-accent/60"
                   >
                     <PurchaseLinkContent purchase={purchase} />

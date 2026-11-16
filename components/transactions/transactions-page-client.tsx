@@ -196,6 +196,7 @@ type TransactionsPageClientProps = {
   overdueIds: string[];
   initialNew: boolean;
   initialEditTransaction: TransactionListItem | null;
+  returnTo: string | null;
   userId: string;
   forecastAlert: ForecastBannerData | null;
   cardBasis: CardBasis;
@@ -224,6 +225,7 @@ export function TransactionsPageClient({
   overdueIds,
   initialNew,
   initialEditTransaction,
+  returnTo,
   userId,
   forecastAlert,
   cardBasis,
@@ -352,6 +354,8 @@ export function TransactionsPageClient({
   }, [initialNew]);
 
   const handledInitialEdit = useRef<string | null>(null);
+  const returnAfterEdit = useRef<string | null>(null);
+  const skipNextRefresh = useRef(false);
   useEffect(() => {
     if (
       !initialEditTransaction ||
@@ -362,8 +366,10 @@ export function TransactionsPageClient({
     if (initialEditTransaction.faturaChave) return;
 
     handledInitialEdit.current = initialEditTransaction.id;
+    returnAfterEdit.current = returnTo;
+    skipNextRefresh.current = false;
     setEditing({ transaction: initialEditTransaction, scope: "single" });
-  }, [initialEditTransaction]);
+  }, [initialEditTransaction, returnTo]);
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -564,11 +570,17 @@ export function TransactionsPageClient({
   }
 
   function handleSaved() {
+    if (skipNextRefresh.current) {
+      skipNextRefresh.current = false;
+      return;
+    }
     router.refresh();
   }
 
   function handleEdit(transaction: TransactionListItem) {
     setFlash(null);
+    returnAfterEdit.current = null;
+    skipNextRefresh.current = false;
     setEditing({ transaction, scope: "single" });
   }
 
@@ -1445,7 +1457,13 @@ export function TransactionsPageClient({
           key={`${editing.transaction.id}-${editing.scope}`}
           open
           onOpenChange={(open) => {
-            if (!open) setEditing(null);
+            if (!open) {
+              const target = returnAfterEdit.current;
+              returnAfterEdit.current = null;
+              skipNextRefresh.current = Boolean(target);
+              setEditing(null);
+              if (target) router.replace(target);
+            }
           }}
           mode="edit"
           transaction={editing.transaction}

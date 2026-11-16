@@ -20,6 +20,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Brand } from "@/components/brand";
+import { LastScreenTracker } from "@/components/last-screen-tracker";
 import { MobileMoreSheet } from "@/components/mobile-more-sheet";
 import { NavigationProgress } from "@/components/navigation-progress";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -139,6 +140,7 @@ export function AppShell({ user, children }: AppShellProps) {
   return (
     <div className="relative min-h-dvh bg-background">
       <NavigationProgress />
+      <LastScreenTracker userId={user.userId} />
       <div
         aria-hidden="true"
         className="deco-pattern-page azulejo azulejo-mask pointer-events-none fixed inset-0 z-0 hidden lg:block"

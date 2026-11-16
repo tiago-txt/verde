@@ -17,6 +17,7 @@ import { listResultRows } from "@/lib/db/queries/reports";
 import { monthRange, todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
 import { parseTransactionFilters } from "@/lib/finance/filters";
+import { sanitizeReturnTo } from "@/lib/navigation/last-screen";
 import { summarizeResult } from "@/lib/finance/result";
 
 export const metadata: Metadata = { title: "Lançamentos" };
@@ -30,6 +31,9 @@ export default async function LancamentosPage({
 
   const params = await searchParams;
   const filters = parseTransactionFilters(params);
+  const returnTo = sanitizeReturnTo(
+    typeof params.voltar === "string" ? params.voltar : null,
+  );
   const workspaceId = user.workspaceId;
 
   ensureRecurrencesForMonth(workspaceId, filters.mes);
@@ -119,6 +123,7 @@ export default async function LancamentosPage({
           ? getTransactionDetail(workspaceId, params.editar)
           : null
       }
+      returnTo={returnTo}
       userId={user.id}
       forecastAlert={forecastAlert}
       cardBasis={cardBasis}
