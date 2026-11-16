@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   Archive,
@@ -36,6 +36,7 @@ import type { BudgetCycleDetail } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
 import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
+import { purchaseEditHref } from "@/lib/navigation/overlays";
 import { BudgetProgress } from "./budget-progress";
 
 type BudgetDetailDialogProps = {
@@ -45,6 +46,8 @@ type BudgetDetailDialogProps = {
   onEdit?: () => void;
   /** Destino ao fechar a edição de uma compra; padrão: detalhe em Orçamentos. */
   transactionReturnTo?: string;
+  /** Chamado antes de abrir a compra (para guardar a rolagem de origem). */
+  onTransactionNavigate?: () => void;
 };
 
 export function BudgetDetailDialog({
@@ -53,8 +56,10 @@ export function BudgetDetailDialog({
   onOpenChange,
   onEdit,
   transactionReturnTo,
+  onTransactionNavigate,
 }: BudgetDetailDialogProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [overrideOpen, setOverrideOpen] = useState(false);
@@ -246,7 +251,12 @@ export function BudgetDetailDialog({
                   {detail.transactions.map((transaction) => (
                     <Link
                       key={transaction.id}
-                      href={`/lancamentos?mes=${transaction.data.slice(0, 7)}&editar=${transaction.id}&dias=31&voltar=${encodeURIComponent(budgetReturnTo)}`}
+                      href={purchaseEditHref(budgetReturnTo, {
+                        id: transaction.id,
+                        mes: transaction.data.slice(0, 7),
+                      })}
+                      scroll={pathname !== "/lancamentos"}
+                      onClick={() => onTransactionNavigate?.()}
                       className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm transition-colors hover:bg-accent"
                     >
                       <span className="min-w-0">

@@ -449,7 +449,10 @@ export function TransactionsPageClient({
       const nextId =
         event.key === "ArrowDown" ? ids[index + 1] : ids[index - 1];
       if (nextId) {
-        router.push(buildTransactionHref({ ...filters, detalhe: nextId }));
+        router.push(
+          buildTransactionHref({ ...filters, detalhe: nextId }),
+          { scroll: false },
+        );
       }
     }
 
@@ -586,25 +589,42 @@ export function TransactionsPageClient({
   }
 
   function openDetails(transaction: TransactionListItem) {
-    go({ ...filters, detalhe: transaction.id }, false);
+    router.push(
+      buildTransactionHref({ ...filters, detalhe: transaction.id }),
+      { scroll: false },
+    );
   }
 
   function closeDetails() {
-    if (filters.detalhe) go({ ...filters, detalhe: null }, false);
+    if (filters.detalhe) {
+      router.push(buildTransactionHref({ ...filters, detalhe: null }), {
+        scroll: false,
+      });
+    }
   }
 
   function navigateDetail(id: string) {
-    go({ ...filters, detalhe: id }, false);
+    router.push(buildTransactionHref({ ...filters, detalhe: id }), {
+      scroll: false,
+    });
   }
 
   function loadMoreDays() {
-    go({ ...filters, dias: Math.min(370, filters.dias + 10) });
+    router.push(
+      buildTransactionHref({
+        ...filters,
+        dias: Math.min(370, filters.dias + 10),
+      }),
+      { scroll: false },
+    );
   }
 
   function closeCreate(open: boolean) {
     setCreateOpen(open);
     if (!open && initialNew) {
-      router.replace(buildTransactionHref({ ...filters, detalhe: null }));
+      router.replace(buildTransactionHref({ ...filters, detalhe: null }), {
+        scroll: false,
+      });
     }
   }
 
@@ -1519,7 +1539,11 @@ export function TransactionsPageClient({
               returnAfterEdit.current = null;
               skipNextRefresh.current = Boolean(target);
               setEditing(null);
-              if (target) router.replace(target);
+              if (target) {
+                const sameRoute =
+                  target.split("?")[0] === window.location.pathname;
+                router.replace(target, { scroll: !sameRoute });
+              }
             }
           }}
           mode="edit"
@@ -1555,6 +1579,7 @@ export function TransactionsPageClient({
               openedInitialInvoice.current = false;
               router.replace(
                 buildTransactionHref({ ...filters, detalhe: null }),
+                { scroll: false },
               );
             }
           }
@@ -1609,6 +1634,7 @@ export function TransactionsPageClient({
               openedInitialBudgetEvent.current = false;
               router.replace(
                 buildTransactionHref({ ...filters, detalhe: null }),
+                { scroll: false },
               );
             }
           }

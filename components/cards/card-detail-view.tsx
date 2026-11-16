@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import Link, { useLinkStatus } from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   CalendarDays,
@@ -49,6 +49,7 @@ import type { CardInvoiceDetail, CardPurchaseItem } from "@/lib/db/queries/cards
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { addMonths, todayISO } from "@/lib/dates";
 import { intervaloDaFatura } from "@/lib/finance/cards";
+import { purchaseEditHref } from "@/lib/navigation/overlays";
 import { categoryTileColor } from "@/lib/finance/investment-category";
 import { formatCurrency, formatDate, formatMonthTitle, formatMonthShort } from "@/lib/format";
 import { EntityTile } from "@/components/entity-tile";
@@ -140,6 +141,7 @@ export function CardDetailView({
   onChanged,
 }: CardDetailViewProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [payOpen, setPayOpen] = useState(initialPay);
@@ -533,7 +535,11 @@ export function CardDetailView({
                 {purchases.map((purchase) => (
                   <Link
                     key={purchase.id}
-                    href={`/lancamentos?mes=${purchase.data.slice(0, 7)}&editar=${purchase.id}&dias=31&voltar=${encodeURIComponent(returnTo)}`}
+                    href={purchaseEditHref(returnTo, {
+                      id: purchase.id,
+                      mes: purchase.data.slice(0, 7),
+                    })}
+                    scroll={pathname !== "/lancamentos"}
                     className="relative flex items-center gap-3 px-4 py-2.5 transition-[transform,background-color] hover:bg-accent/40 active:scale-[0.99] active:bg-accent/60"
                   >
                     <PurchaseLinkContent purchase={purchase} />

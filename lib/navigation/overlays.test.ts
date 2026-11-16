@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   parseBudgetEventOverlay,
   parseInvoiceOverlay,
+  purchaseEditHref,
   withScreenParams,
 } from "./overlays";
 
@@ -71,5 +72,29 @@ describe("parâmetros de retorno para overlay", () => {
     expect(
       withScreenParams("/lancamentos", { abrirFatura: CARD_ID }),
     ).toBe(`/lancamentos?abrirFatura=${CARD_ID}`);
+  });
+});
+
+describe("link de edição da compra", () => {
+  it("mantém mês, dias e filtros da tela de origem em Lançamentos", () => {
+    const returnTo = `/lancamentos?mes=2026-11&dias=10&abrirFatura=${CARD_ID}&faturaChave=2026-11`;
+    const href = purchaseEditHref(returnTo, { id: "tx-1", mes: "2026-10" });
+    const params = new URLSearchParams(href.split("?")[1]);
+    expect(params.get("mes")).toBe("2026-11");
+    expect(params.get("dias")).toBe("10");
+    expect(params.get("editar")).toBe("tx-1");
+    expect(params.get("voltar")).toBe(returnTo);
+    expect(params.get("abrirFatura")).toBe(CARD_ID);
+  });
+
+  it("fora de Lançamentos abre no mês da compra", () => {
+    expect(
+      purchaseEditHref("/cartoes/c1?fatura=2026-11", {
+        id: "tx-1",
+        mes: "2026-10",
+      }),
+    ).toBe(
+      "/lancamentos?mes=2026-10&editar=tx-1&dias=31&voltar=%2Fcartoes%2Fc1%3Ffatura%3D2026-11",
+    );
   });
 });

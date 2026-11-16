@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/popover";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { EntityTile } from "@/components/entity-tile";
+import { isSourceVisible } from "@/lib/design/source-visibility";
 import type { TransactionFormData } from "@/lib/db/queries/transactions";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,9 @@ export function SourceSelect({
   const options = useMemo<SourceOption[]>(() => {
     const accountOptions = accounts
       .filter((account) => account.id !== excludeAccountId)
+      .filter((account) =>
+        isSourceVisible(account.arquivada, `conta:${account.id}`, value),
+      )
       .map<SourceOption>((account) => ({
         id: account.id,
         value: `conta:${account.id}`,
@@ -82,21 +86,25 @@ export function SourceSelect({
 
     if (accountsOnly) return accountOptions;
 
-    const cardOptions = cards.map<SourceOption>((card) => ({
-      id: card.id,
-      value: `cartao:${card.id}`,
-      nome: card.nome,
-      detalhe: card.arquivado
-        ? "Cartão arquivado"
-        : `${card.bandeira} · fecha dia ${card.diaFechamento}`,
-      cor: card.cor,
-      icone: "cartao",
-      iconeNome: card.icone,
-      arquivado: card.arquivado,
-    }));
+    const cardOptions = cards
+      .filter((card) =>
+        isSourceVisible(card.arquivado, `cartao:${card.id}`, value),
+      )
+      .map<SourceOption>((card) => ({
+        id: card.id,
+        value: `cartao:${card.id}`,
+        nome: card.nome,
+        detalhe: card.arquivado
+          ? "Cartão arquivado"
+          : `${card.bandeira} · fecha dia ${card.diaFechamento}`,
+        cor: card.cor,
+        icone: "cartao",
+        iconeNome: card.icone,
+        arquivado: card.arquivado,
+      }));
 
     return [...accountOptions, ...cardOptions];
-  }, [accounts, accountsOnly, cards, excludeAccountId]);
+  }, [accounts, accountsOnly, cards, excludeAccountId, value]);
 
   const selected = options.find((option) => option.value === value) ?? null;
 

@@ -15,6 +15,10 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/empty-state";
 import { MonthPicker } from "@/components/calendar/month-picker";
 import { useToast } from "@/components/ui/toast";
+import {
+  rememberBudgetDetailScroll,
+  takeBudgetDetailScroll,
+} from "@/lib/navigation/scroll-return";
 import { BudgetDetailDialog } from "./budget-detail-dialog";
 import { BudgetFormDialog } from "./budget-form-dialog";
 import { BudgetScopeDialog } from "./budget-scope-dialog";
@@ -88,6 +92,7 @@ export function BudgetsView({
   );
   const openedInitial = useRef(false);
   const openedInitialDetail = useRef(false);
+  const detailOriginScroll = useRef(0);
 
   const totals = useMemo(() => {
     return details.reduce(
@@ -125,6 +130,16 @@ export function BudgetsView({
     );
     if (!detail) return;
     openedInitialDetail.current = true;
+    const savedScroll = takeBudgetDetailScroll();
+    if (savedScroll !== null) {
+      const max = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight,
+      );
+      const scroll = Math.min(savedScroll, max);
+      window.scrollTo(0, scroll);
+      detailOriginScroll.current = scroll;
+    }
     setDetailId(initialDetailBudgetId);
   }, [initialDetailBudgetId, details]);
 
@@ -135,7 +150,9 @@ export function BudgetsView({
     const params = new URLSearchParams();
     params.set("ciclo", ciclo);
     if (incluirArquivados) params.set("arquivados", "1");
-    router.replace(`/limite-de-gastos?${params.toString()}`);
+    router.replace(`/limite-de-gastos?${params.toString()}`, {
+      scroll: false,
+    });
   }
 
   function changeCycle(next: string) {
@@ -374,7 +391,10 @@ export function BudgetsView({
               <button
                 key={summary.id}
                 type="button"
-                onClick={() => setDetailId(summary.id)}
+                onClick={() => {
+                  detailOriginScroll.current = window.scrollY;
+                  setDetailId(summary.id);
+                }}
                 className={cn(
                   "flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary/40 hover:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                   summary.arquivado && "opacity-70",
@@ -502,6 +522,9 @@ export function BudgetsView({
       <BudgetDetailDialog
         detail={selectedDetail}
         open={Boolean(selectedDetail)}
+        onTransactionNavigate={() => {
+          rememberBudgetDetailScroll(detailOriginScroll.current);
+        }}
         onOpenChange={(open) => {
           if (!open) {
             setDetailId(null);

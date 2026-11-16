@@ -45,3 +45,26 @@ export function withScreenParams(
   for (const [key, value] of Object.entries(params)) search.set(key, value);
   return `${path}?${search.toString()}`;
 }
+
+function isTransactionsScreen(value: string): boolean {
+  return value === "/lancamentos" || value.startsWith("/lancamentos?");
+}
+
+/**
+ * Abre a edição da compra mantendo mês/filtros da tela de origem quando ela é
+ * Lançamentos. Trocar o mês atrás do modal muda a altura da lista e faz o
+ * navegador perder a posição da rolagem. Fora de Lançamentos (página do
+ * cartão, por exemplo), abre no mês da própria compra.
+ */
+export function purchaseEditHref(
+  returnTo: string,
+  purchase: { id: string; mes: string },
+): string {
+  if (isTransactionsScreen(returnTo)) {
+    return withScreenParams(returnTo, {
+      editar: purchase.id,
+      voltar: returnTo,
+    });
+  }
+  return `/lancamentos?mes=${purchase.mes}&editar=${purchase.id}&dias=31&voltar=${encodeURIComponent(returnTo)}`;
+}
