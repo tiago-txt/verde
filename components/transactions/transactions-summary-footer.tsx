@@ -329,7 +329,7 @@ export function TransactionsSummaryFooter({
 
       <div
         ref={mobileFooterRef}
-        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 overflow-hidden rounded-t-2xl border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden"
+        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden"
       >
         {expanded && (
           <div className="max-h-[60dvh] overflow-y-auto border-b border-border px-4 pb-3 pt-3">
