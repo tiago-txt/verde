@@ -4,8 +4,10 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
+  or,
   sql,
 } from "drizzle-orm";
 import { scopedDb } from "@/lib/db/scoped";
@@ -782,6 +784,8 @@ function loadSpending(
             cartaoFechamento: transactions.cartaoFechamento,
             cartaoVencimento: transactions.cartaoVencimento,
             cartaoFechamentoCompra: transactions.cartaoFechamentoCompra,
+            orcamentoId: transactions.orcamentoId,
+            orcamentoIgnorado: transactions.orcamentoIgnorado,
             deletedAt: transactions.deletedAt,
           })
           .from(transactions)
@@ -793,7 +797,10 @@ function loadSpending(
               inArray(transactions.tipo, ["despesa", "receita"]),
               gte(transactions.data, windowStart),
               lte(transactions.data, windowEnd),
-              inArray(transactions.categoriaId, [...allCategoryIds]),
+              or(
+                inArray(transactions.categoriaId, [...allCategoryIds]),
+                isNotNull(transactions.orcamentoId),
+              ),
             ),
           )
           .orderBy(asc(transactions.data), asc(transactions.createdAt))
@@ -813,7 +820,12 @@ function loadSpending(
     );
 
     const matching = rows.flatMap((row) => {
-      if (!row.categoriaId || !expanded.has(row.categoriaId)) return [];
+      if (row.orcamentoIgnorado) return [];
+      if (row.orcamentoId) {
+        if (row.orcamentoId !== budget.id) return [];
+      } else if (!row.categoriaId || !expanded.has(row.categoriaId)) {
+        return [];
+      }
       if (!transacaoConsomeOrcamento(budget.origens, row.cartaoId)) return [];
       // Receita só reduz orçamento quando é estorno no cartão.
       if (row.tipo === "receita" && !row.cartaoId) return [];

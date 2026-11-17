@@ -45,6 +45,10 @@ const transactionFields = z.object({
   baseValor: z.enum(["total", "parcela"]),
   /** Fatura escolhida manualmente para compras no cartão (YYYY-MM). */
   faturaChaveOverride: monthKeySchema.nullable().optional(),
+  /** Orçamento escolhido manualmente (sobrepõe a categoria). */
+  orcamentoId: idSchema.nullable().optional(),
+  /** Compra não consome nenhum orçamento. */
+  orcamentoIgnorado: z.boolean().optional(),
 });
 
 export type TransactionFormValues = z.infer<typeof transactionFields>;

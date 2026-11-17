@@ -145,6 +145,8 @@ function buildDefaults(
       parcelas: 2,
       baseValor: transaction.recorrenciaId ? "parcela" : "total",
       faturaChaveOverride: transaction.faturaChaveOverride ?? null,
+      orcamentoId: transaction.orcamentoId ?? null,
+      orcamentoIgnorado: transaction.orcamentoIgnorado ?? false,
       orcamentoDeslocamento: transaction.orcamentoDeslocamento ?? 0,
     };
   }
@@ -186,6 +188,8 @@ function buildDefaults(
     parcelas: 2,
     baseValor: "total",
     faturaChaveOverride: null,
+    orcamentoId: null,
+    orcamentoIgnorado: false,
     orcamentoDeslocamento: 0,
   };
 }
@@ -380,6 +384,8 @@ export function TransactionFormDialog({
   const contaId = watch("contaId");
   const cartaoId = watch("cartaoId");
   const faturaChaveOverride = watch("faturaChaveOverride");
+  const orcamentoId = watch("orcamentoId");
+  const orcamentoIgnorado = watch("orcamentoIgnorado");
   const categoriaId = watch("categoriaId");
   const tagIds = watch("tagIds");
   const observacao = watch("observacao");
@@ -537,6 +543,8 @@ export function TransactionFormDialog({
         data,
         cartaoId: cartaoId ?? null,
         orcamentoDeslocamento,
+        orcamentoId: orcamentoId ?? null,
+        orcamentoIgnorado: orcamentoIgnorado ?? false,
         excludeTransactionId: transaction?.id ?? null,
       })
         .then((hint) => {
@@ -1728,6 +1736,47 @@ export function TransactionFormDialog({
                         </span>
                       </p>
                     )}
+                    <div className="space-y-1 pt-1">
+                      <FieldLabel htmlFor="transaction-orcamento">
+                        Orçamento
+                      </FieldLabel>
+                      <NativeSelect
+                        id="transaction-orcamento"
+                        value={
+                          orcamentoIgnorado ? "none" : (orcamentoId ?? "")
+                        }
+                        onChange={(event) => {
+                          const next = event.target.value;
+                          if (next === "none") {
+                            setValue("orcamentoIgnorado", true, {
+                              shouldDirty: true,
+                            });
+                            setValue("orcamentoId", null, {
+                              shouldDirty: true,
+                            });
+                            return;
+                          }
+                          setValue("orcamentoIgnorado", false, {
+                            shouldDirty: true,
+                          });
+                          setValue("orcamentoId", next || null, {
+                            shouldDirty: true,
+                          });
+                        }}
+                      >
+                        <option value="">Automático pela categoria</option>
+                        <option value="none">Nenhum orçamento</option>
+                        {formData.budgets.map((budget) => (
+                          <option key={budget.id} value={budget.id}>
+                            {budget.nome}
+                          </option>
+                        ))}
+                      </NativeSelect>
+                      <p className="text-xs text-muted-foreground">
+                        Sobrepõe a categoria. Em compras parceladas, vale para
+                        todas as parcelas.
+                      </p>
+                    </div>
                     {forecastHint?.temAlerta && forecastHint.periodo && (
                       <div
                         aria-live="polite"

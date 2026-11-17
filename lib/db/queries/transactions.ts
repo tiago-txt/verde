@@ -27,7 +27,7 @@ import {
   type RecurrenceTemplate,
   type TransactionType,
 } from "@/lib/db/schema";
-import { eachDayOfMonth, addMonths, monthRange, todayISO } from "@/lib/dates";
+import { eachDayOfMonth, addMonths, currentMonth, monthRange, todayISO } from "@/lib/dates";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import {
   cicloCompetencia,
@@ -46,7 +46,7 @@ import {
   recurrenceHorizon,
 } from "@/lib/finance/recurrence";
 import { listAllAccounts } from "./accounts";
-import { loadBudgetSeries } from "./budgets";
+import { listBudgetsWithCategories, loadBudgetSeries } from "./budgets";
 import { listCardsForFilter, type CardOption } from "./cards";
 import {
   getSystemCategoryIds,
@@ -91,6 +91,10 @@ export type TransactionListItem = {
   cartaoVencimento: number | null;
   cartaoFechamentoCompraSnapshot: "proxima_fatura" | "fatura_atual" | null;
   orcamentoDeslocamento: number;
+  /** Orçamento escolhido manualmente, se houver. */
+  orcamentoId: string | null;
+  /** Compra não consome orçamento. */
+  orcamentoIgnorado: boolean;
   /** Nome e ciclo do orçamento realmente consumido (competência). */
   orcamentoNome: string | null;
   orcamentoCiclo: string | null;
@@ -135,6 +139,7 @@ export type TransactionFormData = {
   cards: CardOption[];
   categories: ReturnType<typeof listAllCategories>;
   tags: ReturnType<typeof listTags>;
+  budgets: { id: string; nome: string; cor: string; icone: string }[];
   lastAccountId: string | null;
   lastCardId: string | null;
   recentDescriptions: RecentDescription[];
@@ -181,6 +186,8 @@ function selectTransactionFields() {
     cartaoVencimento: transactions.cartaoVencimento,
     cartaoFechamentoCompraSnapshot: transactions.cartaoFechamentoCompra,
     orcamentoDeslocamento: transactions.orcamentoDeslocamento,
+    orcamentoId: transactions.orcamentoId,
+    orcamentoIgnorado: transactions.orcamentoIgnorado,
     categoriaId: transactions.categoriaId,
     categoriaNome: categories.nome,
     categoriaCor: categories.cor,
@@ -254,6 +261,8 @@ type BudgetChipRow = {
   cartaoVencimento: number | null;
   cartaoFechamentoCompraSnapshot: "proxima_fatura" | "fatura_atual" | null;
   orcamentoDeslocamento: number;
+  orcamentoId: string | null;
+  orcamentoIgnorado: boolean;
 };
 
 /**
@@ -270,7 +279,10 @@ function resolveBudgetChips(
   const categories = listAllCategories(workspaceId);
 
   for (const row of rows) {
-    if (row.tipo === "transferencia" || !row.categoriaId) continue;
+    if (row.tipo === "transferencia") continue;
+    if (row.orcamentoIgnorado) continue;
+    if (!row.categoriaId && !row.orcamentoId) continue;
+    const manualBudgetId = row.orcamentoId;
     const card = row.cartaoId
       ? resolveCompetenceCard(
           {
@@ -299,6 +311,7 @@ function resolveBudgetChips(
 
     for (const item of series) {
       if (item.arquivado) continue;
+      if (manualBudgetId && item.id !== manualBudgetId) continue;
       let found = false;
       for (let delta = -6; delta <= 6 && !found; delta += 1) {
         const ciclo = addMonths(monthKey, delta);
@@ -307,8 +320,10 @@ function resolveBudgetChips(
         if (cicloCompetencia(transaction, resolved.diaFechamento, card) !== ciclo) {
           continue;
         }
-        const expanded = expandirCategorias(categories, resolved.categoriaIds);
-        if (!expanded.has(row.categoriaId)) continue;
+        if (!manualBudgetId) {
+          const expanded = expandirCategorias(categories, resolved.categoriaIds);
+          if (!row.categoriaId || !expanded.has(row.categoriaId)) continue;
+        }
         if (!transacaoConsomeOrcamento(resolved.origens, row.cartaoId)) continue;
 
         chips.set(row.id, {
@@ -638,6 +653,14 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
     cards: listCardsForFilter(workspaceId),
     categories: listAllCategories(workspaceId),
     tags: listTags(workspaceId),
+    budgets: listBudgetsWithCategories(workspaceId, currentMonth()).map(
+      (budget) => ({
+        id: budget.id,
+        nome: budget.nome,
+        cor: budget.cor,
+        icone: budget.icone,
+      }),
+    ),
     lastAccountId: lastTransaction?.contaId ?? null,
     lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,

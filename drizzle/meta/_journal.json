@@ -141,6 +141,13 @@
       "when": 1794939705613,
       "tag": "0019_many_invisible_woman",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1794940504130,
+      "tag": "0020_rich_apocalypse",
+      "breakpoints": true
     }
   ]
 }

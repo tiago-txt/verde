@@ -388,6 +388,8 @@ export async function createTransactionAction(
     cartaoFechamento: card?.diaFechamento ?? null,
     cartaoVencimento: card?.diaVencimento ?? null,
     cartaoFechamentoCompra: card?.fechamentoCompra ?? null,
+    orcamentoId: data.orcamentoIgnorado ? null : (data.orcamentoId ?? null),
+    orcamentoIgnorado: data.orcamentoIgnorado ?? false,
   };
 
   try {
@@ -585,6 +587,11 @@ export async function updateTransactionAction(
   const isInstallment =
     Boolean(existing.parcelaGrupoId) && (existing.parcelaTotal ?? 0) > 1;
   const isGrouped = isFixed || isInstallment;
+  const budgetChanged =
+    (data.orcamentoIgnorado !== undefined &&
+      data.orcamentoIgnorado !== existing.orcamentoIgnorado) ||
+    (data.orcamentoId !== undefined &&
+      (data.orcamentoId ?? null) !== existing.orcamentoId);
   const dateChanged = data.data !== existing.data;
   const invoiceChanged =
     data.faturaChaveOverride !== undefined &&
@@ -655,6 +662,15 @@ export async function updateTransactionAction(
     cartaoFechamento: card?.diaFechamento ?? null,
     cartaoVencimento: card?.diaVencimento ?? null,
     cartaoFechamentoCompra: card?.fechamentoCompra ?? null,
+    orcamentoId: data.orcamentoIgnorado
+      ? null
+      : data.orcamentoId !== undefined
+        ? data.orcamentoId
+        : existing.orcamentoId,
+    orcamentoIgnorado:
+      data.orcamentoIgnorado !== undefined
+        ? data.orcamentoIgnorado
+        : existing.orcamentoIgnorado,
   };
   const overrideValue = isCard
     ? data.faturaChaveOverride !== undefined
@@ -1399,7 +1415,7 @@ export async function updateTransactionAction(
           [data.id, existing.faturaChaveOverride],
         ]);
 
-        if (data.scope !== "single") {
+        if (data.scope !== "single" || budgetChanged) {
           const rows = tx
             .select({
               id: transactions.id,

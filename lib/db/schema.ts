@@ -393,6 +393,14 @@ export const transactions = sqliteTable(
     orcamentoDeslocamento: integer("orcamento_deslocamento")
       .notNull()
       .default(0),
+    /** Orçamento escolhido manualmente (sobrepõe a categoria). */
+    orcamentoId: text("orcamento_id").references(() => budgets.id, {
+      onDelete: "set null",
+    }),
+    /** Quando true, a compra não consome nenhum orçamento. */
+    orcamentoIgnorado: integer("orcamento_ignorado", { mode: "boolean" })
+      .notNull()
+      .default(false),
     ...timestamps,
     deletedAt: integer("deleted_at", { mode: "timestamp_ms" }),
   },

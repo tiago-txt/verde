@@ -460,3 +460,62 @@ describe("fechamento manual do ciclo", () => {
     expect(sobra).toMatchObject({ valor: 50_000, data: `${mes}-11` });
   });
 });
+
+describe("orçamento manual por lançamento", () => {
+  it("aceita orçamento de outra categoria e ignora os demais", async () => {
+    const mercado = categoryId("Mercado");
+    const lazer = categoryId("Lazer");
+    const mes = currentMonth();
+    const mercadoId = await createBudget({
+      nome: "Mercado",
+      categoriaIds: [mercado],
+      dataInicio: mes,
+    });
+    const lazerId = await createBudget({
+      nome: "Lazer",
+      categoriaIds: [lazer],
+      dataInicio: mes,
+    });
+
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "despesa",
+        descricao: "Compra manual",
+        valor: 10_000,
+        data: todayISO(),
+        pago: true,
+        categoriaId: lazer,
+        orcamentoId: mercadoId,
+      })
+      .run();
+
+    expect(
+      getBudgetCycleDetail(user.workspaceId, mercadoId, mes)?.resumo.gasto,
+    ).toBe(10_000);
+    expect(
+      getBudgetCycleDetail(user.workspaceId, lazerId, mes)?.resumo.gasto,
+    ).toBe(0);
+
+    testDb.db
+      .insert(transactions)
+      .values({
+        id: crypto.randomUUID(),
+        workspaceId: user.workspaceId,
+        tipo: "despesa",
+        descricao: "Sem orçamento",
+        valor: 5_000,
+        data: todayISO(),
+        pago: true,
+        categoriaId: mercado,
+        orcamentoIgnorado: true,
+      })
+      .run();
+
+    expect(
+      getBudgetCycleDetail(user.workspaceId, mercadoId, mes)?.resumo.gasto,
+    ).toBe(10_000);
+  });
+});

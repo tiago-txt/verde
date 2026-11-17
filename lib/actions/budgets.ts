@@ -879,6 +879,8 @@ export async function getBudgetHintAction(input: {
   cartaoId?: string | null;
   orcamentoDeslocamento?: number | null;
   excludeTransactionId?: string | null;
+  orcamentoId?: string | null;
+  orcamentoIgnorado?: boolean;
 }): Promise<BudgetHint | null> {
   const user = await requireUser();
   const workspaceId = user.workspaceId;
@@ -890,6 +892,8 @@ export async function getBudgetHintAction(input: {
       cartaoId: idSchema.nullable().optional(),
       orcamentoDeslocamento: z.number().int().min(-2).max(2).optional(),
       excludeTransactionId: idSchema.nullable().optional(),
+      orcamentoId: idSchema.nullable().optional(),
+      orcamentoIgnorado: z.boolean().optional(),
     })
     .safeParse(input);
   if (!parsed.success) return null;
@@ -900,7 +904,10 @@ export async function getBudgetHintAction(input: {
     cartaoId,
     orcamentoDeslocamento,
     excludeTransactionId,
+    orcamentoId,
+    orcamentoIgnorado,
   } = parsed.data;
+  if (orcamentoIgnorado) return null;
   const series = loadBudgetSeries(workspaceId);
   const categories = listAllCategories(workspaceId);
   const { db, ws } = scopedDb(workspaceId);
@@ -924,6 +931,7 @@ export async function getBudgetHintAction(input: {
 
   for (const row of series) {
     if (row.arquivado) continue;
+    if (orcamentoId && row.id !== orcamentoId) continue;
     for (const ciclo of candidateCycles) {
       const resolved = resolverCiclo(row, ciclo);
       if (!resolved) continue;
@@ -941,7 +949,7 @@ export async function getBudgetHintAction(input: {
       if (consumed !== ciclo) continue;
 
       const expanded = expandirCategorias(categories, resolved.categoriaIds);
-      if (!expanded.has(categoriaId)) continue;
+      if (!orcamentoId && !expanded.has(categoriaId)) continue;
       if (!transacaoConsomeOrcamento(resolved.origens, cartaoId)) continue;
 
       const detail = getBudgetCycleDetail(workspaceId, row.id, ciclo);
@@ -957,7 +965,7 @@ export async function getBudgetHintAction(input: {
           transaction &&
           transaction.tipo !== "transferencia" &&
           transaction.categoriaId &&
-          expanded.has(transaction.categoriaId) &&
+          (Boolean(orcamentoId) || expanded.has(transaction.categoriaId)) &&
           transacaoConsomeOrcamento(resolved.origens, transaction.cartaoId) &&
           cicloCompetencia(
             {
