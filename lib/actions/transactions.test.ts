@@ -1104,18 +1104,141 @@ describe("edição da série: destacar, converter e encerrar", () => {
     ]);
   });
 
-  it("mantém a data de recorrência fixa bloqueada", async () => {
+  it("desloca a recorrência fixa desta ocorrência em diante", async () => {
     const { recurrenceId } = await createFixedSeries();
     const march = byDate(recurrenceId, "2024-03-10");
+    expect(march).toBeTruthy();
 
     const result = await updateTransactionAction(
       updateInput(march!.id, {
-        data: "2024-04-10",
+        data: "2024-05-10",
+        descricao: march!.descricao,
+        valor: march!.valor,
+        pago: march!.pago,
         repeticao: "fixa",
         scope: "future",
       }),
     );
-    expect(result.ok).toBe(false);
+    expect(result.ok).toBe(true);
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.dataFim).toBe("2024-03-09");
+
+    const changed = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, march!.id))
+      .get();
+    expect(changed?.data).toBe("2024-05-10");
+    expect(changed?.recorrenciaId).toBeTruthy();
+    expect(changed?.recorrenciaId).not.toBe(recurrenceId);
+
+    expect(
+      testDb.db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(
+              transactions.recorrenciaId,
+              changed!.recorrenciaId as string,
+            ),
+            eq(transactions.data, "2024-06-10"),
+            isNull(transactions.deletedAt),
+          ),
+        )
+        .get(),
+    ).toBeTruthy();
+
+    expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
+    expect(byDate(recurrenceId, "2024-03-10")).toBeUndefined();
+  });
+
+  it("muda a primeira ocorrência fixa e não mexe nas anteriores", async () => {
+    const { id, recurrenceId } = await createFixedSeries();
+    const first = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(id, {
+        data: "2024-02-10",
+        descricao: first!.descricao,
+        valor: first!.valor,
+        pago: first!.pago,
+        repeticao: "fixa",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.ativo).toBe(false);
+
+    const changed = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    expect(changed?.data).toBe("2024-02-10");
+    expect(changed?.recorrenciaId).toBeTruthy();
+    expect(changed?.recorrenciaId).not.toBe(recurrenceId);
+
+    expect(
+      testDb.db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(
+              transactions.recorrenciaId,
+              changed!.recorrenciaId as string,
+            ),
+            eq(transactions.data, "2024-03-10"),
+            isNull(transactions.deletedAt),
+          ),
+        )
+        .get(),
+    ).toBeTruthy();
+  });
+
+  it("recusa data de recorrência só nesta ocorrência ou em todas", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+
+    const single = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-05-10",
+        descricao: march!.descricao,
+        valor: march!.valor,
+        pago: march!.pago,
+        repeticao: "fixa",
+        scope: "single",
+      }),
+    );
+    expect(single.ok).toBe(false);
+
+    const all = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-05-10",
+        descricao: march!.descricao,
+        valor: march!.valor,
+        pago: march!.pago,
+        repeticao: "fixa",
+        scope: "all",
+      }),
+    );
+    expect(all.ok).toBe(false);
   });
 
   it("converte as próximas parcelas em série fixa", async () => {    const { groupId } = await createInstallmentSeries();

@@ -32,7 +32,9 @@ export function ScopeDialog({
   mode,
   transaction,
   onSelect,
-  scopes = ["single", "future", "all"],
+  scopes = mode === "delete"
+    ? ["single", "future", "all"]
+    : ["single", "future"],
   note,
 }: ScopeDialogProps) {
   if (!transaction) return null;

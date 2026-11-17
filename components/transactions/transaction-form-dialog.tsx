@@ -378,9 +378,14 @@ export function TransactionFormDialog({
   const isKeepInstallment =
     mode === "edit" && isInstallment && repeticao === "parcelada";
   const canChangeType = mode === "create" || !isGrouped;
-  const canChangeDate = mode === "create" || !isFixed;
+  const canChangeDate = true;
   const dateChanged =
     mode === "edit" && Boolean(transaction) && data !== transaction?.data;
+  const dateScopes: Scope[] | undefined = dateChanged
+    ? isFixed
+      ? ["future"]
+      : ["single", "future"]
+    : undefined;
   const paidLocked = mode === "edit" && isGrouped && scope !== "single";
 
   useEffect(() => {
@@ -2110,10 +2115,12 @@ export function TransactionFormDialog({
             }}
             mode="edit"
             transaction={transaction}
-            scopes={isConversion ? ["future"] : undefined}
+            scopes={isConversion ? ["future"] : dateScopes}
             note={
-              dateChanged && isInstallment
-                ? "A data desta parcela mudou. “Esta e as próximas” desloca o restante do parcelamento; “Só esta parcela” muda apenas esta."
+              dateChanged
+                ? isFixed
+                  ? "A data desta ocorrência mudou. As próximas ocorrências serão deslocadas; as passadas não serão alteradas."
+                  : "A data desta parcela mudou. “Esta e as próximas” desloca o restante do parcelamento; “Só esta parcela” muda apenas esta."
                 : undefined
             }
             onSelect={handleSaveScope}

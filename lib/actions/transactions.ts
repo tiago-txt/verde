@@ -574,15 +574,22 @@ export async function updateTransactionAction(
   const isFixed = Boolean(existing.recorrenciaId);
   const isInstallment = Boolean(existing.parcelaGrupoId);
   const isGrouped = isFixed || isInstallment;
+  const dateChanged = data.data !== existing.data;
+
+  if (data.scope === "all") {
+    return fail(
+      "Alterações não podem incluir ocorrências passadas. Use a exclusão para remover o histórico.",
+    );
+  }
+  if (dateChanged && isFixed && data.scope !== "future") {
+    return fail(
+      "A data de uma recorrência muda desta ocorrência em diante. Escolha “esta e as próximas”.",
+    );
+  }
 
   if (isGrouped && data.tipo !== existing.tipo) {
     return fail(
       "Não é possível alterar o tipo de um lançamento recorrente ou parcelado.",
-    );
-  }
-  if (isFixed && data.data !== existing.data) {
-    return fail(
-      "Não é possível alterar a data de um lançamento recorrente. Exclua e crie um novo.",
     );
   }
 
@@ -663,6 +670,7 @@ export async function updateTransactionAction(
       : updateValues;
 
   let convertedToFixed = false;
+  let recreatedFixed = false;
   try {
     db.transaction((tx) => {
       if (!isGrouped) {
@@ -1057,7 +1065,7 @@ export async function updateTransactionAction(
         const plan = buildInstallmentPlan({
           valorCents: data.valor,
           parcelas: data.parcelas,
-          dataInicio: existing.data,
+          dataInicio: data.data,
           baseValor: data.baseValor,
         });
         const [first, ...rest] = plan;
@@ -1144,7 +1152,7 @@ export async function updateTransactionAction(
             id: recurrenceId,
             workspaceId,
             frequencia: data.frequencia,
-            dataInicio: existing.data,
+            dataInicio: data.data,
             dataFim: data.dataFim,
             ativo: true,
             template,
@@ -1154,6 +1162,7 @@ export async function updateTransactionAction(
         tx.update(transactions)
           .set({
             ...updateValues,
+            data: data.data,
             pago: isCard ? false : data.pago,
             recorrenciaId: recurrenceId,
             parcelaGrupoId: null,
@@ -1169,6 +1178,109 @@ export async function updateTransactionAction(
 
       if (isFixed) {
         const recurrenceId = existing.recorrenciaId as string;
+
+        if (dateChanged) {
+          const now = new Date();
+          const recurrence = tx
+            .select()
+            .from(recurrences)
+            .where(
+              and(
+                eq(recurrences.id, recurrenceId),
+                eq(recurrences.workspaceId, workspaceId),
+              ),
+            )
+            .get();
+
+          if (recurrence) {
+            const delta = monthDeltaBetween(existing.data, data.data);
+            const selected = tx
+              .select({
+                id: transactions.id,
+                data: transactions.data,
+                faturaChaveOverride: transactions.faturaChaveOverride,
+              })
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.recorrenciaId, recurrenceId),
+                  eq(transactions.workspaceId, workspaceId),
+                  gte(transactions.data, existing.data),
+                  isNull(transactions.deletedAt),
+                ),
+              )
+              .all()
+              .sort((a, b) => a.data.localeCompare(b.data));
+
+            const shiftedEnd = recurrence.dataFim
+              ? addMonthsClamped(recurrence.dataFim, delta)
+              : null;
+            const newDates = generateRecurrenceDates({
+              frequencia: recurrence.frequencia,
+              dataInicio: data.data,
+              dataFim: shiftedEnd,
+              maxOccurrences: Math.max(selected.length + 1, 2),
+            });
+            const newRecurrenceId = crypto.randomUUID();
+
+            endRecurrenceBefore(tx, recurrence, existing.data, now);
+
+            const template: RecurrenceTemplate = {
+              ...recurrence.template,
+              tipo: data.tipo,
+              descricao: data.descricao,
+              valor: data.valor,
+              contaId,
+              cartaoId,
+              contaDestinoId,
+              categoriaId,
+              observacao,
+              tagIds: data.tagIds,
+              pago: false,
+              orcamentoDeslocamento,
+              ...cardSnapshot,
+            };
+            tx.insert(recurrences)
+              .values({
+                id: newRecurrenceId,
+                workspaceId,
+                frequencia: recurrence.frequencia,
+                dataInicio: data.data,
+                dataFim: shiftedEnd,
+                ativo: true,
+                template,
+              })
+              .run();
+
+            selected.forEach((row, index) => {
+              const nextDate =
+                newDates[index] ?? addMonthsClamped(row.data, delta);
+              const currentOverride = row.faturaChaveOverride;
+              const nextOverride =
+                currentOverride && isValidMonthKey(currentOverride)
+                  ? addMonths(
+                      currentOverride,
+                      monthDeltaBetween(row.data, nextDate),
+                    )
+                  : currentOverride;
+              tx.update(transactions)
+                .set({
+                  ...groupedUpdateValues,
+                  data: nextDate,
+                  faturaChaveOverride: nextOverride,
+                  recorrenciaId: newRecurrenceId,
+                  updatedAt: now,
+                })
+                .where(eq(transactions.id, row.id))
+                .run();
+              replaceTags(tx, workspaceId, row.id, data.tagIds);
+            });
+
+            recreatedFixed = true;
+          }
+          return;
+        }
+
         let ids: string[] = [data.id];
 
         if (data.scope !== "single") {
@@ -1357,7 +1469,7 @@ export async function updateTransactionAction(
     );
   }
 
-  if ((!isGrouped && data.repeticao === "fixa") || convertedToFixed) {
+  if ((!isGrouped && data.repeticao === "fixa") || convertedToFixed || recreatedFixed) {
     try {
       ensureRecurrencesForMonth(workspaceId, data.data.slice(0, 7));
     } catch (error) {
