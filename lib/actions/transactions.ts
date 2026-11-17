@@ -4,7 +4,7 @@ import { and, eq, gt, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { addDaysISO, todayISO } from "@/lib/dates";
+import { addDaysISO, addMonths, isValidMonthKey, todayISO } from "@/lib/dates";
 import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
@@ -25,6 +25,7 @@ import { invalidateForecastCache } from "@/lib/db/queries/forecast";
 import { idsForCategoryChange } from "@/lib/finance/batch";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import { buildInstallmentPlan } from "@/lib/finance/installments";
+import { addMonthsClamped } from "@/lib/finance/date-math";
 import { generateRecurrenceDates } from "@/lib/finance/recurrence";
 import {
   selectFixedRecurrenceTransactions,
@@ -83,6 +84,14 @@ function nextRecurrenceDateAfter(
       dataFim: recurrence.dataFim,
     }).find((date) => date > anchorDate) ?? null
   );
+}
+
+/** Diferença em meses entre dois meses ISO (YYYY-MM-DD). */
+function monthDeltaBetween(from: string, to: string): number {
+  const [fromYear, fromMonth] = from.slice(0, 7).split("-").map(Number);
+  const [toYear, toMonth] = to.slice(0, 7).split("-").map(Number);
+  if (!fromYear || !fromMonth || !toYear || !toMonth) return 0;
+  return (toYear - fromYear) * 12 + (toMonth - fromMonth);
 }
 
 /**
@@ -571,9 +580,9 @@ export async function updateTransactionAction(
       "Não é possível alterar o tipo de um lançamento recorrente ou parcelado.",
     );
   }
-  if (isGrouped && data.data !== existing.data) {
+  if (isFixed && data.data !== existing.data) {
     return fail(
-      "Não é possível alterar a data de um lançamento recorrente ou parcelado. Exclua e crie um novo.",
+      "Não é possível alterar a data de um lançamento recorrente. Exclua e crie um novo.",
     );
   }
 
@@ -1243,12 +1252,18 @@ export async function updateTransactionAction(
       if (isInstallment) {
         const groupId = existing.parcelaGrupoId as string;
         let ids: string[] = [data.id];
+        const datesById = new Map<string, string>([[data.id, existing.data]]);
+        const overridesById = new Map<string, string | null>([
+          [data.id, existing.faturaChaveOverride],
+        ]);
 
         if (data.scope !== "single") {
           const rows = tx
             .select({
               id: transactions.id,
               parcelaAtual: transactions.parcelaAtual,
+              data: transactions.data,
+              faturaChaveOverride: transactions.faturaChaveOverride,
             })
             .from(transactions)
             .where(
@@ -1260,10 +1275,15 @@ export async function updateTransactionAction(
             )
             .all();
 
+          for (const row of rows) {
+            datesById.set(row.id, row.data);
+            overridesById.set(row.id, row.faturaChaveOverride);
+          }
+
           ids = selectInstallmentTransactions(
             rows.map((row) => ({
               id: row.id,
-              data: existing.data,
+              data: row.data,
               parcelaAtual: row.parcelaAtual,
             })),
             {
@@ -1284,6 +1304,43 @@ export async function updateTransactionAction(
               ),
             )
             .run();
+
+          if (data.data !== existing.data) {
+            const delta = monthDeltaBetween(existing.data, data.data);
+            const now = new Date();
+            for (const transactionId of ids) {
+              const nextDate =
+                transactionId === data.id
+                  ? data.data
+                  : delta === 0
+                    ? datesById.get(transactionId) ?? existing.data
+                    : addMonthsClamped(
+                        datesById.get(transactionId) ?? existing.data,
+                        delta,
+                      );
+              const currentOverride =
+                overridesById.get(transactionId) ?? null;
+              const nextOverride =
+                currentOverride &&
+                isValidMonthKey(currentOverride) &&
+                delta !== 0
+                  ? addMonths(currentOverride, delta)
+                  : currentOverride;
+              tx.update(transactions)
+                .set({
+                  data: nextDate,
+                  faturaChaveOverride: nextOverride,
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(transactions.id, transactionId),
+                    eq(transactions.workspaceId, workspaceId),
+                  ),
+                )
+                .run();
+            }
+          }
 
           for (const transactionId of ids) {
             replaceTags(tx, workspaceId, transactionId, data.tagIds);

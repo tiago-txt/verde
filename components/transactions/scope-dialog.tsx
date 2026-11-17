@@ -22,6 +22,8 @@ type ScopeDialogProps = {
   onSelect: (scope: Scope) => void;
   /** Alcances oferecidos; por padrão, os três. */
   scopes?: Scope[];
+  /** Observação extra, ex.: mudança de data em parcelamento. */
+  note?: string;
 };
 
 export function ScopeDialog({
@@ -31,6 +33,7 @@ export function ScopeDialog({
   transaction,
   onSelect,
   scopes = ["single", "future", "all"],
+  note,
 }: ScopeDialogProps) {
   if (!transaction) return null;
 
@@ -61,6 +64,11 @@ export function ScopeDialog({
                 ? "Escolha o alcance da alteração."
                 : "Escolha quais lançamentos serão excluídos. Esta ação não pode ser desfeita pela interface."}
             </span>
+            {note && (
+              <span className="mt-2 block text-xs text-muted-foreground">
+                {note}
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 

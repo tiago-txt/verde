@@ -958,6 +958,166 @@ describe("edição da série: destacar, converter e encerrar", () => {
     });
   });
 
+  it("desloca esta e as próximas parcelas ao mudar o mês", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(second!.id, {
+        data: "2024-04-10",
+        descricao: second!.descricao,
+        valor: second!.valor,
+        pago: second!.pago,
+        repeticao: "parcelada",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const group = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(group.map((row) => row.data)).toEqual([
+      "2024-01-10",
+      "2024-04-10",
+      "2024-05-10",
+    ]);
+    expect(group.map((row) => row.valor)).toEqual([33_334, 33_333, 33_333]);
+  });
+
+  it("muda só a parcela editada quando o alcance é esta", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(second!.id, {
+        data: "2024-04-10",
+        descricao: second!.descricao,
+        valor: second!.valor,
+        pago: second!.pago,
+        repeticao: "parcelada",
+        scope: "single",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const group = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(group.map((row) => row.data)).toEqual([
+      "2024-01-10",
+      "2024-04-10",
+      "2024-03-10",
+    ]);
+  });
+
+  it("desloca também a fatura forçada das parcelas", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const group = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    const overrides = ["2024-02", "2024-03", "2024-04"];
+    group.forEach((row, index) => {
+      testDb.db
+        .update(transactions)
+        .set({ faturaChaveOverride: overrides[index] })
+        .where(eq(transactions.id, row.id))
+        .run();
+    });
+
+    const second = group[1];
+    const result = await updateTransactionAction(
+      updateInput(second!.id, {
+        data: "2024-04-10",
+        descricao: second!.descricao,
+        valor: second!.valor,
+        pago: second!.pago,
+        repeticao: "parcelada",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const after = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(after.map((row) => row.faturaChaveOverride)).toEqual([
+      "2024-02",
+      "2024-05",
+      "2024-06",
+    ]);
+  });
+
+  it("antecipa as próximas parcelas quando o mês volta", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(second!.id, {
+        data: "2023-12-10",
+        descricao: second!.descricao,
+        valor: second!.valor,
+        pago: second!.pago,
+        repeticao: "parcelada",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const group = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(group.map((row) => row.data)).toEqual([
+      "2024-01-10",
+      "2023-12-10",
+      "2024-01-10",
+    ]);
+  });
+
+  it("mantém a data de recorrência fixa bloqueada", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+
+    const result = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-04-10",
+        repeticao: "fixa",
+        scope: "future",
+      }),
+    );
+    expect(result.ok).toBe(false);
+  });
+
   it("converte as próximas parcelas em série fixa", async () => {    const { groupId } = await createInstallmentSeries();
     const february = testDb.db
       .select()
