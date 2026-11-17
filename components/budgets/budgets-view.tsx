@@ -57,6 +57,8 @@ function relevantChange(
 ): boolean {
   if (budget.valorPadrao !== values.valorPadrao) return true;
   if (budget.diaFechamento !== values.diaFechamento) return true;
+  if (budget.periodicidadeMeses !== values.periodicidadeMeses) return true;
+  if (budget.baseValorPeriodo !== values.baseValorPeriodo) return true;
   if (budget.dataInicio !== values.dataInicio) return true;
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
@@ -215,7 +217,7 @@ export function BudgetsView({
         ...pendingValues,
         id: editing.id,
         scope,
-        ciclo,
+        ciclo: editing.ciclo,
       });
       if (!result.ok) {
         setScopeError(result.error);

@@ -63,10 +63,15 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
 - **Edição/exclusão por escopo**: só este, este e os próximos, ou todos.
 - **Orçamentos com ciclo** (`/limite-de-gastos`): envelope por categorias com dia
   de fechamento, valor por ciclo, overrides, vigências e eventos virtuais de
-  provisão/sobra no previsto, sem alterar o realizado. O orçamento é uma
+  provisão/sobra no previsto, sem alterar o realizado. A periodicidade padrão é
+  mensal; também há bimestral, trimestral, semestral, anual ou de 1 a 12 meses,
+  com o valor interpretado como **total do período** ou **por mês** (o limite do
+  ciclo é o valor mensal vezes a quantidade de meses). O orçamento é uma
   **série**: cada ciclo é uma ocorrência e pode ser editado/excluído em três
   escopos (só este, este e os próximos, todos). Exceções por ciclo permitem
   ajustar valor/categorias/fechamento ou excluir só um mês, com restauração.
+  Um ciclo longo aparece também nos meses intermediários, mesmo que não sejam
+  o mês inicial.
   Quando o envelope estoura ou é consumido, a linha permanece visível com
   reserva R$ 0,00, barra vermelha e o resultado final; ela nunca some por
   `restante <= 0`. A reserva é o **restante** do ciclo (`limite − gasto`) na

@@ -843,7 +843,7 @@ export function buildDraftForecastEvents(
       for (const seriesRow of series) {
         if (seriesRow.arquivado) continue;
         const baseMonth = item.data.slice(0, 7);
-        for (let delta = -6; delta <= 6; delta += 1) {
+        for (let delta = -12; delta <= 6; delta += 1) {
           const candidate = addMonthsKey(baseMonth, delta);
           const resolved = resolverCiclo(seriesRow, candidate);
           if (!resolved) continue;
@@ -856,6 +856,10 @@ export function buildDraftForecastEvents(
             },
             resolved.diaFechamento,
             config,
+            {
+              periodicidadeMeses: resolved.periodicidadeMeses,
+              dataInicio: resolved.dataInicio,
+            },
           );
           if (consumed !== candidate) continue;
 
@@ -928,6 +932,8 @@ export function buildDraftForecastEvents(
           {
             valorPadrao: resolved.valorPadrao,
             diaFechamento: resolved.diaFechamento,
+            periodicidadeMeses: resolved.periodicidadeMeses,
+            baseValorPeriodo: resolved.baseValorPeriodo,
             antecedenciaCiclos: resolved.antecedenciaCiclos,
             dataInicio: resolved.dataInicio,
             dataFim: resolved.dataFim,

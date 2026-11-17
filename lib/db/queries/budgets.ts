@@ -34,6 +34,7 @@ import {
   eventosDoCiclo,
   eventoPassaFiltros,
   expandirCategorias,
+  intervaloDoCiclo,
   limiteDoCiclo,
   orcamentoVigenteNoCiclo,
   resolverCiclo,
@@ -72,6 +73,8 @@ export type BudgetWithCategories = {
   nome: string;
   valorPadrao: number;
   diaFechamento: number;
+  periodicidadeMeses: number;
+  baseValorPeriodo: "total" | "mensal";
   antecedenciaCiclos: number;
   origens: BudgetOrigin;
   sobraPolicy: "rolar" | "liberar" | "realocar";
@@ -232,6 +235,8 @@ function cycleConfigFromBudget(budget: BudgetWithCategories) {
   return {
     valorPadrao: budget.valorPadrao,
     diaFechamento: budget.diaFechamento,
+    periodicidadeMeses: budget.periodicidadeMeses,
+    baseValorPeriodo: budget.baseValorPeriodo,
     antecedenciaCiclos: budget.antecedenciaCiclos,
     dataInicio: budget.dataInicio,
     dataFim: budget.dataFim,
@@ -370,6 +375,8 @@ export function loadBudgetSeries(
       nome: version.nome,
       valorPadrao: version.valorPadrao,
       diaFechamento: version.diaFechamento,
+      periodicidadeMeses: version.periodicidadeMeses,
+      baseValorPeriodo: version.baseValorPeriodo,
       antecedenciaCiclos: version.antecedenciaCiclos,
       origens: version.origens,
       contaId: version.contaId,
@@ -405,6 +412,8 @@ export function loadBudgetSeries(
         nome: budget.nome,
         valorPadrao: budget.valorPadrao,
         diaFechamento: budget.diaFechamento,
+        periodicidadeMeses: budget.periodicidadeMeses,
+        baseValorPeriodo: budget.baseValorPeriodo,
         antecedenciaCiclos: budget.antecedenciaCiclos,
         origens: budget.origens,
         contaId: budget.contaId,
@@ -513,7 +522,7 @@ function categoryInfoMap(
   );
 }
 
-/** Orçamentos resolvidos para um ciclo (uma linha por série). */
+/** Orçamentos resolvidos para o mês (uma linha por série, com o ciclo que o contém). */
 export function listBudgetsWithCategories(
   workspaceId: string,
   ciclo: string = currentMonth(),
@@ -522,9 +531,39 @@ export function listBudgetsWithCategories(
   const series = loadBudgetSeries(workspaceId, options);
   const categoriesById = categoryInfoMap(workspaceId);
   return series
-    .map((row) => toResolvedBudget(row, ciclo, categoriesById))
-    .filter((budget): budget is BudgetWithCategories => Boolean(budget))
+    .flatMap((row) => {
+      const cicloDoOrcamento = cicloDoMes(row, ciclo);
+      if (!cicloDoOrcamento) return [];
+      const budget = toResolvedBudget(row, cicloDoOrcamento, categoriesById);
+      return budget ? [budget] : [];
+    })
     .filter((budget) => options?.incluirArquivados || !budget.arquivado);
+}
+
+/**
+ * Ciclo da série que contém o mês pedido. Ciclos longos (N > 1) podem ter
+ * começado até 12 meses antes; `resolverCiclo` descarta os meses que não são
+ * início de ciclo.
+ */
+function cicloDoMes(series: BudgetSeriesRow, mes: string): string | null {
+  if (resolverCiclo(series, mes)) return mes;
+  for (let delta = 1; delta <= 12; delta += 1) {
+    const candidato = addMonths(mes, -delta);
+    const resolved = resolverCiclo(series, candidato);
+    if (!resolved) continue;
+    const intervalo = intervaloDoCiclo(
+      candidato,
+      resolved.diaFechamento,
+      resolved.periodicidadeMeses,
+    );
+    if (
+      intervalo.inicio.slice(0, 7) <= mes &&
+      mes <= intervalo.fim.slice(0, 7)
+    ) {
+      return candidato;
+    }
+  }
+  return null;
 }
 
 type SpendingContext = {
@@ -659,22 +698,21 @@ function applySobraPolicy(
       restanteByBudget.set(pair.budget.budgetId, info.restante);
     }
 
-    const nextCycle = addMonths(cycle, 1);
-    const nextActive = new Set(
-      (byCycle.get(nextCycle) ?? []).map((pair) => pair.budget.budgetId),
-    );
-
     for (const pair of cyclePairs) {
       const policy = pair.budget.sobraPolicy ?? "liberar";
       if (policy !== "realocar") continue;
       const destinationId = pair.budget.sobraDestinoBudgetId;
-      if (
-        !destinationId ||
-        destinationId === pair.budget.budgetId ||
-        !nextActive.has(destinationId)
-      ) {
+      if (!destinationId || destinationId === pair.budget.budgetId) {
         continue;
       }
+      const nextCycle = addMonths(
+        cycle,
+        pair.budget.periodicidadeMeses ?? 1,
+      );
+      const destinationActive = (byCycle.get(nextCycle) ?? []).some(
+        (nextPair) => nextPair.budget.budgetId === destinationId,
+      );
+      if (!destinationActive) continue;
       const amount = restanteByBudget.get(pair.budget.budgetId) ?? 0;
       if (amount <= 0) continue;
 
@@ -860,6 +898,10 @@ function loadSpending(
         },
         budget.diaFechamento,
         card,
+        {
+          periodicidadeMeses: budget.periodicidadeMeses,
+          dataInicio: budget.dataInicio,
+        },
       );
       if (consumed !== ciclo) return [];
 
@@ -951,7 +993,7 @@ export function listBudgetCycleDetails(
   const categoriesById = categoryInfoMap(workspaceId);
   const spending = loadSpending(
     workspaceId,
-    eligible.map((budget) => ({ budget, ciclo })),
+    eligible.map((budget) => ({ budget, ciclo: budget.ciclo })),
     {
       seriesByBudgetId: new Map(series.map((row) => [row.id, row])),
       categoriesById,
@@ -959,11 +1001,11 @@ export function listBudgetCycleDetails(
   );
 
   return eligible.flatMap((budget) => {
-    const result = spending.get(pairKey(budget.id, ciclo));
+    const result = spending.get(pairKey(budget.id, budget.ciclo));
     return result
       ? [
           {
-            resumo: toCycleSummary(budget, ciclo, result),
+            resumo: toCycleSummary(budget, budget.ciclo, result),
             transactions: result.transactions,
           },
         ]
@@ -997,18 +1039,18 @@ export function getBudgetCycleDetail(
   const categoriesById = categoryInfoMap(workspaceId);
   const spending = loadSpending(
     workspaceId,
-    [{ budget, ciclo }],
+    [{ budget, ciclo: budget.ciclo }],
     seriesRow
       ? {
           seriesByBudgetId: new Map([[seriesRow.id, seriesRow]]),
           categoriesById,
         }
       : undefined,
-  ).get(pairKey(budget.id, ciclo));
+  ).get(pairKey(budget.id, budget.ciclo));
   if (!spending) return null;
 
   return {
-    resumo: toCycleSummary(budget, ciclo, spending),
+    resumo: toCycleSummary(budget, budget.ciclo, spending),
     transactions: spending.transactions,
   };
 }
@@ -1019,17 +1061,16 @@ export function listExcludedBudgetCycles(
   ciclo: string,
 ): { budgetId: string; nome: string }[] {
   const series = loadBudgetSeries(workspaceId, { incluirArquivados: true });
-  return series
-    .filter(
-      (row) =>
-        (!row.dataInicio || row.dataInicio <= ciclo) &&
-        (!row.dataFim || row.dataFim >= ciclo) &&
-        row.exceptions.some(
-          (exception) =>
-            exception.ciclo === ciclo && exception.tipo === "excluido",
-        ),
-    )
-    .map((row) => ({ budgetId: row.id, nome: row.nome }));
+  return series.flatMap((row) => {
+    const cicloDoOrcamento = cicloDoMes(row, ciclo);
+    if (!cicloDoOrcamento) return [];
+    const excluded = row.exceptions.some(
+      (exception) =>
+        exception.ciclo === cicloDoOrcamento &&
+        exception.tipo === "excluido",
+    );
+    return excluded ? [{ budgetId: row.id, nome: row.nome }] : [];
+  });
 }
 
 function buildEventContext(
@@ -1163,7 +1204,10 @@ function mergeSobrasNasProvisoes(
           : undefined);
       if (!provision && event.resumo.fechado) {
         const next = provisionByBudgetAndCycle.get(
-          `${event.resumo.budgetId}:${addMonths(event.ciclo, 1)}`,
+          `${event.resumo.budgetId}:${addMonths(
+            event.ciclo,
+            event.resumo.periodicidadeMeses ?? 1,
+          )}`,
         );
         if (next && next.valor === event.valor) provision = next;
       }
@@ -1519,7 +1563,7 @@ export function getBudgetNoticeForTransactions(
   for (const item of relevant) {
     const monthKey = item.data.slice(0, 7);
     const candidateCycles = new Set<string>();
-    for (let delta = -6; delta <= 6; delta += 1) {
+    for (let delta = -12; delta <= 6; delta += 1) {
       candidateCycles.add(addMonths(monthKey, delta));
     }
 
@@ -1549,6 +1593,10 @@ export function getBudgetNoticeForTransactions(
           },
           budget.diaFechamento,
           card,
+          {
+            periodicidadeMeses: budget.periodicidadeMeses,
+            dataInicio: budget.dataInicio,
+          },
         );
         if (consumed !== ciclo) continue;
 

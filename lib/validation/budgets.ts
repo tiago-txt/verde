@@ -1,5 +1,9 @@
 import { z } from "zod";
-import { BUDGET_ORIGINS, BUDGET_SOBRA_POLICIES } from "@/lib/db/schema";
+import {
+  BUDGET_ORIGINS,
+  BUDGET_SOBRA_POLICIES,
+  BUDGET_VALUE_BASES,
+} from "@/lib/db/schema";
 import {
   hexColorSchema,
   iconNameSchema,
@@ -22,6 +26,13 @@ const budgetFields = z.object({
     .int("Dia inválido")
     .min(1, "O dia de fechamento deve estar entre 1 e 31")
     .max(31, "O dia de fechamento deve estar entre 1 e 31"),
+  periodicidadeMeses: z
+    .number()
+    .int("Periodicidade inválida")
+    .min(1, "A periodicidade deve estar entre 1 e 12 meses")
+    .max(12, "A periodicidade deve estar entre 1 e 12 meses")
+    .default(1),
+  baseValorPeriodo: z.enum(BUDGET_VALUE_BASES).default("total"),
   antecedenciaCiclos: z.union([z.literal(0), z.literal(1)], {
     error: "A antecedência deve ser 0 ou 1 ciclo",
   }),
@@ -116,6 +127,8 @@ export const budgetCycleClosureSchema = z.object({
 });
 
 export type BudgetFormValues = z.infer<typeof budgetFields>;
-export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
+/** Entrada aceita pela action: campos com default podem ser omitidos. */
+export type BudgetFormInput = z.input<typeof budgetFields>;
+export type UpdateBudgetInput = z.input<typeof updateBudgetSchema>;
 export type BudgetOverrideInput = z.infer<typeof budgetOverrideSchema>;
 export type BudgetCycleClosureInput = z.infer<typeof budgetCycleClosureSchema>;

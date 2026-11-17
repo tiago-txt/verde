@@ -413,6 +413,19 @@ export function TransactionFormDialog({
       ? datasDaFatura(effectiveInvoiceKey, selectedCard)
       : null;
   const fixedSeries = repeticao === "fixa";
+  const selectedBudgetOption = orcamentoId
+    ? (budgetOptions.find((budget) => budget.id === orcamentoId) ?? null)
+    : budgetHint
+      ? (budgetOptions.find((budget) => budget.id === budgetHint.budgetId) ??
+        null)
+      : null;
+  const selectedBudgetName = selectedBudgetOption?.nome ?? budgetHint?.nome ?? null;
+  const selectedBudgetRestante =
+    selectedBudgetOption?.restante ?? budgetHint?.restante ?? null;
+  const selectedBudgetRestanteApos =
+    selectedBudgetRestante !== null
+      ? Math.max(0, selectedBudgetRestante - valor)
+      : null;
   const invoiceOptions = useMemo(() => {
     if (!cardInvoiceKey) return [] as string[];
     const purchaseMonth = data.slice(0, 7);
@@ -1862,7 +1875,39 @@ export function TransactionFormDialog({
                 <Accordion open={activeChip === "orcamento"}>
                   <div className="space-y-2">
                     <FieldLabel>Orçamento</FieldLabel>
-                    <div className="grid gap-2 sm:grid-cols-2">
+                    {!orcamentoIgnorado && selectedBudgetName && (
+                      <p className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                        <span>
+                          {orcamentoId
+                            ? "Selecionado"
+                            : "Selecionado automaticamente"}
+                          :
+                        </span>
+                        {selectedBudgetOption && (
+                          <EntityTile
+                            kind="orcamento"
+                            entity={{
+                              id: selectedBudgetOption.id,
+                              nome: selectedBudgetOption.nome,
+                              cor: selectedBudgetOption.cor,
+                              icone: selectedBudgetOption.icone,
+                            }}
+                            size="sm"
+                            className="h-5 w-5"
+                          />
+                        )}
+                        <span className="font-medium text-foreground">
+                          {selectedBudgetName}
+                        </span>
+                        {selectedBudgetRestanteApos !== null && (
+                          <span className="text-muted-foreground">
+                            · restará{" "}
+                            {formatCurrency(selectedBudgetRestanteApos)}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                    <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => {
@@ -1897,6 +1942,8 @@ export function TransactionFormDialog({
                       >
                         Nenhum orçamento
                       </button>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
                       {budgetOptions.map((budget) => {
                         const selected =
                           !orcamentoIgnorado && orcamentoId === budget.id;
@@ -1985,31 +2032,6 @@ export function TransactionFormDialog({
                           }`
                         : "Nenhum orçamento cobre esta categoria e data."}
                     </p>
-                    {budgetHint && (
-                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                        <Target
-                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
-                          aria-hidden="true"
-                        />
-                        <span>
-                          Orçamento{" "}
-                          <span className="font-medium text-foreground">
-                            {budgetHint.nome}
-                          </span>{" "}
-                          · restam{" "}
-                          {formatCurrency(
-                            Math.max(0, budgetHint.restante - valor),
-                          )}
-                          {valor > budgetHint.restante && (
-                            <span className="font-medium text-destructive">
-                              {" "}
-                              · Vai estourar em{" "}
-                              {formatCurrency(valor - budgetHint.restante)}
-                            </span>
-                          )}
-                        </span>
-                      </p>
-                    )}
                   </div>
                 </Accordion>
               </div>

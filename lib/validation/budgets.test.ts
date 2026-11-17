@@ -48,4 +48,26 @@ describe("createBudgetSchema", () => {
       parse({ dataInicio: "2026-11", dataFim: "2026-10" }).success,
     ).toBe(false);
   });
+
+  it("aplica mensal e total do período como padrão", () => {
+    const result = parse({});
+    expect(result.success).toBe(true);
+    expect(result.success ? result.data : null).toMatchObject({
+      periodicidadeMeses: 1,
+      baseValorPeriodo: "total",
+    });
+  });
+
+  it("aceita periodicidade de 1 a 12 meses e as duas bases", () => {
+    expect(parse({ periodicidadeMeses: 1 }).success).toBe(true);
+    expect(parse({ periodicidadeMeses: 2 }).success).toBe(true);
+    expect(parse({ periodicidadeMeses: 12 }).success).toBe(true);
+    expect(
+      parse({ periodicidadeMeses: 3, baseValorPeriodo: "mensal" }).success,
+    ).toBe(true);
+    expect(parse({ periodicidadeMeses: 0 }).success).toBe(false);
+    expect(parse({ periodicidadeMeses: 13 }).success).toBe(false);
+    expect(parse({ periodicidadeMeses: 2.5 }).success).toBe(false);
+    expect(parse({ baseValorPeriodo: "anual" }).success).toBe(false);
+  });
 });

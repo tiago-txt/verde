@@ -148,6 +148,13 @@
       "when": 1794940504130,
       "tag": "0020_rich_apocalypse",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1794945850039,
+      "tag": "0021_mute_whiplash",
+      "breakpoints": true
     }
   ]
 }

@@ -322,11 +322,16 @@ function resolveBudgetChips(
       if (item.arquivado) continue;
       if (manualBudgetId && item.id !== manualBudgetId) continue;
       let found = false;
-      for (let delta = -6; delta <= 6 && !found; delta += 1) {
+      for (let delta = -12; delta <= 6 && !found; delta += 1) {
         const ciclo = addMonths(monthKey, delta);
         const resolved = resolverCiclo(item, ciclo);
         if (!resolved) continue;
-        if (cicloCompetencia(transaction, resolved.diaFechamento, card) !== ciclo) {
+        if (
+          cicloCompetencia(transaction, resolved.diaFechamento, card, {
+            periodicidadeMeses: resolved.periodicidadeMeses,
+            dataInicio: resolved.dataInicio,
+          }) !== ciclo
+        ) {
           continue;
         }
         if (!manualBudgetId) {

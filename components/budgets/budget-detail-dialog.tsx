@@ -41,6 +41,7 @@ import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 import { purchaseEditHref } from "@/lib/navigation/overlays";
 import { BudgetProgress } from "./budget-progress";
+import { descricaoDoPeriodo } from "./budget-period";
 
 type BudgetDetailDialogProps = {
   detail: BudgetCycleDetail | null;
@@ -157,6 +158,12 @@ export function BudgetDetailDialog({
                     {formatMonthTitle(summary.ciclo)} ·{" "}
                     {formatDate(summary.inicio).slice(0, 5)} a{" "}
                     {formatDate(summary.fim).slice(0, 5)}
+                    {summary.periodicidadeMeses > 1
+                      ? ` · ${descricaoDoPeriodo(
+                          summary.periodicidadeMeses,
+                          summary.baseValorPeriodo,
+                        )}`
+                      : ""}
                   </DialogDescription>
                 </div>
               </div>

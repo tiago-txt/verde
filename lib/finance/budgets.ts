@@ -2,6 +2,7 @@ import { addDaysISO, addMonths, dateInMonth } from "@/lib/dates";
 import type {
   BudgetOrigin,
   BudgetSobraPolicy,
+  BudgetValueBase,
   BudgetVersionData,
   TransactionType,
 } from "@/lib/db/schema";
@@ -14,8 +15,9 @@ export type { BudgetOrigin } from "@/lib/db/schema";
  * Regras puras dos orçamentos-envelope com ciclo (tipo fatura de cartão).
  *
  * O ciclo `YYYY-MM` começa no dia de fechamento daquele mês e termina no dia
- * anterior ao fechamento do mês seguinte. O fechamento/acerto acontece no
- * `dia_fechamento` do mês seguinte.
+ * anterior ao fechamento do mês seguinte. Com periodicidade maior que 1 mês,
+ * o ciclo começa no `diaFechamento` do mês inicial e termina no dia anterior
+ * ao fechamento do mês inicial + N.
  */
 
 export const BUDGET_EVENT_KINDS = ["provisao", "sobra"] as const;
@@ -24,6 +26,10 @@ export type BudgetEventKind = (typeof BUDGET_EVENT_KINDS)[number];
 export type BudgetCycleConfig = {
   valorPadrao: number;
   diaFechamento: number;
+  /** Meses por ciclo (1 = mensal, 2 = bimestral, ..., 12 = anual). */
+  periodicidadeMeses?: number;
+  /** `total` = valor do período inteiro; `mensal` = valor por mês. */
+  baseValorPeriodo?: BudgetValueBase;
   antecedenciaCiclos: number;
   dataInicio: string;
   dataFim: string | null;
@@ -168,6 +174,10 @@ export function resolverCiclo(
     nome: ajustes.nome ?? version.nome ?? series.nome,
     valorPadrao: ajustes.valorPadrao ?? version.valorPadrao,
     diaFechamento: ajustes.diaFechamento ?? version.diaFechamento,
+    periodicidadeMeses:
+      ajustes.periodicidadeMeses ?? version.periodicidadeMeses ?? 1,
+    baseValorPeriodo:
+      ajustes.baseValorPeriodo ?? version.baseValorPeriodo ?? "total",
     antecedenciaCiclos:
       ajustes.antecedenciaCiclos ?? version.antecedenciaCiclos,
     origens: ajustes.origens ?? version.origens,
@@ -178,6 +188,18 @@ export function resolverCiclo(
     icone: ajustes.icone ?? version.icone,
     categoriaIds: ajustes.categoriaIds ?? version.categoriaIds,
   };
+
+  // Em séries com periodicidade maior que 1 mês, apenas os meses alinhados ao
+  // início da série são inícios de ciclo válidos.
+  if (
+    !ehInicioDeCiclo(
+      ciclo,
+      series.dataInicio,
+      resolved.periodicidadeMeses,
+    )
+  ) {
+    return null;
+  }
 
   return {
     ...resolved,
@@ -195,7 +217,11 @@ export function resolverCiclo(
   };
 }
 
-/** Lista os ciclos entre `start` e `end` (inclusive), com limite de segurança. */
+/** Lista os ciclos entre `start` e `end` (inclusive), com limite de segurança.
+ * Inclui os 12 meses anteriores a `start` para que ciclos longos (anuais, por
+ * exemplo) iniciados antes da janela ainda sejam encontrados e validados por
+ * `resolverCiclo`.
+ */
 export function ciclosEntre(
   start: string,
   end: string | null,
@@ -203,7 +229,7 @@ export function ciclosEntre(
 ): string[] {
   if (!start) return [];
   const result: string[] = [];
-  let current = start;
+  let current = addMonths(start, -12);
   while (result.length < max) {
     if (end && current > end) break;
     result.push(current);
@@ -229,8 +255,42 @@ function normalizarDia(diaFechamento: number): number {
   return Math.min(31, Math.max(1, Math.trunc(diaFechamento)));
 }
 
+/** Meses por ciclo, sempre entre 1 e 12. */
+export function normalizarPeriodicidade(periodicidadeMeses?: number): number {
+  if (!Number.isFinite(periodicidadeMeses)) return 1;
+  return Math.min(12, Math.max(1, Math.trunc(periodicidadeMeses as number)));
+}
+
+/** Diferença em meses entre duas chaves `YYYY-MM`. */
+function mesesEntre(de: string, ate: string): number {
+  const [anoDe, mesDe] = de.split("-").map(Number);
+  const [anoAte, mesAte] = ate.split("-").map(Number);
+  if (!anoDe || !mesDe || !anoAte || !mesAte) return 0;
+  return (anoAte - anoDe) * 12 + (mesAte - mesDe);
+}
+
+/**
+ * O ciclo é um início válido da série? Mensal aceita qualquer mês; com N > 1,
+ * os ciclos são alinhados ao mês de `dataInicio`.
+ */
+export function ehInicioDeCiclo(
+  ciclo: string,
+  dataInicio: string | null | undefined,
+  periodicidadeMeses?: number,
+): boolean {
+  const periodicidade = normalizarPeriodicidade(periodicidadeMeses);
+  if (periodicidade === 1) return true;
+  if (!dataInicio) return true;
+  return mesesEntre(dataInicio, ciclo) % periodicidade === 0;
+}
+
 /** Ciclo (`YYYY-MM`) ao qual uma data pertence. */
-export function cicloDaData(data: string, diaFechamento: number): string {
+export function cicloDaData(
+  data: string,
+  diaFechamento: number,
+  periodicidadeMeses = 1,
+  dataInicio?: string | null,
+): string {
   const dia = normalizarDia(diaFechamento);
   const mes = data.slice(0, 7);
   const fechamentoDoMes = dateInMonth(mes, dia);
@@ -241,6 +301,7 @@ export function cicloDaData(data: string, diaFechamento: number): string {
 export function intervaloDoCiclo(
   ciclo: string,
   diaFechamento: number,
+  periodicidadeMeses = 1,
 ): { inicio: string; fim: string } {
   const dia = normalizarDia(diaFechamento);
   const inicio = dateInMonth(ciclo, dia);
@@ -248,10 +309,11 @@ export function intervaloDoCiclo(
   return { inicio, fim: addDaysISO(fechamentoSeguinte, -1) };
 }
 
-/** Data de fechamento/acerto do ciclo (dia de fechamento do mês seguinte). */
+/** Data de fechamento/acerto do ciclo (dia de fechamento do mês inicial + N). */
 export function dataDeFechamento(
   ciclo: string,
   diaFechamento: number,
+  periodicidadeMeses = 1,
 ): string {
   return dateInMonth(addMonths(ciclo, 1), normalizarDia(diaFechamento));
 }
@@ -266,9 +328,15 @@ export function transacaoConsomeOrcamento(
   return true;
 }
 
-/** Ciclos que podem gerar evento em um mês (inclui M-2 por segurança). */
+/**
+ * Ciclos que podem gerar evento em um mês. Inclui os 12 meses anteriores para
+ * que um ciclo longo iniciado antes do mês ainda apareça; `resolverCiclo`
+ * descarta os meses que não são início de ciclo.
+ */
 export function ciclosRelevantesParaMes(mes: string): string[] {
-  return [addMonths(mes, -2), addMonths(mes, -1), mes, addMonths(mes, 1)];
+  return Array.from({ length: 14 }, (_, index) =>
+    addMonths(mes, index - 12),
+  );
 }
 
 export function orcamentoVigenteNoCiclo(
@@ -283,8 +351,12 @@ export function orcamentoVigenteNoCiclo(
 
 export type BudgetOverrides = Record<string, number> | Map<string, number>;
 
+/** Limite do ciclo: override pontual ou o valor padrão conforme a base. */
 export function limiteDoCiclo(
-  budget: Pick<BudgetCycleConfig, "valorPadrao">,
+  budget: Pick<
+    BudgetCycleConfig,
+    "valorPadrao" | "periodicidadeMeses" | "baseValorPeriodo"
+  >,
   ciclo: string,
   overrides?: BudgetOverrides,
 ): number {
@@ -292,7 +364,8 @@ export function limiteDoCiclo(
     overrides instanceof Map
       ? overrides.get(ciclo)
       : overrides?.[ciclo];
-  return override ?? budget.valorPadrao;
+  if (override !== undefined) return override;
+  return budget.valorPadrao;
 }
 
 /** Todas as categorias (raízes + descendentes) cobertas por um orçamento. */
@@ -399,7 +472,11 @@ export function calcularCiclo(
   gasto: number,
   overrides?: BudgetOverrides,
 ): BudgetCycleInfo {
-  const { inicio, fim } = intervaloDoCiclo(ciclo, budget.diaFechamento);
+  const { inicio, fim } = intervaloDoCiclo(
+    ciclo,
+    budget.diaFechamento,
+    budget.periodicidadeMeses,
+  );
   const limite = Math.max(0, limiteDoCiclo(budget, ciclo, overrides));
   const restante = Math.max(0, limite - gasto);
   const estouro = Math.max(0, gasto - limite);
@@ -409,7 +486,11 @@ export function calcularCiclo(
     ciclo,
     inicio,
     fim,
-    fechamento: dataDeFechamento(ciclo, budget.diaFechamento),
+    fechamento: dataDeFechamento(
+      ciclo,
+      budget.diaFechamento,
+      budget.periodicidadeMeses,
+    ),
     limite,
     gasto,
     restante,
@@ -436,7 +517,11 @@ export function eventosDoCiclo(
   // resultado final; a linha não some.
   const provisionDate =
     budget.antecedenciaCiclos === 1
-      ? intervaloDoCiclo(addMonths(ciclo, -1), budget.diaFechamento).inicio
+      ? intervaloDoCiclo(
+          addMonths(ciclo, -normalizarPeriodicidade(budget.periodicidadeMeses)),
+          budget.diaFechamento,
+          budget.periodicidadeMeses,
+        ).inicio
       : result.inicio;
 
   const events: BudgetEvent[] = [

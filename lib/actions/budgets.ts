@@ -43,6 +43,7 @@ import {
   createBudgetSchema,
   updateBudgetSchema,
   type BudgetCycleClosureInput,
+  type BudgetFormInput,
   type BudgetFormValues,
   type UpdateBudgetInput,
 } from "@/lib/validation/budgets";
@@ -143,7 +144,9 @@ function conflictError(
   // Para séries sem fim, valida uma janela segura de ciclos. O usuário pode
   // criar um orçamento futuro depois; nesse momento a validação roda de novo.
   const rangeEnd = end ?? addMonths(currentMonth(), 24);
-  const cycles = ciclosEntre(start, rangeEnd, 120);
+  const cycles = ciclosEntre(start, rangeEnd, 120).filter(
+    (ciclo) => ciclo >= start,
+  );
 
   for (const row of series) {
     if (ignoreBudgetId && row.id === ignoreBudgetId) continue;
@@ -196,6 +199,8 @@ function versionDataFromForm(
     nome: data.nome,
     valorPadrao: data.valorPadrao,
     diaFechamento: data.diaFechamento,
+    periodicidadeMeses: data.periodicidadeMeses ?? 1,
+    baseValorPeriodo: data.baseValorPeriodo ?? "total",
     antecedenciaCiclos: data.antecedenciaCiclos,
     origens: data.origens,
     contaId,
@@ -204,6 +209,13 @@ function versionDataFromForm(
     icone: data.icone,
     categoriaIds,
   };
+}
+
+/** Valor total do ciclo para a base escolhida (override legado é por ciclo). */
+function valorTotalDoCiclo(data: BudgetFormValues): number {
+  return data.baseValorPeriodo === "mensal"
+    ? data.valorPadrao * (data.periodicidadeMeses ?? 1)
+    : data.valorPadrao;
 }
 
 function insertVersion(
@@ -293,7 +305,7 @@ function upsertException(
 }
 
 export async function createBudgetAction(
-  input: BudgetFormValues,
+  input: BudgetFormInput,
 ): Promise<ActionResult> {
   const user = await requireUser();
   const { db } = scopedDb(user.workspaceId);
@@ -346,6 +358,8 @@ export async function createBudgetAction(
           nome: data.nome,
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
+          periodicidadeMeses: data.periodicidadeMeses ?? 1,
+          baseValorPeriodo: data.baseValorPeriodo ?? "total",
           antecedenciaCiclos: data.antecedenciaCiclos,
           origens: data.origens,
           sobraPolicy: data.sobraPolicy ?? "liberar",
@@ -365,7 +379,7 @@ export async function createBudgetAction(
           updatedAt: now,
           categoriaId: data.categoriaIds[0] as string,
           mes: data.dataInicio,
-          valorLimite: data.valorPadrao,
+          valorLimite: valorTotalDoCiclo(data),
         })
         .run();
 
@@ -510,19 +524,20 @@ export async function updateBudgetAction(
           versionData,
         );
         // Compatibilidade com o mecanismo antigo de override de valor.
+        const valorDoCiclo = valorTotalDoCiclo(data);
         tx.insert(budgetOverrides)
           .values({
             workspaceId,
             budgetId: series.id,
             ciclo,
-            valorCentavos: data.valorPadrao,
+            valorCentavos: valorDoCiclo,
             createdAt: now,
             updatedAt: now,
           })
           .onConflictDoUpdate({
             target: [budgetOverrides.budgetId, budgetOverrides.ciclo],
             set: {
-              valorCentavos: data.valorPadrao,
+              valorCentavos: valorDoCiclo,
               updatedAt: now,
             },
           })
@@ -593,6 +608,8 @@ export async function updateBudgetAction(
           nome: data.nome,
           valorPadrao: data.valorPadrao,
           diaFechamento: data.diaFechamento,
+          periodicidadeMeses: data.periodicidadeMeses ?? 1,
+          baseValorPeriodo: data.baseValorPeriodo ?? "total",
           antecedenciaCiclos: data.antecedenciaCiclos,
           origens: data.origens,
           cartaoId: data.cartaoId ?? null,
@@ -604,7 +621,7 @@ export async function updateBudgetAction(
           updatedAt: now,
           categoriaId: data.categoriaIds[0] as string,
           mes: data.dataInicio,
-          valorLimite: data.valorPadrao,
+          valorLimite: valorTotalDoCiclo(data),
         })
         .where(
           and(eq(budgets.id, series.id), ws(budgets.workspaceId)),
@@ -925,7 +942,7 @@ export async function getBudgetHintAction(input: {
   const card = cartaoId ? cardById.get(cartaoId) : null;
   const monthKey = data.slice(0, 7);
   const candidateCycles = new Set<string>();
-  for (let delta = -6; delta <= 6; delta += 1) {
+  for (let delta = -12; delta <= 6; delta += 1) {
     candidateCycles.add(addMonths(monthKey, delta));
   }
 
@@ -945,6 +962,10 @@ export async function getBudgetHintAction(input: {
         },
         resolved.diaFechamento,
         card,
+        {
+          periodicidadeMeses: resolved.periodicidadeMeses,
+          dataInicio: resolved.dataInicio,
+        },
       );
       if (consumed !== ciclo) continue;
 
@@ -977,6 +998,10 @@ export async function getBudgetHintAction(input: {
             },
             resolved.diaFechamento,
             transactionCard,
+            {
+              periodicidadeMeses: resolved.periodicidadeMeses,
+              dataInicio: resolved.dataInicio,
+            },
           ) === ciclo
         ) {
           const signed =
@@ -1126,7 +1151,7 @@ export async function listBudgetOptionsAction(input: {
 
   for (const row of loadBudgetSeries(workspaceId)) {
     if (row.arquivado) continue;
-    for (let delta = -2; delta <= 2; delta += 1) {
+    for (let delta = -12; delta <= 2; delta += 1) {
       const ciclo = addMonths(monthKey, delta);
       const resolved = resolverCiclo(row, ciclo);
       if (!resolved) continue;
@@ -1142,6 +1167,10 @@ export async function listBudgetOptionsAction(input: {
           },
           resolved.diaFechamento,
           card,
+          {
+            periodicidadeMeses: resolved.periodicidadeMeses,
+            dataInicio: resolved.dataInicio,
+          },
         ) !== ciclo
       ) {
         continue;

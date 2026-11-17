@@ -81,11 +81,19 @@ export type BudgetSobraPolicy = (typeof BUDGET_SOBRA_POLICIES)[number];
 export const BUDGET_EXCEPTION_TYPES = ["excluido", "ajustado"] as const;
 export type BudgetExceptionType = (typeof BUDGET_EXCEPTION_TYPES)[number];
 
+/** Como interpretar `valorPadrao` em uma periodicidade maior que 1 mês. */
+export const BUDGET_VALUE_BASES = ["total", "mensal"] as const;
+export type BudgetValueBase = (typeof BUDGET_VALUE_BASES)[number];
+
 /** Campos de configuração que podem variar por vigência/exceção. */
 export type BudgetVersionData = {
   nome: string;
   valorPadrao: number;
   diaFechamento: number;
+  /** Meses por ciclo (1 = mensal, 2 = bimestral, ..., 12 = anual). */
+  periodicidadeMeses: number;
+  /** `total` = valor do período inteiro; `mensal` = valor por mês. */
+  baseValorPeriodo: BudgetValueBase;
   antecedenciaCiclos: number;
   origens: BudgetOrigin;
   contaId: string | null;
@@ -556,6 +564,12 @@ export const budgets = sqliteTable(
     nome: text("nome").notNull().default(""),
     valorPadrao: integer("valor_padrao_centavos").notNull().default(0),
     diaFechamento: integer("dia_fechamento").notNull().default(1),
+    /** Meses por ciclo (1 = mensal, 2 = bimestral, ..., 12 = anual). */
+    periodicidadeMeses: integer("periodicidade_meses").notNull().default(1),
+    /** `total` = valor do período inteiro; `mensal` = valor por mês. */
+    baseValorPeriodo: text("base_valor_periodo", { enum: BUDGET_VALUE_BASES })
+      .notNull()
+      .default("total"),
     antecedenciaCiclos: integer("antecedencia_ciclos").notNull().default(0),
     /** @deprecated mantido no banco; a reserva é sempre no início do ciclo. */
     dataDaReserva: text("data_da_reserva", { enum: BUDGET_RESERVE_DATES })
@@ -614,6 +628,14 @@ export const budgets = sqliteTable(
     check(
       "budgets_fechamento_check",
       sql`${table.diaFechamento} between 1 and 31`,
+    ),
+    check(
+      "budgets_periodicidade_check",
+      sql`${table.periodicidadeMeses} between 1 and 12`,
+    ),
+    check(
+      "budgets_base_valor_check",
+      sql`${table.baseValorPeriodo} in ('total', 'mensal')`,
     ),
     check(
       "budgets_antecedencia_check",
@@ -690,6 +712,12 @@ export const budgetVersions = sqliteTable(
     nome: text("nome").notNull(),
     valorPadrao: integer("valor_padrao_centavos").notNull(),
     diaFechamento: integer("dia_fechamento").notNull(),
+    /** Meses por ciclo (1 = mensal, 2 = bimestral, ..., 12 = anual). */
+    periodicidadeMeses: integer("periodicidade_meses").notNull().default(1),
+    /** `total` = valor do período inteiro; `mensal` = valor por mês. */
+    baseValorPeriodo: text("base_valor_periodo", { enum: BUDGET_VALUE_BASES })
+      .notNull()
+      .default("total"),
     antecedenciaCiclos: integer("antecedencia_ciclos").notNull(),
     dataDaReserva: text("data_da_reserva", { enum: BUDGET_RESERVE_DATES })
       .notNull()
@@ -721,6 +749,14 @@ export const budgetVersions = sqliteTable(
     check(
       "budget_versions_fechamento_check",
       sql`${table.diaFechamento} between 1 and 31`,
+    ),
+    check(
+      "budget_versions_periodicidade_check",
+      sql`${table.periodicidadeMeses} between 1 and 12`,
+    ),
+    check(
+      "budget_versions_base_valor_check",
+      sql`${table.baseValorPeriodo} in ('total', 'mensal')`,
     ),
     check(
       "budget_versions_vencimento_check",

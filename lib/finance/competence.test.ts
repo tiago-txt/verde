@@ -103,6 +103,8 @@ describe("competência do orçamento", () => {
           nome: "Mercado",
           valorPadrao: 50_000,
           diaFechamento: 1,
+          periodicidadeMeses: 1,
+          baseValorPeriodo: "total",
           antecedenciaCiclos: 0,
           origens: "todas",
           contaId: null,

@@ -70,16 +70,24 @@ export function dataCompetencia(
 
 /**
  * Ciclo de orçamento consumido: ciclo que contém a data de competência,
- * deslocado manualmente em ciclos relativos ao padrão.
+ * deslocado manualmente em ciclos relativos ao padrão. `periodicidadeMeses` e
+ * `dataInicio` alinham o cálculo em séries com ciclos maiores que um mês.
  */
 export function cicloCompetencia(
   transaction: CompetenceTransaction,
   diaFechamento: number,
   card?: CompetenceCard | null,
+  options?: {
+    periodicidadeMeses?: number;
+    dataInicio?: string | null;
+  },
 ): string {
+  const periodicidade = options?.periodicidadeMeses ?? 1;
   const base = cicloDaData(
     dataCompetencia(transaction, card),
     diaFechamento,
+    periodicidade,
+    options?.dataInicio,
   );
   return addMonths(base, clampBudgetOffset(transaction.orcamentoDeslocamento));
 }

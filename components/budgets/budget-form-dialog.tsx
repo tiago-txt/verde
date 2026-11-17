@@ -32,6 +32,7 @@ import {
 import { formatMonthTitle } from "@/lib/format";
 import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
+import { BUDGET_PERIODICIDADE_OPTIONS } from "./budget-period";
 
 type BudgetFormDialogProps = {
   open: boolean;
@@ -55,6 +56,8 @@ function defaultValues(
       nome: budget.nome,
       valorPadrao: budget.valorPadrao,
       diaFechamento: budget.diaFechamento,
+      periodicidadeMeses: budget.periodicidadeMeses,
+      baseValorPeriodo: budget.baseValorPeriodo,
       antecedenciaCiclos: budget.antecedenciaCiclos === 1 ? 1 : 0,
       origens: budget.origens,
       sobraPolicy: budget.sobraPolicy,
@@ -74,6 +77,8 @@ function defaultValues(
     nome: "",
     valorPadrao: 50000,
     diaFechamento: 1,
+    periodicidadeMeses: 1,
+    baseValorPeriodo: "total",
     antecedenciaCiclos: 0,
     origens: "todas",
     sobraPolicy: "liberar",
@@ -95,6 +100,8 @@ function relevantChange(
 ): boolean {
   if (budget.valorPadrao !== values.valorPadrao) return true;
   if (budget.diaFechamento !== values.diaFechamento) return true;
+  if (budget.periodicidadeMeses !== values.periodicidadeMeses) return true;
+  if (budget.baseValorPeriodo !== values.baseValorPeriodo) return true;
   if (budget.dataInicio !== values.dataInicio) return true;
   if ((budget.dataFim ?? null) !== (values.dataFim ?? null)) return true;
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
@@ -144,6 +151,8 @@ export function BudgetFormDialog({
   const icone = watch("icone");
   const antecedencia = watch("antecedenciaCiclos");
   const diaFechamento = watch("diaFechamento");
+  const periodicidadeMeses = watch("periodicidadeMeses");
+  const baseValorPeriodo = watch("baseValorPeriodo");
   const sobraPolicy = watch("sobraPolicy");
   const destinations = useMemo(
     () =>
@@ -203,6 +212,9 @@ export function BudgetFormDialog({
               {`fecha dia ${
                 Number.isFinite(diaFechamento) ? diaFechamento : "—"
               }`}
+              {periodicidadeMeses > 1
+                ? ` · a cada ${periodicidadeMeses} meses`
+                : ""}
             </p>
           </DialogHeader>
 
@@ -224,12 +236,94 @@ export function BudgetFormDialog({
             </div>
 
             <div className="grid grid-cols-2 gap-3">
+              <div
+                className={cn(
+                  "space-y-1",
+                  periodicidadeMeses === 1 && "col-span-2",
+                )}
+              >
+                <Label
+                  htmlFor="budget-periodicidade"
+                  className="text-xs text-muted-foreground"
+                >
+                  Periodicidade
+                </Label>
+                <Controller
+                  control={control}
+                  name="periodicidadeMeses"
+                  render={({ field }) => (
+                    <NativeSelect
+                      id="budget-periodicidade"
+                      value={String(field.value ?? 1)}
+                      onChange={(event) => {
+                        const value = Number(event.target.value);
+                        field.onChange(value);
+                        if (value === 1) {
+                          form.setValue("baseValorPeriodo", "total", {
+                            shouldDirty: true,
+                          });
+                        }
+                      }}
+                    >
+                      {BUDGET_PERIODICIDADE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                  )}
+                />
+                <p className="text-xs text-muted-foreground">
+                  {periodicidadeMeses > 1
+                    ? `O ciclo dura ${periodicidadeMeses} meses.`
+                    : "Um ciclo por mês."}
+                </p>
+              </div>
+
+              {periodicidadeMeses > 1 && (
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="budget-base-valor"
+                    className="text-xs text-muted-foreground"
+                  >
+                    Valor
+                  </Label>
+                  <Controller
+                    control={control}
+                    name="baseValorPeriodo"
+                    render={({ field }) => (
+                      <NativeSelect
+                        id="budget-base-valor"
+                        value={field.value ?? "total"}
+                        onChange={(event) =>
+                          field.onChange(event.target.value)
+                        }
+                      >
+                        <option value="total">Total do período</option>
+                        <option value="mensal">Por mês</option>
+                      </NativeSelect>
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {baseValorPeriodo === "mensal"
+                      ? `O limite do ciclo será ${periodicidadeMeses} vezes o valor mensal.`
+                      : "O valor informado vale para o período inteiro."}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label
                   htmlFor="budget-valor"
                   className="text-xs text-muted-foreground"
                 >
-                  Valor por ciclo
+                  {periodicidadeMeses > 1
+                    ? baseValorPeriodo === "mensal"
+                      ? "Valor por mês"
+                      : "Valor total do período"
+                    : "Valor do ciclo"}
                 </Label>
                 <Controller
                   control={control}

@@ -123,6 +123,65 @@ describe("migration 0009 (competência e fechamento do cartão)", () => {
   });
 });
 
+describe("migration 0021 (periodicidade do orçamento)", () => {
+  it("preserva os dados existentes e aplica mensal/total como padrão", () => {
+    testDb = createPreviousStageDatabase(20);
+    const db = testDb.sqlite;
+    db.prepare(
+      "insert into workspaces (id, nome, created_at) values ('ws-1', 'Workspace', ?)",
+    ).run(NOW);
+    db.prepare(
+      `insert into categories (id, workspace_id, nome, tipo, icone, cor, categoria_pai_id, is_system, created_at, updated_at)
+       values ('cat-1', 'ws-1', 'Mercado', 'despesa', 'ShoppingCart', '#84cc16', null, 0, ?, ?)`,
+    ).run(NOW, NOW);
+    db.prepare(
+      `insert into budgets (id, workspace_id, nome, valor_padrao_centavos, dia_fechamento, antecedencia_ciclos, data_da_reserva, dia_vencimento, origens, conta_id, cartao_id, data_inicio, data_fim, sobra_policy, cor, icone, arquivado, created_at, updated_at, categoria_id, mes, valor_limite)
+       values ('budget-1', 'ws-1', 'Alimentação', 50000, 10, 1, 'inicio_do_ciclo', 20, 'cartao', null, null, '2026-01', null, 'liberar', '#34d399', 'Target', 0, ?, ?, 'cat-1', '2026-01', 50000)`,
+    ).run(NOW, NOW);
+    db.prepare(
+      `insert into budget_versions (id, workspace_id, budget_id, vigente_apartir, nome, valor_padrao_centavos, dia_fechamento, antecedencia_ciclos, data_da_reserva, dia_vencimento, origens, conta_id, cartao_id, cor, icone, categoria_ids, created_at, updated_at)
+       values ('version-1', 'ws-1', 'budget-1', '2026-01', 'Alimentação', 50000, 10, 1, 'inicio_do_ciclo', 20, 'cartao', null, null, '#34d399', 'Target', '["cat-1"]', ?, ?)`,
+    ).run(NOW, NOW);
+
+    migrateRemaining(testDb);
+
+    const budget = db
+      .prepare(
+        "select nome, valor_padrao_centavos, periodicidade_meses, base_valor_periodo from budgets where id = 'budget-1'",
+      )
+      .get() as {
+      nome: string;
+      valor_padrao_centavos: number;
+      periodicidade_meses: number;
+      base_valor_periodo: string;
+    };
+    expect(budget).toEqual({
+      nome: "Alimentação",
+      valor_padrao_centavos: 50000,
+      periodicidade_meses: 1,
+      base_valor_periodo: "total",
+    });
+
+    const version = db
+      .prepare(
+        "select id, valor_padrao_centavos, periodicidade_meses, base_valor_periodo from budget_versions where budget_id = 'budget-1'",
+      )
+      .get() as {
+      id: string;
+      valor_padrao_centavos: number;
+      periodicidade_meses: number;
+      base_valor_periodo: string;
+    };
+    expect(version).toEqual({
+      id: "version-1",
+      valor_padrao_centavos: 50000,
+      periodicidade_meses: 1,
+      base_valor_periodo: "total",
+    });
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  });
+});
+
 describe("migration 0008 (versões e exceções de orçamento)", () => {
   it("cria a versão inicial e migra overrides para exceções ajustadas", () => {
     testDb = createPreviousStageDatabase(7);
