@@ -409,6 +409,12 @@ export function TransactionFormDialog({
       ? datasDaFatura(effectiveInvoiceKey, selectedCard)
       : null;
   const fixedSeries = repeticao === "fixa";
+  const monthKey = data.slice(0, 7);
+  const validBudgets = formData.budgets.filter(
+    (budget) =>
+      budget.dataInicio <= monthKey &&
+      (!budget.dataFim || budget.dataFim >= monthKey),
+  );
   const invoiceOptions = useMemo(() => {
     if (!cardInvoiceKey) return [] as string[];
     const purchaseMonth = data.slice(0, 7);
@@ -1736,47 +1742,6 @@ export function TransactionFormDialog({
                         </span>
                       </p>
                     )}
-                    <div className="space-y-1 pt-1">
-                      <FieldLabel htmlFor="transaction-orcamento">
-                        Orçamento
-                      </FieldLabel>
-                      <NativeSelect
-                        id="transaction-orcamento"
-                        value={
-                          orcamentoIgnorado ? "none" : (orcamentoId ?? "")
-                        }
-                        onChange={(event) => {
-                          const next = event.target.value;
-                          if (next === "none") {
-                            setValue("orcamentoIgnorado", true, {
-                              shouldDirty: true,
-                            });
-                            setValue("orcamentoId", null, {
-                              shouldDirty: true,
-                            });
-                            return;
-                          }
-                          setValue("orcamentoIgnorado", false, {
-                            shouldDirty: true,
-                          });
-                          setValue("orcamentoId", next || null, {
-                            shouldDirty: true,
-                          });
-                        }}
-                      >
-                        <option value="">Automático pela categoria</option>
-                        <option value="none">Nenhum orçamento</option>
-                        {formData.budgets.map((budget) => (
-                          <option key={budget.id} value={budget.id}>
-                            {budget.nome}
-                          </option>
-                        ))}
-                      </NativeSelect>
-                      <p className="text-xs text-muted-foreground">
-                        Sobrepõe a categoria. Em compras parceladas, vale para
-                        todas as parcelas.
-                      </p>
-                    </div>
                     {forecastHint?.temAlerta && forecastHint.periodo && (
                       <div
                         aria-live="polite"
@@ -1910,6 +1875,41 @@ export function TransactionFormDialog({
               <div className="col-span-2 sm:col-span-6">
                 <Accordion open={activeChip === "orcamento"}>
                   <div className="space-y-2">
+                    <FieldLabel htmlFor="transaction-orcamento">
+                      Orçamento
+                    </FieldLabel>
+                    <NativeSelect
+                      id="transaction-orcamento"
+                      value={orcamentoIgnorado ? "none" : (orcamentoId ?? "")}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        if (next === "none") {
+                          setValue("orcamentoIgnorado", true, {
+                            shouldDirty: true,
+                          });
+                          setValue("orcamentoId", null, { shouldDirty: true });
+                          return;
+                        }
+                        setValue("orcamentoIgnorado", false, {
+                          shouldDirty: true,
+                        });
+                        setValue("orcamentoId", next || null, {
+                          shouldDirty: true,
+                        });
+                      }}
+                    >
+                      <option value="">Automático pela categoria</option>
+                      <option value="none">Nenhum orçamento</option>
+                      {validBudgets.map((budget) => (
+                        <option key={budget.id} value={budget.id}>
+                          {budget.nome}
+                        </option>
+                      ))}
+                    </NativeSelect>
+                    <p className="text-xs text-muted-foreground">
+                      Sobrepõe a categoria. Em compras parceladas, vale para
+                      todas as parcelas.
+                    </p>
                     <FieldLabel>Orçamento de</FieldLabel>
                     <div className="grid grid-cols-3 gap-1.5">
                       {(

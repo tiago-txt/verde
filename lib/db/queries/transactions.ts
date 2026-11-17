@@ -139,7 +139,14 @@ export type TransactionFormData = {
   cards: CardOption[];
   categories: ReturnType<typeof listAllCategories>;
   tags: ReturnType<typeof listTags>;
-  budgets: { id: string; nome: string; cor: string; icone: string }[];
+  budgets: {
+    id: string;
+    nome: string;
+    cor: string;
+    icone: string;
+    dataInicio: string;
+    dataFim: string | null;
+  }[];
   lastAccountId: string | null;
   lastCardId: string | null;
   recentDescriptions: RecentDescription[];
@@ -659,6 +666,8 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
         nome: budget.nome,
         cor: budget.cor,
         icone: budget.icone,
+        dataInicio: budget.dataInicio,
+        dataFim: budget.dataFim,
       }),
     ),
     lastAccountId: lastTransaction?.contaId ?? null,
