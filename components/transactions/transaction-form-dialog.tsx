@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import {
   AlertTriangle,
   ArrowRight,
+  Calculator,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -77,7 +78,12 @@ import type { Scope } from "@/lib/finance/scopes";
 import { formatCurrency, formatDate, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { useSheetViewport } from "@/lib/hooks/use-sheet-viewport";
 import { useIsMobile } from "@/lib/hooks/use-is-mobile";
-import { keypadDisplay } from "@/lib/finance/numeric-keypad";
+import {
+  applyCalculatorOperator,
+  applyKeypadKey,
+  keypadDisplay,
+  type KeypadOperator,
+} from "@/lib/finance/numeric-keypad";
 import { NumericKeypad } from "./numeric-keypad";
 import { ScopeDialog } from "./scope-dialog";
 import { DetachDialog, type DetachMode } from "./detach-dialog";
@@ -113,6 +119,8 @@ function buildDefaults(
   formData: TransactionFormData,
   mode: "create" | "edit",
   initialCartaoId?: string | null,
+  initialDate?: string | null,
+  lastUsed?: { contaId: string | null; cartaoId: string | null } | null,
 ): TransactionFormValues {
   if (mode === "edit" && transaction) {
     return {
@@ -142,13 +150,17 @@ function buildDefaults(
   }
 
   const lastCard = formData.cards.find(
-    (card) => card.id === formData.lastCardId && !card.arquivado,
+    (card) =>
+      card.id === (lastUsed ? lastUsed.cartaoId : formData.lastCardId) &&
+      !card.arquivado,
   );
   const initialCard = formData.cards.find(
     (card) => card.id === initialCartaoId && !card.arquivado,
   );
   const lastAccount = formData.accounts.find(
-    (account) => account.id === formData.lastAccountId && !account.arquivada,
+    (account) =>
+      account.id === (lastUsed ? lastUsed.contaId : formData.lastAccountId) &&
+      !account.arquivada,
   );
   const firstAccount =
     lastAccount ??
@@ -160,7 +172,7 @@ function buildDefaults(
     tipo: "despesa",
     descricao: "",
     valor: 0,
-    data: todayISO(),
+    data: initialDate ?? todayISO(),
     pago: true,
     contaId: defaultCard ? null : (firstAccount?.id ?? null),
     cartaoId: defaultCard?.id ?? null,
@@ -270,6 +282,8 @@ type TransactionFormDialogProps = {
   scope?: Scope;
   formData: TransactionFormData;
   initialCartaoId?: string | null;
+  /** Data inicial ao criar; por padrão, hoje. */
+  initialDate?: string | null;
   onSaved: () => void;
   onRequestDelete?: (transaction: TransactionListItem) => void;
 };
@@ -282,6 +296,7 @@ export function TransactionFormDialog({
   scope = "single",
   formData,
   initialCartaoId = null,
+  initialDate = null,
   onSaved,
   onRequestDelete,
 }: TransactionFormDialogProps) {
@@ -308,6 +323,15 @@ export function TransactionFormDialog({
   const [newTagName, setNewTagName] = useState("");
   const [creatingTag, setCreatingTag] = useState(false);
   const [keypadOpen, setKeypadOpen] = useState(true);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [calculatorLeft, setCalculatorLeft] = useState<number | null>(null);
+  const [calculatorOperator, setCalculatorOperator] =
+    useState<KeypadOperator | null>(null);
+  const [calculatorFresh, setCalculatorFresh] = useState(false);
+  const lastUsedRef = useRef<{
+    contaId: string | null;
+    cartaoId: string | null;
+  } | null>(null);
   const skipConfirmRef = useRef(false);
   const { toast } = useToast();
   const isMobile = useIsMobile();
@@ -334,7 +358,13 @@ export function TransactionFormDialog({
 
   const form = useForm<TransactionFormValues>({
     resolver: zodResolver(createTransactionSchema),
-    defaultValues: buildDefaults(transaction, formData, mode, initialCartaoId),
+    defaultValues: buildDefaults(
+      transaction,
+      formData,
+      mode,
+      initialCartaoId,
+      initialDate,
+    ),
   });
 
   const { register, control, handleSubmit, reset, watch, setValue, formState } =
@@ -422,8 +452,29 @@ export function TransactionFormDialog({
     setDescriptionOpen(false);
     setAccountTouched(false);
     setKeypadOpen(true);
-    reset(buildDefaults(transaction, formData, mode, initialCartaoId));
-  }, [open, transaction, formData, mode, reset, initialCartaoId]);
+    setCalculatorOpen(false);
+    setCalculatorLeft(null);
+    setCalculatorOperator(null);
+    setCalculatorFresh(false);
+    reset(
+      buildDefaults(
+        transaction,
+        formData,
+        mode,
+        initialCartaoId,
+        initialDate,
+        lastUsedRef.current,
+      ),
+    );
+  }, [
+    open,
+    transaction,
+    formData,
+    mode,
+    reset,
+    initialCartaoId,
+    initialDate,
+  ]);
 
   const categoryOptions = formData.categories.filter(
     (category) =>
@@ -691,6 +742,11 @@ export function TransactionFormDialog({
       return;
     }
 
+    lastUsedRef.current = {
+      contaId: values.contaId,
+      cartaoId: values.cartaoId,
+    };
+
     if (result.budgetNotice) {
       toast({
         description: result.budgetNotice.message,
@@ -715,10 +771,23 @@ export function TransactionFormDialog({
     }
 
     if (keepOpen) {
-      reset(buildDefaults(null, formData, "create", initialCartaoId));
+      reset(
+        buildDefaults(
+          null,
+          formData,
+          "create",
+          initialCartaoId,
+          initialDate,
+          lastUsedRef.current,
+        ),
+      );
       setActiveChip(null);
       setServerError(null);
       setKeypadOpen(true);
+      setCalculatorOpen(false);
+      setCalculatorLeft(null);
+      setCalculatorOperator(null);
+      setCalculatorFresh(false);
       onSaved();
       requestAnimationFrame(() => {
         document.getElementById("transaction-valor")?.focus();
@@ -768,6 +837,70 @@ export function TransactionFormDialog({
     setPendingSave(null);
     if (!pending) return;
     void save(pending.values, pending.keepOpen, choice);
+  }
+
+  function setValor(next: number) {
+    setValue("valor", next, {
+      shouldValidate: true,
+      shouldDirty: true,
+    });
+  }
+
+  function handleKeypadKey(key: string) {
+    const base = calculatorFresh ? 0 : valor;
+    setValor(applyKeypadKey(base, key));
+    if (calculatorFresh && /^\d/.test(key)) setCalculatorFresh(false);
+  }
+
+  function handleCalculatorOperator(operator: KeypadOperator) {
+    if (calculatorLeft === null) {
+      setCalculatorLeft(valor);
+    } else if (calculatorOperator && !calculatorFresh) {
+      setCalculatorLeft(
+        applyCalculatorOperator(calculatorLeft, valor, calculatorOperator),
+      );
+    }
+    setCalculatorOperator(operator);
+    setCalculatorFresh(true);
+    setValor(0);
+  }
+
+  function handleCalculatorEquals() {
+    if (calculatorLeft === null || !calculatorOperator) return;
+    const result = applyCalculatorOperator(
+      calculatorLeft,
+      calculatorFresh ? 0 : valor,
+      calculatorOperator,
+    );
+    setValor(result);
+    setCalculatorLeft(null);
+    setCalculatorOperator(null);
+    setCalculatorFresh(false);
+  }
+
+  function handleCalculatorClear() {
+    setCalculatorLeft(null);
+    setCalculatorOperator(null);
+    setCalculatorFresh(false);
+    setValor(0);
+  }
+
+  function toggleCalculator() {
+    if (calculatorOpen) {
+      if (calculatorLeft !== null && calculatorOperator) {
+        setValor(
+          applyCalculatorOperator(
+            calculatorLeft,
+            calculatorFresh ? 0 : valor,
+            calculatorOperator,
+          ),
+        );
+      }
+      setCalculatorLeft(null);
+      setCalculatorOperator(null);
+      setCalculatorFresh(false);
+    }
+    setCalculatorOpen(!calculatorOpen);
   }
 
   const onSubmit = handleSubmit((values) => persist(values, false));
@@ -886,6 +1019,12 @@ export function TransactionFormDialog({
     ) : null;
 
   const keypadText = keypadDisplay(valor);
+  const calculatorExpression =
+    calculatorOpen && calculatorLeft !== null && calculatorOperator
+      ? `${formatCurrency(calculatorLeft)} ${
+          calculatorOperator === "+" ? "+" : "−"
+        } ${calculatorFresh ? "…" : formatCurrency(valor)}`
+      : null;
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -2095,26 +2234,50 @@ export function TransactionFormDialog({
 
               {keypadOpen && (
                 <div className="border-t border-border px-3">
-                  <div className="mx-auto flex h-11 max-w-sm items-center justify-between px-1">
-                    <span className="text-xs text-muted-foreground">
-                      Valor em reais
+                  <div className="mx-auto flex h-11 max-w-sm items-center justify-between gap-2 px-1">
+                    <span className="min-w-0 truncate text-xs text-muted-foreground">
+                      {calculatorExpression ?? "Valor em reais"}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => setKeypadOpen(false)}
-                      className="inline-flex h-10 items-center gap-1 rounded-full px-3 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      Concluir
-                      <ChevronDown className="h-4 w-4" />
-                    </button>
+                    <div className="flex shrink-0 items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={toggleCalculator}
+                        aria-label={
+                          calculatorOpen
+                            ? "Desativar calculadora"
+                            : "Abrir calculadora"
+                        }
+                        aria-pressed={calculatorOpen}
+                        className={cn(
+                          "grid h-10 w-10 place-items-center rounded-full transition-colors",
+                          calculatorOpen
+                            ? "bg-primary/15 text-primary"
+                            : "text-muted-foreground hover:bg-accent hover:text-foreground",
+                        )}
+                      >
+                        <Calculator className="h-4 w-4" aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setKeypadOpen(false)}
+                        className="inline-flex h-10 items-center gap-1 rounded-full px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        Ocultar teclado
+                        <ChevronDown className="h-4 w-4" />
+                      </button>
+                    </div>
                   </div>
                   <NumericKeypad
-                    value={valor}
-                    onChange={(cents) =>
-                      setValue("valor", cents, {
-                        shouldValidate: true,
-                        shouldDirty: true,
-                      })
+                    onKey={handleKeypadKey}
+                    calculator={
+                      calculatorOpen
+                        ? {
+                            operator: calculatorOperator,
+                            onOperator: handleCalculatorOperator,
+                            onEquals: handleCalculatorEquals,
+                            onClear: handleCalculatorClear,
+                          }
+                        : undefined
                     }
                     className="mx-auto max-w-sm"
                   />

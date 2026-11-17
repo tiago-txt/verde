@@ -23,3 +23,21 @@ export function applyKeypadKey(
 export function keypadDisplay(cents: number): string {
   return (Math.max(0, cents) / 100).toFixed(2).replace(".", ",");
 }
+
+export type KeypadOperator = "+" | "-";
+
+/**
+ * Calculadora simples do teclado, sempre em centavos inteiros.
+ * A subtração não deixa o valor negativo porque o lançamento não aceita isso.
+ */
+export function applyCalculatorOperator(
+  left: number,
+  right: number,
+  operator: KeypadOperator,
+): number {
+  const safeLeft = Number.isFinite(left) ? Math.max(0, Math.trunc(left)) : 0;
+  const safeRight = Number.isFinite(right) ? Math.max(0, Math.trunc(right)) : 0;
+  const result =
+    operator === "+" ? safeLeft + safeRight : safeLeft - safeRight;
+  return Math.max(0, result);
+}

@@ -4,6 +4,7 @@ import {
   addMonths,
   dateInMonth,
   daysInMonth,
+  defaultDateForMonth,
   isValidISODate,
   isValidMonthKey,
   monthRange,
@@ -74,5 +75,20 @@ describe("validadores", () => {
 
   it("todayISO está no formato YYYY-MM-DD", () => {
     expect(todayISO()).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});
+
+describe("data padrão do mês visualizado", () => {
+  it("mantém o dia de hoje no mês atual", () => {
+    expect(defaultDateForMonth("2026-11", "2026-11-17")).toBe("2026-11-17");
+  });
+
+  it("usa o mesmo dia em outro mês, limitado ao fim do mês", () => {
+    expect(defaultDateForMonth("2026-12", "2026-11-17")).toBe("2026-12-17");
+    expect(defaultDateForMonth("2026-02", "2026-01-31")).toBe("2026-02-28");
+  });
+
+  it("cai para hoje quando o mês é inválido", () => {
+    expect(defaultDateForMonth("2026-13", "2026-11-17")).toBe("2026-11-17");
   });
 });

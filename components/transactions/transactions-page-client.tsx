@@ -110,7 +110,7 @@ import type { ForecastBannerData } from "@/lib/db/queries/forecast";
 import {
   addMonths,
   currentMonth,
-  todayISO,
+  defaultDateForMonth,
 } from "@/lib/dates";
 import type { Scope } from "@/lib/finance/scopes";
 import { countLabel } from "@/lib/design/plural";
@@ -1555,6 +1555,7 @@ export function TransactionsPageClient({
           onOpenChange={closeCreate}
           mode="create"
           formData={formData}
+          initialDate={defaultDateForMonth(filters.mes)}
           onSaved={handleSaved}
         />
       )}

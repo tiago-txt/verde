@@ -427,7 +427,10 @@ async function MonthBlock({
         {result.receitas === 0 && result.despesas === 0 && (
           <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             Nenhum movimento neste mês.
-            <Link href="/lancamentos?novo=1" className="font-medium text-primary hover:underline">
+            <Link
+              href={`/lancamentos?novo=1&mes=${month}`}
+              className="font-medium text-primary hover:underline"
+            >
               Lançar agora
             </Link>
           </p>

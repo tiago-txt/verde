@@ -44,7 +44,7 @@ export function DashboardMonthHeader({ month }: { month: string }) {
           <a href="/relatorios">Relatórios</a>
         </Button>
         <Button asChild className="h-11 max-sm:h-12">
-          <a href="/lancamentos?novo=1">
+          <a href={`/lancamentos?novo=1&mes=${month}`}>
             <Plus className="h-4 w-4" />
             <span className="hidden sm:inline">Novo lançamento</span>
             <span className="sm:hidden">Novo</span>

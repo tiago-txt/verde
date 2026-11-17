@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { applyKeypadKey, KEYPAD_MAX_DIGITS, keypadDisplay } from "./numeric-keypad";
+import {
+  applyCalculatorOperator,
+  applyKeypadKey,
+  KEYPAD_MAX_DIGITS,
+  keypadDisplay,
+} from "./numeric-keypad";
 
 describe("teclado numérico em centavos", () => {
   it("digita dígitos e 00 deslocando em centavos", () => {
@@ -25,5 +30,21 @@ describe("teclado numérico em centavos", () => {
   it("ignora teclas inválidas e limpa", () => {
     expect(applyKeypadKey(500, "x")).toBe(500);
     expect(applyKeypadKey(500, "clear")).toBe(0);
+  });
+});
+
+describe("calculadora do teclado em centavos", () => {
+  it("soma e subtrai valores inteiros", () => {
+    expect(applyCalculatorOperator(1_000, 250, "+")).toBe(1_250);
+    expect(applyCalculatorOperator(1_000, 250, "-")).toBe(750);
+  });
+
+  it("não deixa o lançamento negativo", () => {
+    expect(applyCalculatorOperator(100, 250, "-")).toBe(0);
+  });
+
+  it("ignora valores inválidos e arredonda centavos", () => {
+    expect(applyCalculatorOperator(Number.NaN, 500, "+")).toBe(500);
+    expect(applyCalculatorOperator(500.9, 100.2, "+")).toBe(600);
   });
 });

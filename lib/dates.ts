@@ -15,6 +15,18 @@ export function currentMonth(): string {
   return todayISO().slice(0, 7);
 }
 
+/**
+ * Data inicial de um novo lançamento conforme o mês que está sendo visto.
+ * Mantém o dia de hoje, limitado ao último dia do mês visualizado.
+ */
+export function defaultDateForMonth(
+  monthKey: string,
+  today = todayISO(),
+): string {
+  if (!isValidMonthKey(monthKey)) return today;
+  return dateInMonth(monthKey, Number(today.slice(8, 10)) || 1);
+}
+
 export function monthOf(isoDate: string): string {
   return isoDate.slice(0, 7);
 }
