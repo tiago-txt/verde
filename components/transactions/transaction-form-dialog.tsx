@@ -80,6 +80,7 @@ import { useIsMobile } from "@/lib/hooks/use-is-mobile";
 import { keypadDisplay } from "@/lib/finance/numeric-keypad";
 import { NumericKeypad } from "./numeric-keypad";
 import { ScopeDialog } from "./scope-dialog";
+import { DetachDialog, type DetachMode } from "./detach-dialog";
 import {
   createTransactionSchema,
   type TransactionFormValues,
@@ -285,6 +286,11 @@ export function TransactionFormDialog({
   const [serverError, setServerError] = useState<string | null>(null);
   const [confirmCloseOpen, setConfirmCloseOpen] = useState(false);
   const [scopePromptOpen, setScopePromptOpen] = useState(false);
+  const [detachPromptOpen, setDetachPromptOpen] = useState(false);
+  const [pendingDetach, setPendingDetach] = useState<{
+    values: TransactionFormValues;
+    keepOpen: boolean;
+  } | null>(null);
   const [pendingSave, setPendingSave] = useState<{
     values: TransactionFormValues;
     keepOpen: boolean;
@@ -634,6 +640,7 @@ export function TransactionFormDialog({
     values: TransactionFormValues,
     keepOpen: boolean,
     saveScope: Scope,
+    detach?: DetachMode,
   ) {
     const result =
       mode === "edit" && transaction
@@ -641,6 +648,7 @@ export function TransactionFormDialog({
             ...values,
             id: transaction.id,
             scope: saveScope,
+            detach,
           })
         : await createTransactionAction(values);
 
@@ -697,15 +705,27 @@ export function TransactionFormDialog({
       return;
     }
 
-    // Em lançamentos recorrentes/parcelados o alcance é escolhido só na hora
-    // de salvar. "Todos" não é oferecido para evitar alterações em cascata.
+    // Em lançamentos agrupados o alcance é escolhido na hora de salvar.
     if (mode === "edit" && transaction && isGrouped) {
+      if (values.repeticao === "nenhuma") {
+        setPendingDetach({ values, keepOpen });
+        setDetachPromptOpen(true);
+        return;
+      }
       setPendingSave({ values, keepOpen });
       setScopePromptOpen(true);
       return;
     }
 
     await save(values, keepOpen, scope);
+  }
+
+  function handleDetachChoice(mode: DetachMode) {
+    const pending = pendingDetach;
+    setDetachPromptOpen(false);
+    setPendingDetach(null);
+    if (!pending) return;
+    void save(pending.values, pending.keepOpen, "single", mode);
   }
 
   function handleSaveScope(choice: Scope) {
@@ -1664,7 +1684,14 @@ export function TransactionFormDialog({
               <div className="col-span-2 sm:col-span-6">
                 <Accordion open={activeChip === "repetir"}>
                   <div className="space-y-2">
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div
+                      className={cn(
+                        "grid gap-1.5",
+                        mode === "edit" && isGrouped
+                          ? "grid-cols-1 sm:grid-cols-3"
+                          : "grid-cols-3",
+                      )}
+                    >
                       {repetitionOptions.map((option) => (
                         <button
                           key={option.value}
@@ -1679,7 +1706,7 @@ export function TransactionFormDialog({
                             tipo === "transferencia"
                           }
                           className={cn(
-                            "min-h-9 rounded-md border px-2 py-1.5 text-xs font-medium leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40",
+                            "min-h-12 whitespace-normal rounded-md border px-2 py-1.5 text-xs font-medium leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-40 sm:min-h-10",
                             repeticao === option.value
                               ? "border-primary/50 bg-primary/10 text-primary"
                               : "border-border text-muted-foreground hover:bg-accent",
@@ -2072,17 +2099,29 @@ export function TransactionFormDialog({
       </DialogContent>
 
       {transaction && (
-        <ScopeDialog
-          open={scopePromptOpen}
-          onOpenChange={(next) => {
-            setScopePromptOpen(next);
-            if (!next) setPendingSave(null);
-          }}
-          mode="edit"
-          transaction={transaction}
-          scopes={isConversion ? ["future"] : undefined}
-          onSelect={handleSaveScope}
-        />
+        <>
+          <ScopeDialog
+            open={scopePromptOpen}
+            onOpenChange={(next) => {
+              setScopePromptOpen(next);
+              if (!next) setPendingSave(null);
+            }}
+            mode="edit"
+            transaction={transaction}
+            scopes={isConversion ? ["future"] : undefined}
+            onSelect={handleSaveScope}
+          />
+
+          <DetachDialog
+            open={detachPromptOpen}
+            onOpenChange={(next) => {
+              setDetachPromptOpen(next);
+              if (!next) setPendingDetach(null);
+            }}
+            transaction={transaction}
+            onSelect={handleDetachChoice}
+          />
+        </>
       )}
 
       <Dialog open={confirmCloseOpen} onOpenChange={setConfirmCloseOpen}>

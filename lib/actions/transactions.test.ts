@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull } from "drizzle-orm";
 import {
   createTestDatabase,
   createWorkspaceUser,
@@ -17,7 +17,11 @@ import {
   type User,
 } from "@/lib/db/schema";
 import { createRecurrenceFromTransactionsAction } from "@/lib/actions/transactions";
-import { updateTransactionAction } from "@/lib/actions/transactions";
+import {
+  deleteTransactionAction,
+  normalizeOrphanInstallmentsAction,
+  updateTransactionAction,
+} from "@/lib/actions/transactions";
 import type { UpdateTransactionInput } from "@/lib/validation/transactions";
 
 const state = vi.hoisted(() => ({ user: null as User | null }));
@@ -460,12 +464,12 @@ describe("edição da série: destacar, converter e encerrar", () => {
     return { id, recurrenceId: edited?.recorrenciaId as string };
   }
 
-  async function createInstallmentSeries() {
+  async function createInstallmentSeries(total = 3) {
     const id = insertTransaction({ data: "2024-01-10", valor: 100_000 });
     const result = await updateTransactionAction(
       updateInput(id, {
         repeticao: "parcelada",
-        parcelas: 3,
+        parcelas: total,
         baseValor: "total",
         valor: 100_000,
       }),
@@ -580,6 +584,17 @@ describe("edição da série: destacar, converter e encerrar", () => {
 
   it("destaca as próximas parcelas sem tocar nas anteriores", async () => {
     const { groupId } = await createInstallmentSeries();
+    const first = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 1),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
     const february = testDb.db
       .select()
       .from(transactions)
@@ -603,13 +618,23 @@ describe("edição da série: destacar, converter e encerrar", () => {
     );
     expect(result.ok).toBe(true);
 
+    const firstAfter = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, first!.id))
+      .get();
+    expect(firstAfter).toMatchObject({
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+
     const group = testDb.db
       .select()
       .from(transactions)
       .where(eq(transactions.parcelaGrupoId, groupId))
       .all();
-    expect(group).toHaveLength(1);
-    expect(group[0]?.parcelaAtual).toBe(1);
+    expect(group).toHaveLength(0);
 
     const detached = testDb.db
       .select()
@@ -673,8 +698,267 @@ describe("edição da série: destacar, converter e encerrar", () => {
     expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
   });
 
-  it("converte as próximas parcelas em série fixa", async () => {
-    const { groupId } = await createInstallmentSeries();
+  it("separa uma parcela em 1/(n-1), avulsa e 1/(m)", async () => {
+    const { groupId } = await createInstallmentSeries(5);
+    const third = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 3),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+    expect(third).toBeTruthy();
+
+    const result = await updateTransactionAction(
+      updateInput(third!.id, {
+        data: third!.data,
+        descricao: "Parcela avulsa",
+        repeticao: "nenhuma",
+        scope: "single",
+        detach: "split",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const previous = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(previous.map((row) => [row.parcelaAtual, row.parcelaTotal])).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+
+    const detached = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, third!.id))
+      .get();
+    expect(detached).toMatchObject({
+      descricao: "Parcela avulsa",
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+
+    const nextGroupId = selectedTransactions().find(
+      (row) => row.parcelaGrupoId && row.parcelaGrupoId !== groupId,
+    )?.parcelaGrupoId;
+    const next = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === nextGroupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(next.map((row) => [row.parcelaAtual, row.parcelaTotal])).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+  });
+
+  it("mantém só a parcela e remove as seguintes", async () => {
+    const { groupId } = await createInstallmentSeries(5);
+    const fourth = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 4),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(fourth!.id, {
+        data: fourth!.data,
+        descricao: "Única parcela",
+        repeticao: "nenhuma",
+        scope: "single",
+        detach: "only",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const previous = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(previous.map((row) => [row.parcelaAtual, row.parcelaTotal])).toEqual([
+      [1, 3],
+      [2, 3],
+      [3, 3],
+    ]);
+
+    const detached = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, fourth!.id))
+      .get();
+    expect(detached).toMatchObject({
+      descricao: "Única parcela",
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+    });
+
+    expect(
+      testDb.db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.parcelaGrupoId, groupId),
+            eq(transactions.parcelaAtual, 5),
+          ),
+        )
+        .get()?.deletedAt,
+    ).toBeTruthy();
+  });
+
+  it("mantém só a ocorrência e remove as próximas de uma série fixa", async () => {
+    const { recurrenceId } = await createFixedSeries();
+    const march = byDate(recurrenceId, "2024-03-10");
+
+    const result = await updateTransactionAction(
+      updateInput(march!.id, {
+        data: "2024-03-10",
+        descricao: "Ocorrência única",
+        repeticao: "nenhuma",
+        scope: "single",
+        detach: "only",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const original = testDb.db
+      .select()
+      .from(recurrences)
+      .where(eq(recurrences.id, recurrenceId))
+      .get();
+    expect(original?.dataFim).toBe("2024-03-09");
+
+    const detached = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, march!.id))
+      .get();
+    expect(detached).toMatchObject({
+      descricao: "Ocorrência única",
+      recorrenciaId: null,
+    });
+
+    expect(byDate(recurrenceId, "2024-02-10")).toBeTruthy();
+    expect(
+      testDb.db
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.recorrenciaId, recurrenceId),
+            gt(transactions.data, "2024-03-10"),
+          ),
+        )
+        .get()?.deletedAt,
+    ).toBeTruthy();
+  });
+
+  it("reenumera as parcelas restantes ao excluir uma parcela", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await deleteTransactionAction({
+      id: second!.id,
+      scope: "single",
+    });
+    expect(result.ok).toBe(true);
+
+    const remaining = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(remaining.map((row) => [row.parcelaAtual, row.parcelaTotal])).toEqual([
+      [1, 2],
+      [2, 2],
+    ]);
+  });
+
+  it("corrige parcelamento órfão com numeração antiga", async () => {
+    const { id, groupId } = await createInstallmentSeries(2);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    // Simula o estado antigo: a 2ª foi removida sem renormalizar a 1ª.
+    testDb.db
+      .update(transactions)
+      .set({ deletedAt: new Date() })
+      .where(eq(transactions.id, second!.id))
+      .run();
+
+    const result = await normalizeOrphanInstallmentsAction();
+    expect(result).toMatchObject({ ok: true, fixed: 1 });
+
+    const first = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    expect(first).toMatchObject({
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+  });
+
+  it("volta a avulsa quando sobra só uma parcela", async () => {    const { id, groupId } = await createInstallmentSeries(2);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await deleteTransactionAction({
+      id: second!.id,
+      scope: "single",
+    });
+    expect(result.ok).toBe(true);
+
+    const first = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    expect(first).toMatchObject({
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+  });
+
+  it("converte as próximas parcelas em série fixa", async () => {    const { groupId } = await createInstallmentSeries();
     const february = testDb.db
       .select()
       .from(transactions)

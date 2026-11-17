@@ -69,7 +69,7 @@ export function ScopeDialog({
             <Button
               type="button"
               variant="outline"
-              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              className="h-auto min-h-14 w-full items-start justify-start whitespace-normal px-4 py-3 text-left"
               onClick={() => onSelect("single")}
             >
               <CalendarDays className="h-4 w-4" />
@@ -86,7 +86,7 @@ export function ScopeDialog({
             <Button
               type="button"
               variant="outline"
-              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              className="h-auto min-h-14 w-full items-start justify-start whitespace-normal px-4 py-3 text-left"
               onClick={() => onSelect("future")}
             >
               <Repeat className="h-4 w-4" />
@@ -105,7 +105,7 @@ export function ScopeDialog({
             <Button
               type="button"
               variant="outline"
-              className="h-auto min-h-14 w-full justify-start px-4 py-3 text-left"
+              className="h-auto min-h-14 w-full items-start justify-start whitespace-normal px-4 py-3 text-left"
               onClick={() => onSelect("all")}
             >
               <Trash2 className="h-4 w-4" />

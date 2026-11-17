@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gt, gte, inArray, isNull } from "drizzle-orm";
+import { and, eq, gt, gte, inArray, isNotNull, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
@@ -83,6 +83,62 @@ function nextRecurrenceDateAfter(
       dataFim: recurrence.dataFim,
     }).find((date) => date > anchorDate) ?? null
   );
+}
+
+/**
+ * Reenumera as parcelas ativas de um grupo. Uma parcela sozinha deixa de ser
+ * parcelada e volta a ser avulsa.
+ */
+function normalizeInstallmentGroup(
+  tx: Tx,
+  workspaceId: string,
+  groupId: string,
+  now: Date,
+): void {
+  // Grupos importados usam ids como "parcela:..." e mantêm a numeração
+  // original (as parcelas fora do período importado não podem ser renumeradas).
+  if (!idSchema.safeParse(groupId).success) return;
+
+  const rows = tx
+    .select({ id: transactions.id, parcelaAtual: transactions.parcelaAtual })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.parcelaGrupoId, groupId),
+        eq(transactions.workspaceId, workspaceId),
+        isNull(transactions.deletedAt),
+      ),
+    )
+    .all()
+    .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+
+  if (rows.length === 0) return;
+
+  if (rows.length === 1) {
+    const only = rows[0];
+    if (!only) return;
+    tx.update(transactions)
+      .set({
+        parcelaGrupoId: null,
+        parcelaAtual: null,
+        parcelaTotal: null,
+        updatedAt: now,
+      })
+      .where(eq(transactions.id, only.id))
+      .run();
+    return;
+  }
+
+  rows.forEach((row, index) => {
+    tx.update(transactions)
+      .set({
+        parcelaAtual: index + 1,
+        parcelaTotal: rows.length,
+        updatedAt: now,
+      })
+      .where(eq(transactions.id, row.id))
+      .run();
+  });
 }
 
 function fail(error: string, code?: string): ActionResult {
@@ -794,6 +850,30 @@ export async function updateTransactionAction(
             return;
           }
 
+          // "Manter só esta ocorrência": remove as próximas e destaca esta.
+          if (data.detach === "only") {
+            if (recurrence) {
+              endRecurrenceBefore(tx, recurrence, existing.data, now);
+              tx.update(transactions)
+                .set({ deletedAt: now, updatedAt: now })
+                .where(
+                  and(
+                    eq(transactions.recorrenciaId, recurrenceId),
+                    eq(transactions.workspaceId, workspaceId),
+                    gt(transactions.data, existing.data),
+                    isNull(transactions.deletedAt),
+                  ),
+                )
+                .run();
+            }
+            tx.update(transactions)
+              .set({ ...updateValuesWithDate, recorrenciaId: null })
+              .where(eq(transactions.id, data.id))
+              .run();
+            replaceTags(tx, workspaceId, data.id, data.tagIds);
+            return;
+          }
+
           // Só esta ocorrência: divide a série em antes/depois para que a
           // geração idempotente não recrie a data destacada.
           if (recurrence) {
@@ -849,35 +929,88 @@ export async function updateTransactionAction(
               ),
             )
             .all();
-          const ids =
-            data.scope === "single"
-              ? [data.id]
-              : selectInstallmentTransactions(
-                  rows.map((row) => ({
-                    id: row.id,
-                    data: existing.data,
-                    parcelaAtual: row.parcelaAtual,
-                  })),
-                  { id: data.id, parcelaAtual: existing.parcelaAtual ?? 1 },
-                  data.scope,
-                ).map((row) => row.id);
 
-          if (ids.length > 0) {
-            tx.update(transactions)
-              .set({
-                ...(data.scope === "single"
-                  ? updateValuesWithDate
-                  : groupedUpdateValues),
-                parcelaGrupoId: null,
-                parcelaAtual: null,
-                parcelaTotal: null,
-              })
-              .where(inArray(transactions.id, ids))
-              .run();
-            for (const transactionId of ids) {
-              replaceTags(tx, workspaceId, transactionId, data.tagIds);
+          if (data.scope === "all") {
+            if (rows.length > 0) {
+              tx.update(transactions)
+                .set({
+                  ...groupedUpdateValues,
+                  parcelaGrupoId: null,
+                  parcelaAtual: null,
+                  parcelaTotal: null,
+                })
+                .where(inArray(transactions.id, rows.map((row) => row.id)))
+                .run();
+              for (const row of rows) {
+                replaceTags(tx, workspaceId, row.id, data.tagIds);
+              }
             }
+            return;
           }
+
+          if (data.scope === "future") {
+            const selected = selectInstallmentTransactions(
+              rows.map((row) => ({
+                id: row.id,
+                data: existing.data,
+                parcelaAtual: row.parcelaAtual,
+              })),
+              { id: data.id, parcelaAtual: existing.parcelaAtual ?? 1 },
+              "future",
+            );
+            if (selected.length > 0) {
+              tx.update(transactions)
+                .set({
+                  ...groupedUpdateValues,
+                  parcelaGrupoId: null,
+                  parcelaAtual: null,
+                  parcelaTotal: null,
+                })
+                .where(inArray(transactions.id, selected.map((row) => row.id)))
+                .run();
+              for (const row of selected) {
+                replaceTags(tx, workspaceId, row.id, data.tagIds);
+              }
+            }
+            normalizeInstallmentGroup(tx, workspaceId, groupId, now);
+            return;
+          }
+
+          const anchorNumber = existing.parcelaAtual ?? 1;
+          const sorted = [...rows].sort(
+            (a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0),
+          );
+          const next = sorted.filter(
+            (row) => (row.parcelaAtual ?? 0) > anchorNumber,
+          );
+
+          if (data.detach === "only") {
+            if (next.length > 0) {
+              tx.update(transactions)
+                .set({ deletedAt: now, updatedAt: now })
+                .where(inArray(transactions.id, next.map((row) => row.id)))
+                .run();
+            }
+          } else if (next.length > 0) {
+            const nextGroupId = crypto.randomUUID();
+            tx.update(transactions)
+              .set({ parcelaGrupoId: nextGroupId, updatedAt: now })
+              .where(inArray(transactions.id, next.map((row) => row.id)))
+              .run();
+            normalizeInstallmentGroup(tx, workspaceId, nextGroupId, now);
+          }
+
+          tx.update(transactions)
+            .set({
+              ...updateValuesWithDate,
+              parcelaGrupoId: null,
+              parcelaAtual: null,
+              parcelaTotal: null,
+            })
+            .where(eq(transactions.id, data.id))
+            .run();
+          replaceTags(tx, workspaceId, data.id, data.tagIds);
+          normalizeInstallmentGroup(tx, workspaceId, groupId, now);
           return;
         }
       }
@@ -1311,6 +1444,7 @@ export async function deleteTransactionAction(input: {
             ),
           )
           .run();
+        normalizeInstallmentGroup(tx, workspaceId, groupId, now);
         return;
       }
 
@@ -1329,6 +1463,7 @@ export async function deleteTransactionAction(input: {
             );
 
       tx.update(transactions).set({ deletedAt: now }).where(condition).run();
+      normalizeInstallmentGroup(tx, workspaceId, groupId, now);
       return;
     }
 
@@ -1345,6 +1480,78 @@ export async function deleteTransactionAction(input: {
 
   revalidateTransactions();
   return { ok: true };
+}
+
+/** Reenumera parcelamentos cujo total ficou antigo após exclusões avulsas. */
+export async function normalizeOrphanInstallmentsAction(): Promise<
+  { ok: true; fixed: number } | { ok: false; error: string }
+> {
+  const user = await requireUser();
+  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+
+  const rows = db
+    .select({
+      groupId: transactions.parcelaGrupoId,
+      parcelaAtual: transactions.parcelaAtual,
+      parcelaTotal: transactions.parcelaTotal,
+    })
+    .from(transactions)
+    .where(
+      and(
+        ws(transactions.workspaceId),
+        isNull(transactions.deletedAt),
+        isNotNull(transactions.parcelaGrupoId),
+      ),
+    )
+    .all();
+
+  const groups = new Map<
+    string,
+    { parcelaAtual: number | null; parcelaTotal: number | null }[]
+  >();
+  for (const row of rows) {
+    const groupId = row.groupId;
+    if (!groupId || !idSchema.safeParse(groupId).success) continue;
+    const items = groups.get(groupId) ?? [];
+    items.push({
+      parcelaAtual: row.parcelaAtual,
+      parcelaTotal: row.parcelaTotal,
+    });
+    groups.set(groupId, items);
+  }
+
+  let fixed = 0;
+  try {
+    db.transaction((tx) => {
+      for (const [groupId, items] of groups) {
+        const sorted = [...items].sort(
+          (a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0),
+        );
+        const needs =
+          sorted.length === 1
+            ? (sorted[0]?.parcelaTotal ?? 1) !== 1 ||
+              (sorted[0]?.parcelaAtual ?? 0) !== 1
+            : sorted.some(
+                (row, index) =>
+                  row.parcelaAtual !== index + 1 ||
+                  row.parcelaTotal !== sorted.length,
+              );
+        if (!needs) continue;
+        normalizeInstallmentGroup(tx, workspaceId, groupId, new Date());
+        fixed += 1;
+      }
+    });
+  } catch (error) {
+    console.error("[verde] erro ao corrigir parcelamentos:", error);
+    return {
+      ok: false,
+      error: "Não foi possível corrigir os parcelamentos.",
+    };
+  }
+
+  revalidateTransactions();
+  return { ok: true, fixed };
 }
 
 export async function duplicateTransactionAction(

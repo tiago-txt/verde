@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { DataSettings } from "@/components/settings/data-settings";
+import { DuplicateFinder } from "@/components/settings/duplicate-finder";
 import {
   SpreadsheetImport,
   type SpreadsheetImportOptions,
@@ -58,6 +59,7 @@ export default async function DadosPage() {
         Configurações
       </Link>
       <DataSettings latestImport={latestImport} />
+      <DuplicateFinder />
       <SpreadsheetImport options={spreadsheetOptions} />
     </div>
   );

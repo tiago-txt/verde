@@ -402,6 +402,15 @@ export function TransactionsPageClient({
     setSelectedBudgetEvent(event);
   }, [initialBudgetEventId, budgetEvents]);
 
+  // Mantém o detalhe do orçamento sincronizado após um refresh do servidor.
+  useEffect(() => {
+    if (!selectedBudgetEvent) return;
+    const fresh = budgetEvents.find(
+      (item) => item.id === selectedBudgetEvent.id,
+    );
+    if (fresh && fresh !== selectedBudgetEvent) setSelectedBudgetEvent(fresh);
+  }, [budgetEvents, selectedBudgetEvent]);
+
   useEffect(() => {
     if (initialNew) {
       skipNextRefresh.current = false;
@@ -646,9 +655,11 @@ export function TransactionsPageClient({
   function handleSaved() {
     if (skipNextRefresh.current) {
       skipNextRefresh.current = false;
-      return;
+    } else {
+      router.refresh();
     }
-    router.refresh();
+    // A fatura aberta é estado local: recarrega para refletir a edição.
+    if (invoiceTarget) reloadInvoice();
   }
 
   function openCreate() {
@@ -722,6 +733,7 @@ export function TransactionsPageClient({
 
     setDeleting(null);
     router.refresh();
+    if (invoiceTarget) reloadInvoice();
   }
 
   function handleFormDelete(transaction: TransactionListItem) {

@@ -154,6 +154,8 @@ export const transactionUpdateSchema = transactionFields
   .extend({
     id: idSchema,
     scope: z.enum(["single", "future", "all"]),
+    /** Como destacar um lançamento agrupado. */
+    detach: z.enum(["split", "only"]).optional(),
   })
   .superRefine(refineTransaction);
 
