@@ -1411,7 +1411,7 @@ export function TransactionsPageClient({
               >
                 <div
                   className={cn(
-                    "transactions-day-header flex flex-wrap items-center justify-between gap-2 border-b border-grout px-2 py-2.5 sm:px-4",
+                    "transactions-day-header -mx-3 flex flex-wrap items-center justify-between gap-2 border-b border-grout px-5 py-2.5 sm:mx-0 sm:px-4",
                     group.day === today && "transactions-day-header-today",
                   )}
                 >
