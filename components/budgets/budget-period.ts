@@ -1,5 +1,3 @@
-import type { BudgetValueBase } from "@/lib/db/schema";
-
 export const BUDGET_PERIODICIDADE_OPTIONS = [
   { value: 1, label: "Mensal" },
   { value: 2, label: "Bimestral" },
@@ -25,14 +23,8 @@ export function periodicidadeLabel(periodicidadeMeses: number): string {
   return PERIODICIDADE_LABELS[meses] ?? `${meses} meses`;
 }
 
-export function baseValorLabel(base: BudgetValueBase): string {
-  return base === "mensal" ? "por mês" : "total do período";
-}
-
-/** Ex.: "Bimestral · total do período". */
-export function descricaoDoPeriodo(
-  periodicidadeMeses: number,
-  base: BudgetValueBase,
-): string {
-  return `${periodicidadeLabel(periodicidadeMeses)} · ${baseValorLabel(base)}`;
+/** Ex.: "Bimestral · a cada 2 meses". */
+export function descricaoDoPeriodo(periodicidadeMeses: number): string {
+  if (periodicidadeMeses <= 1) return "Mensal";
+  return `A cada ${periodicidadeMeses} meses`;
 }

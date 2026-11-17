@@ -152,7 +152,6 @@ export function BudgetFormDialog({
   const antecedencia = watch("antecedenciaCiclos");
   const diaFechamento = watch("diaFechamento");
   const periodicidadeMeses = watch("periodicidadeMeses");
-  const baseValorPeriodo = watch("baseValorPeriodo");
   const sobraPolicy = watch("sobraPolicy");
   const destinations = useMemo(
     () =>
@@ -275,42 +274,10 @@ export function BudgetFormDialog({
                 />
                 <p className="text-xs text-muted-foreground">
                   {periodicidadeMeses > 1
-                    ? `O ciclo dura ${periodicidadeMeses} meses.`
-                    : "Um ciclo por mês."}
+                    ? `O orçamento aparece a cada ${periodicidadeMeses} meses.`
+                    : "Um orçamento por mês."}
                 </p>
               </div>
-
-              {periodicidadeMeses > 1 && (
-                <div className="space-y-1">
-                  <Label
-                    htmlFor="budget-base-valor"
-                    className="text-xs text-muted-foreground"
-                  >
-                    Valor
-                  </Label>
-                  <Controller
-                    control={control}
-                    name="baseValorPeriodo"
-                    render={({ field }) => (
-                      <NativeSelect
-                        id="budget-base-valor"
-                        value={field.value ?? "total"}
-                        onChange={(event) =>
-                          field.onChange(event.target.value)
-                        }
-                      >
-                        <option value="total">Total do período</option>
-                        <option value="mensal">Por mês</option>
-                      </NativeSelect>
-                    )}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    {baseValorPeriodo === "mensal"
-                      ? `O limite do ciclo será ${periodicidadeMeses} vezes o valor mensal.`
-                      : "O valor informado vale para o período inteiro."}
-                  </p>
-                </div>
-              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -319,11 +286,7 @@ export function BudgetFormDialog({
                   htmlFor="budget-valor"
                   className="text-xs text-muted-foreground"
                 >
-                  {periodicidadeMeses > 1
-                    ? baseValorPeriodo === "mensal"
-                      ? "Valor por mês"
-                      : "Valor total do período"
-                    : "Valor do ciclo"}
+                  Valor do ciclo
                 </Label>
                 <Controller
                   control={control}

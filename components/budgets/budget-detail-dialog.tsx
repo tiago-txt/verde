@@ -159,10 +159,7 @@ export function BudgetDetailDialog({
                     {formatDate(summary.inicio).slice(0, 5)} a{" "}
                     {formatDate(summary.fim).slice(0, 5)}
                     {summary.periodicidadeMeses > 1
-                      ? ` · ${descricaoDoPeriodo(
-                          summary.periodicidadeMeses,
-                          summary.baseValorPeriodo,
-                        )}`
+                      ? ` · ${descricaoDoPeriodo(summary.periodicidadeMeses)}`
                       : ""}
                   </DialogDescription>
                 </div>

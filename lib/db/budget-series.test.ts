@@ -461,110 +461,83 @@ describe("fechamento manual do ciclo", () => {
   });
 });
 
-describe("orçamento com periodicidade maior que um mês", () => {
-  it("cria bimestral com valor mensal e calcula o limite do período", async () => {
+describe("orçamento com recorrência", () => {
+  it("bimestral aparece em novembro, some em dezembro e volta em janeiro", async () => {
     const mercado = categoryId("Mercado");
     const id = await createBudget({
       nome: "Bimestral",
       valorPadrao: 10_000,
       diaFechamento: 1,
       periodicidadeMeses: 2,
-      baseValorPeriodo: "mensal",
       categoriaIds: [mercado],
-      dataInicio: "2026-01",
+      dataInicio: "2026-11",
     });
 
-    expect(resolved(id, "2026-01")).toMatchObject({
-      periodicidadeMeses: 2,
-      baseValorPeriodo: "mensal",
-      valorPadrao: 10_000,
-    });
-    expect(resolved(id, "2026-02")).toBeNull();
+    expect(resolved(id, "2026-11")).not.toBeNull();
+    expect(resolved(id, "2026-12")).toBeNull();
+    expect(resolved(id, "2027-01")).not.toBeNull();
     expect(
-      getBudgetCycleDetail(user.workspaceId, id, "2026-01")?.resumo,
+      getBudgetCycleDetail(user.workspaceId, id, "2026-11")?.resumo,
     ).toMatchObject({
-      limite: 20_000,
-      inicio: "2026-01-01",
-      fim: "2026-02-28",
-      fechamento: "2026-03-01",
+      limite: 10_000,
+      inicio: "2026-11-01",
+      fim: "2026-11-30",
+      fechamento: "2026-12-01",
     });
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2026-12"),
+    ).toBeNull();
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-01")?.resumo.limite,
+    ).toBe(10_000);
   });
 
-  it("gasto no segundo mês consome o mesmo ciclo longo", async () => {
+  it("gasto em dezembro não consome; em janeiro consome a ocorrência de janeiro", async () => {
     const mercado = categoryId("Mercado");
     const id = await createBudget({
       nome: "Bimestral",
       valorPadrao: 50_000,
       diaFechamento: 1,
       periodicidadeMeses: 2,
-      baseValorPeriodo: "total",
       categoriaIds: [mercado],
-      dataInicio: "2026-01",
+      dataInicio: "2026-11",
     });
-    addExpense(mercado, "2026-02-15", 10_000);
+    addExpense(mercado, "2026-12-15", 10_000);
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2026-12"),
+    ).toBeNull();
 
+    addExpense(mercado, "2027-01-15", 10_000);
     expect(
-      getBudgetCycleDetail(user.workspaceId, id, "2026-01")?.resumo.gasto,
+      getBudgetCycleDetail(user.workspaceId, id, "2027-01")?.resumo.gasto,
     ).toBe(10_000);
-    const detalhesDoMes = listBudgetCycleDetails(user.workspaceId, "2026-02");
-    expect(
-      detalhesDoMes.find((detail) => detail.resumo.id === id)?.resumo,
-    ).toMatchObject({ ciclo: "2026-01", gasto: 10_000 });
-    const notice = getBudgetNoticeForTransactions(user.workspaceId, [
-      { categoriaId: mercado, data: "2026-02-15" },
-    ]);
-    expect(notice?.message).toContain("ciclo até 01/03");
   });
 
-  it("editar todos troca a periodicidade e realinha os ciclos", async () => {
+  it("editar todos troca a recorrência", async () => {
     const mercado = categoryId("Mercado");
     const id = await createBudget({
       nome: "Bimestral",
       valorPadrao: 50_000,
       periodicidadeMeses: 2,
       categoriaIds: [mercado],
-      dataInicio: "2026-01",
+      dataInicio: "2026-11",
     });
 
-    const result = await updateBudget(id, "2026-01", "all", {
+    const result = await updateBudget(id, "2026-11", "all", {
       valorPadrao: 60_000,
       periodicidadeMeses: 3,
-      baseValorPeriodo: "total",
       categoriaIds: [mercado],
     });
     expect(result.ok).toBe(true);
 
-    expect(resolved(id, "2026-03")).toBeNull();
-    expect(resolved(id, "2026-04")).toMatchObject({
+    expect(resolved(id, "2026-12")).toBeNull();
+    expect(resolved(id, "2027-01")).toMatchObject({
       periodicidadeMeses: 3,
       valorPadrao: 60_000,
     });
     expect(
-      getBudgetCycleDetail(user.workspaceId, id, "2026-04")?.resumo.limite,
+      getBudgetCycleDetail(user.workspaceId, id, "2027-01")?.resumo.limite,
     ).toBe(60_000);
-  });
-
-  it("editar só um ciclo mantém o limite total do período", async () => {
-    const mercado = categoryId("Mercado");
-    const id = await createBudget({
-      nome: "Bimestral",
-      valorPadrao: 10_000,
-      periodicidadeMeses: 2,
-      baseValorPeriodo: "mensal",
-      categoriaIds: [mercado],
-      dataInicio: "2026-01",
-    });
-
-    const result = await updateBudget(id, "2026-01", "single", {
-      valorPadrao: 15_000,
-      periodicidadeMeses: 2,
-      baseValorPeriodo: "mensal",
-      categoriaIds: [mercado],
-    });
-    expect(result.ok).toBe(true);
-    expect(
-      getBudgetCycleDetail(user.workspaceId, id, "2026-01")?.resumo.limite,
-    ).toBe(30_000);
   });
 });
 

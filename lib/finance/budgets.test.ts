@@ -138,142 +138,82 @@ describe("intervaloDoCiclo e dataDeFechamento", () => {
   });
 });
 
-describe("periodicidade do orçamento", () => {
-  const bimestral: BudgetCycleConfig = {
-    ...budget,
+describe("recorrência do orçamento", () => {
+  const base: BudgetCycleConfig = {
     valorPadrao: 50_000,
+    diaFechamento: 10,
+    antecedenciaCiclos: 0,
+    dataInicio: "2026-11",
+    dataFim: null,
+    origens: "todas",
     periodicidadeMeses: 2,
-    baseValorPeriodo: "total",
+  };
+  const series: BudgetSeriesInput = {
+    id: "budget-bimestral",
+    nome: "Bimestral",
+    dataInicio: "2026-11",
+    dataFim: null,
+    arquivado: false,
+    versions: [
+      {
+        vigenteApartir: "2026-11",
+        nome: "Bimestral",
+        valorPadrao: 50_000,
+        diaFechamento: 10,
+        periodicidadeMeses: 2,
+        baseValorPeriodo: "total",
+        antecedenciaCiclos: 0,
+        origens: "todas",
+        contaId: null,
+        cartaoId: null,
+        cor: "#34d399",
+        icone: "Target",
+        categoriaIds: [],
+      },
+    ],
+    exceptions: [],
   };
 
-  it("bimestral dura dois meses fechando no dia de fechamento", () => {
-    expect(intervaloDoCiclo("2026-01", 10, 2)).toEqual({
-      inicio: "2026-01-10",
-      fim: "2026-03-09",
+  it("bimestral aparece em novembro, some em dezembro e volta em janeiro", () => {
+    expect(resolverCiclo(series, "2026-11")).toMatchObject({
+      ciclo: "2026-11",
+      periodicidadeMeses: 2,
+      valorPadrao: 50_000,
     });
-    expect(dataDeFechamento("2026-01", 10, 2)).toBe("2026-03-10");
-  });
-
-  it("trimestral atravessa a virada do ano", () => {
-    expect(intervaloDoCiclo("2026-11", 10, 3)).toEqual({
-      inicio: "2026-11-10",
-      fim: "2027-02-09",
+    expect(resolverCiclo(series, "2026-12")).toBeNull();
+    expect(resolverCiclo(series, "2027-01")).toMatchObject({
+      ciclo: "2027-01",
     });
-    expect(dataDeFechamento("2026-11", 10, 3)).toBe("2027-02-10");
+    expect(ehInicioDeCiclo("2026-11", "2026-11", 2)).toBe(true);
+    expect(ehInicioDeCiclo("2026-12", "2026-11", 2)).toBe(false);
   });
 
-  it("ciclo anual cobre doze meses", () => {
-    expect(intervaloDoCiclo("2026-03", 5, 12)).toEqual({
-      inicio: "2026-03-05",
-      fim: "2027-03-04",
-    });
-    expect(dataDeFechamento("2026-03", 5, 12)).toBe("2027-03-05");
+  it("trimestral salta dois meses", () => {
+    const trimestral = { ...series, versions: [{ ...series.versions[0]!, periodicidadeMeses: 3 }] };
+    expect(resolverCiclo(trimestral, "2026-12")).toBeNull();
+    expect(resolverCiclo(trimestral, "2027-01")).toBeNull();
+    expect(resolverCiclo(trimestral, "2027-02")).not.toBeNull();
   });
 
-  it("cicloDaData alinha os ciclos ao mês de início da série", () => {
-    expect(cicloDaData("2026-01-09", 10, 2, "2026-01")).toBe("2025-11");
-    expect(cicloDaData("2026-01-10", 10, 2, "2026-01")).toBe("2026-01");
-    expect(cicloDaData("2026-02-15", 10, 2, "2026-01")).toBe("2026-01");
-    expect(cicloDaData("2026-03-09", 10, 2, "2026-01")).toBe("2026-01");
-    expect(cicloDaData("2026-03-10", 10, 2, "2026-01")).toBe("2026-03");
-
-    expect(cicloDaData("2026-04-15", 1, 3, "2026-02")).toBe("2026-02");
-    expect(cicloDaData("2026-05-01", 1, 3, "2026-02")).toBe("2026-05");
+  it("o valor é o do ciclo, sem multiplicar pela periodicidade", () => {
+    expect(
+      limiteDoCiclo(
+        { ...base, baseValorPeriodo: "mensal" },
+        "2026-11",
+      ),
+    ).toBe(50_000);
   });
 
-  it("periodicidade 1 mantém o comportamento mensal", () => {
-    expect(cicloDaData("2026-11-09", 10, 1, "2026-01")).toBe("2026-10");
-    expect(cicloDaData("2026-11-10", 10)).toBe("2026-11");
-    expect(intervaloDoCiclo("2026-11", 10, 1)).toEqual({
+  it("provisão e sobra continuam no intervalo de um mês", () => {
+    expect(eventosDoCiclo(base, "2026-11", 20_000)).toEqual([
+      { tipo: "provisao", data: "2026-11-10", valor: 30_000, ciclo: "2026-11" },
+      { tipo: "sobra", data: "2026-12-10", valor: 30_000, ciclo: "2026-11" },
+    ]);
+    expect(intervaloDoCiclo("2026-11", 10)).toEqual({
       inicio: "2026-11-10",
       fim: "2026-12-09",
     });
-  });
-
-  it("limite é o total do período ou o valor mensal vezes N", () => {
-    expect(limiteDoCiclo(bimestral, "2026-01")).toBe(50_000);
-    expect(
-      limiteDoCiclo({ ...bimestral, baseValorPeriodo: "mensal" }, "2026-01"),
-    ).toBe(100_000);
-    expect(
-      limiteDoCiclo(
-        { ...bimestral, baseValorPeriodo: "mensal" },
-        "2026-01",
-        { "2026-01": 70_000 },
-      ),
-    ).toBe(70_000);
-    expect(calcularCiclo(bimestral, "2026-01", 20_000)).toMatchObject({
-      inicio: "2026-01-10",
-      fim: "2026-03-09",
-      fechamento: "2026-03-10",
-      limite: 50_000,
-      restante: 30_000,
-      percentual: 40,
-    });
-  });
-
-  it("provisão no início e sobra no fim do período", () => {
-    expect(eventosDoCiclo(bimestral, "2026-01", 20_000)).toEqual([
-      { tipo: "provisao", data: "2026-01-10", valor: 30_000, ciclo: "2026-01" },
-      { tipo: "sobra", data: "2026-03-10", valor: 30_000, ciclo: "2026-01" },
-    ]);
-  });
-
-  it("antecedência de um ciclo usa o início do ciclo anterior completo", () => {
-    const events = eventosDoCiclo(
-      { ...bimestral, antecedenciaCiclos: 1 },
-      "2026-03",
-      0,
-    );
-    expect(events[0]).toEqual({
-      tipo: "provisao",
-      data: "2026-01-10",
-      valor: 50_000,
-      ciclo: "2026-03",
-    });
-  });
-
-  it("resolverCiclo rejeita meses que não iniciam a série", () => {
-    const series: BudgetSeriesInput = {
-      id: "budget-bimestral",
-      nome: "Bimestral",
-      dataInicio: "2026-01",
-      dataFim: null,
-      arquivado: false,
-      versions: [
-        {
-          vigenteApartir: "2026-01",
-          nome: "Bimestral",
-          valorPadrao: 50_000,
-          diaFechamento: 10,
-          periodicidadeMeses: 2,
-          baseValorPeriodo: "total",
-          antecedenciaCiclos: 0,
-          origens: "todas",
-          contaId: null,
-          cartaoId: null,
-          cor: "#34d399",
-          icone: "Target",
-          categoriaIds: [],
-        },
-      ],
-      exceptions: [],
-    };
-
-    expect(resolverCiclo(series, "2026-01")).toMatchObject({
-      ciclo: "2026-01",
-      periodicidadeMeses: 2,
-    });
-    expect(resolverCiclo(series, "2026-02")).toBeNull();
-    expect(resolverCiclo(series, "2026-03")).not.toBeNull();
-    expect(ehInicioDeCiclo("2026-05", "2026-01", 2)).toBe(true);
-    expect(ehInicioDeCiclo("2026-04", "2026-01", 2)).toBe(false);
-  });
-
-  it("ciclosEntre inclui os 12 meses anteriores para achar ciclos longos", () => {
-    const ciclos = ciclosEntre("2026-11", "2026-12");
-    expect(ciclos[0]).toBe("2025-11");
-    expect(ciclos.at(-1)).toBe("2026-12");
+    expect(dataDeFechamento("2026-11", 10)).toBe("2026-12-10");
   });
 });
 
