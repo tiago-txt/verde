@@ -1081,3 +1081,85 @@ export async function reopenBudgetCycleAction(
   return { ok: true };
 }
 
+
+export type BudgetOption = {
+  id: string;
+  nome: string;
+  cor: string;
+  icone: string;
+  ciclo: string;
+  restante: number;
+  limite: number;
+};
+
+export async function listBudgetOptionsAction(input: {
+  data: string;
+  cartaoId?: string | null;
+}): Promise<BudgetOption[]> {
+  const user = await requireUser();
+  const workspaceId = user.workspaceId;
+  const parsed = z
+    .object({
+      data: isoDateSchema,
+      cartaoId: idSchema.nullable().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return [];
+
+  const { db, ws } = scopedDb(workspaceId);
+  const cardRows = db
+    .select({
+      id: creditCards.id,
+      diaFechamento: creditCards.diaFechamento,
+      diaVencimento: creditCards.diaVencimento,
+      fechamentoCompra: creditCards.fechamentoCompra,
+    })
+    .from(creditCards)
+    .where(ws(creditCards.workspaceId))
+    .all();
+  const cardById = new Map(cardRows.map((card) => [card.id, card]));
+  const card = parsed.data.cartaoId
+    ? (cardById.get(parsed.data.cartaoId) ?? null)
+    : null;
+  const monthKey = parsed.data.data.slice(0, 7);
+  const out: BudgetOption[] = [];
+
+  for (const row of loadBudgetSeries(workspaceId)) {
+    if (row.arquivado) continue;
+    for (let delta = -2; delta <= 2; delta += 1) {
+      const ciclo = addMonths(monthKey, delta);
+      const resolved = resolverCiclo(row, ciclo);
+      if (!resolved) continue;
+      if (!transacaoConsomeOrcamento(resolved.origens, parsed.data.cartaoId ?? null)) {
+        continue;
+      }
+      if (
+        cicloCompetencia(
+          {
+            tipo: "despesa",
+            data: parsed.data.data,
+            cartaoId: parsed.data.cartaoId ?? null,
+          },
+          resolved.diaFechamento,
+          card,
+        ) !== ciclo
+      ) {
+        continue;
+      }
+      const detail = getBudgetCycleDetail(workspaceId, row.id, ciclo);
+      if (!detail) continue;
+      out.push({
+        id: row.id,
+        nome: resolved.nome,
+        cor: resolved.cor,
+        icone: resolved.icone,
+        ciclo,
+        restante: detail.resumo.restante,
+        limite: detail.resumo.limite,
+      });
+      break;
+    }
+  }
+
+  return out.sort((a, b) => a.nome.localeCompare(b.nome));
+}

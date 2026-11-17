@@ -29,6 +29,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { EntityTile } from "@/components/entity-tile";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -56,7 +57,9 @@ import {
 } from "@/lib/actions/transactions";
 import {
   getBudgetHintAction,
+  listBudgetOptionsAction,
   type BudgetHint,
+  type BudgetOption,
 } from "@/lib/actions/budgets";
 import {
   simulateForecastAction,
@@ -322,6 +325,7 @@ export function TransactionFormDialog({
     "repetir" | "obs" | "tags" | "orcamento" | null
   >(null);
   const [budgetHint, setBudgetHint] = useState<BudgetHint | null>(null);
+  const [budgetOptions, setBudgetOptions] = useState<BudgetOption[]>([]);
   const [forecastHint, setForecastHint] = useState<ForecastHint | null>(null);
   const [extraTags, setExtraTags] = useState<{ id: string; nome: string }[]>([]);
   const [newTagName, setNewTagName] = useState("");
@@ -409,12 +413,6 @@ export function TransactionFormDialog({
       ? datasDaFatura(effectiveInvoiceKey, selectedCard)
       : null;
   const fixedSeries = repeticao === "fixa";
-  const monthKey = data.slice(0, 7);
-  const validBudgets = formData.budgets.filter(
-    (budget) =>
-      budget.dataInicio <= monthKey &&
-      (!budget.dataFim || budget.dataFim >= monthKey),
-  );
   const invoiceOptions = useMemo(() => {
     if (!cardInvoiceKey) return [] as string[];
     const purchaseMonth = data.slice(0, 7);
@@ -487,6 +485,24 @@ export function TransactionFormDialog({
     initialCartaoId,
     initialDate,
   ]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void listBudgetOptionsAction({ data, cartaoId: cartaoId ?? null })
+        .then((options) => {
+          if (!cancelled) setBudgetOptions(options);
+        })
+        .catch(() => {
+          if (!cancelled) setBudgetOptions([]);
+        });
+    }, 200);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [open, data, cartaoId]);
 
   const categoryOptions = formData.categories.filter(
     (category) =>
@@ -565,7 +581,7 @@ export function TransactionFormDialog({
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId, orcamentoDeslocamento]);
+  }, [open, tipo, categoriaId, data, transaction?.id, formData.categories, cartaoId, orcamentoDeslocamento, orcamentoId, orcamentoIgnorado]);
 
   useEffect(() => {
     if (
@@ -1712,36 +1728,6 @@ export function TransactionFormDialog({
                     <FieldError
                       message={formState.errors.categoriaId?.message}
                     />
-                    {budgetHint && (
-                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                        <Target
-                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
-                          aria-hidden="true"
-                        />
-                        <span>
-                          Orçamento{" "}
-                          <span className="font-medium text-foreground">
-                            {budgetHint.nome}
-                          </span>{" "}
-                          · {formatMonthTitle(budgetHint.ciclo)} · restam{" "}
-                          {formatCurrency(budgetHint.restante)}
-                          {budgetHint.viaFatura && (
-                            <>
-                              {" "}
-                              · via fatura de{" "}
-                              {formatDate(budgetHint.viaFatura).slice(0, 5)}
-                            </>
-                          )}
-                          {valor > budgetHint.restante && (
-                            <span className="font-medium text-destructive">
-                              {" "}
-                              · Vai estourar em{" "}
-                              {formatCurrency(valor - budgetHint.restante)}
-                            </span>
-                          )}
-                        </span>
-                      </p>
-                    )}
                     {forecastHint?.temAlerta && forecastHint.periodo && (
                       <div
                         aria-live="polite"
@@ -1875,37 +1861,88 @@ export function TransactionFormDialog({
               <div className="col-span-2 sm:col-span-6">
                 <Accordion open={activeChip === "orcamento"}>
                   <div className="space-y-2">
-                    <FieldLabel htmlFor="transaction-orcamento">
-                      Orçamento
-                    </FieldLabel>
-                    <NativeSelect
-                      id="transaction-orcamento"
-                      value={orcamentoIgnorado ? "none" : (orcamentoId ?? "")}
-                      onChange={(event) => {
-                        const next = event.target.value;
-                        if (next === "none") {
+                    <FieldLabel>Orçamento</FieldLabel>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setValue("orcamentoIgnorado", false, {
+                            shouldDirty: true,
+                          });
+                          setValue("orcamentoId", null, { shouldDirty: true });
+                        }}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors",
+                          !orcamentoIgnorado && !orcamentoId
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        Automático pela categoria
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
                           setValue("orcamentoIgnorado", true, {
                             shouldDirty: true,
                           });
                           setValue("orcamentoId", null, { shouldDirty: true });
-                          return;
-                        }
-                        setValue("orcamentoIgnorado", false, {
-                          shouldDirty: true,
-                        });
-                        setValue("orcamentoId", next || null, {
-                          shouldDirty: true,
-                        });
-                      }}
-                    >
-                      <option value="">Automático pela categoria</option>
-                      <option value="none">Nenhum orçamento</option>
-                      {validBudgets.map((budget) => (
-                        <option key={budget.id} value={budget.id}>
-                          {budget.nome}
-                        </option>
-                      ))}
-                    </NativeSelect>
+                        }}
+                        className={cn(
+                          "rounded-lg border px-3 py-2 text-left text-xs font-medium transition-colors",
+                          orcamentoIgnorado
+                            ? "border-primary/50 bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:bg-accent",
+                        )}
+                      >
+                        Nenhum orçamento
+                      </button>
+                      {budgetOptions.map((budget) => {
+                        const selected =
+                          !orcamentoIgnorado && orcamentoId === budget.id;
+                        return (
+                          <button
+                            key={budget.id}
+                            type="button"
+                            onClick={() => {
+                              setValue("orcamentoIgnorado", false, {
+                                shouldDirty: true,
+                              });
+                              setValue("orcamentoId", budget.id, {
+                                shouldDirty: true,
+                              });
+                            }}
+                            className={cn(
+                              "flex items-center gap-2 rounded-lg border p-2 text-left transition-colors",
+                              selected
+                                ? "border-primary/50 bg-primary/10"
+                                : "border-border hover:bg-accent",
+                            )}
+                          >
+                            <EntityTile
+                              kind="orcamento"
+                              entity={{
+                                id: budget.id,
+                                nome: budget.nome,
+                                cor: budget.cor,
+                                icone: budget.icone,
+                              }}
+                              size="sm"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-medium">
+                                {budget.nome}
+                              </span>
+                              <span className="block text-xs text-muted-foreground">
+                                {budget.restante !== null
+                                  ? `Disponível ${formatCurrency(budget.restante)}`
+                                  : "Sem ciclo atual"}
+                              </span>
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                     <p className="text-xs text-muted-foreground">
                       Sobrepõe a categoria. Em compras parceladas, vale para
                       todas as parcelas.
@@ -1948,6 +1985,31 @@ export function TransactionFormDialog({
                           }`
                         : "Nenhum orçamento cobre esta categoria e data."}
                     </p>
+                    {budgetHint && (
+                      <p className="flex items-start gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+                        <Target
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary"
+                          aria-hidden="true"
+                        />
+                        <span>
+                          Orçamento{" "}
+                          <span className="font-medium text-foreground">
+                            {budgetHint.nome}
+                          </span>{" "}
+                          · restam{" "}
+                          {formatCurrency(
+                            Math.max(0, budgetHint.restante - valor),
+                          )}
+                          {valor > budgetHint.restante && (
+                            <span className="font-medium text-destructive">
+                              {" "}
+                              · Vai estourar em{" "}
+                              {formatCurrency(valor - budgetHint.restante)}
+                            </span>
+                          )}
+                        </span>
+                      </p>
+                    )}
                   </div>
                 </Accordion>
               </div>

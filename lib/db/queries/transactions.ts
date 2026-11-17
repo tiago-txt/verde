@@ -27,7 +27,7 @@ import {
   type RecurrenceTemplate,
   type TransactionType,
 } from "@/lib/db/schema";
-import { eachDayOfMonth, addMonths, monthRange, todayISO } from "@/lib/dates";
+import { eachDayOfMonth, addMonths, currentMonth, monthRange, todayISO } from "@/lib/dates";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import {
   cicloCompetencia,
@@ -46,7 +46,7 @@ import {
   recurrenceHorizon,
 } from "@/lib/finance/recurrence";
 import { listAllAccounts } from "./accounts";
-import { loadBudgetSeries } from "./budgets";
+import { listBudgetCycleDetails, loadBudgetSeries } from "./budgets";
 import { listCardsForFilter, type CardOption } from "./cards";
 import {
   getSystemCategoryIds,
@@ -146,6 +146,8 @@ export type TransactionFormData = {
     icone: string;
     dataInicio: string;
     dataFim: string | null;
+    /** Disponível no ciclo atual; null quando não há ciclo corrente. */
+    restante: number | null;
   }[];
   lastAccountId: string | null;
   lastCardId: string | null;
@@ -660,16 +662,23 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
     cards: listCardsForFilter(workspaceId),
     categories: listAllCategories(workspaceId),
     tags: listTags(workspaceId),
-    budgets: loadBudgetSeries(workspaceId)
-      .filter((budget) => !budget.arquivado)
-      .map((budget) => ({
-        id: budget.id,
-        nome: budget.nome,
-        cor: budget.cor,
-        icone: budget.icone,
-        dataInicio: budget.dataInicio,
-        dataFim: budget.dataFim,
-      })),
+    budgets: (() => {
+      const current = listBudgetCycleDetails(workspaceId, currentMonth());
+      const restanteById = new Map(
+        current.map((detail) => [detail.resumo.id, detail.resumo.restante]),
+      );
+      return loadBudgetSeries(workspaceId)
+        .filter((budget) => !budget.arquivado)
+        .map((budget) => ({
+          id: budget.id,
+          nome: budget.nome,
+          cor: budget.cor,
+          icone: budget.icone,
+          dataInicio: budget.dataInicio,
+          dataFim: budget.dataFim,
+          restante: restanteById.get(budget.id) ?? null,
+        }));
+    })(),
     lastAccountId: lastTransaction?.contaId ?? null,
     lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,
