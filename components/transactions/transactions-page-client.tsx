@@ -78,8 +78,8 @@ const TransactionDetailsPanel = dynamic(
 );
 import { getCardInvoiceDetailAction } from "@/lib/actions/cards";
 import { BudgetDetailDialog } from "@/components/budgets/budget-detail-dialog";
+import { BudgetQuickEditDialog } from "@/components/budgets/budget-quick-edit-dialog";
 import {
-  rememberBudgetEventScroll,
   takeBudgetEventScroll,
 } from "@/lib/navigation/scroll-return";
 import { withScreenParams } from "@/lib/navigation/overlays";
@@ -327,6 +327,8 @@ export function TransactionsPageClient({
 
   const [selectedBudgetEvent, setSelectedBudgetEvent] =
     useState<BudgetEventView | null>(null);
+  const [quickEditBudget, setQuickEditBudget] =
+    useState<BudgetEventView["resumo"] | null>(null);
   const budgetEventOriginScroll = useRef(0);
   const [invoiceTarget, setInvoiceTarget] = useState<{
     cartaoId: string;
@@ -1694,12 +1696,20 @@ export function TransactionsPageClient({
         }}
         onEdit={() => {
           if (!selectedBudgetEvent) return;
-          const { ciclo, id } = selectedBudgetEvent.resumo;
-          rememberBudgetEventScroll(budgetEventOriginScroll.current);
+          setQuickEditBudget(selectedBudgetEvent.resumo);
+        }}
+      />
+
+      <BudgetQuickEditDialog
+        open={Boolean(quickEditBudget)}
+        onOpenChange={(open) => {
+          if (!open) setQuickEditBudget(null);
+        }}
+        budget={quickEditBudget}
+        onSaved={() => {
+          setQuickEditBudget(null);
           setSelectedBudgetEvent(null);
-          const params = new URLSearchParams({ ciclo, orcamento: id });
-          if (budgetEventReturnTo) params.set("voltar", budgetEventReturnTo);
-          router.push(`/limite-de-gastos?${params.toString()}`);
+          router.refresh();
         }}
       />
 
