@@ -5,19 +5,30 @@ import {
   CheckCircle2,
   Clock3,
   CircleAlert,
+  Loader2,
+  Lock,
+  Unlock,
 } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
+import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type BudgetEventRowProps = {
   event: BudgetEventView;
   onOpen: (event: BudgetEventView) => void;
+  onToggleCycle?: (event: BudgetEventView) => void;
+  cyclePending?: boolean;
 };
 
-export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
+export function BudgetEventRow({
+  event,
+  onOpen,
+  onToggleCycle,
+  cyclePending = false,
+}: BudgetEventRowProps) {
   const summary = event.resumo;
   const isProvision = event.tipoEvento === "provisao";
   const isOverspent = isProvision && summary.estouro > 0;
@@ -62,6 +73,8 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
     },
   }[projectionStatus];
   const StatusIcon = statusMeta.icon;
+  const canToggleCycle =
+    isProvision && (summary.fechado || summary.inicio <= todayISO());
 
   const sobraReference = formatMonthTitle(
     summary.inicio.slice(0, 7),
@@ -96,103 +109,138 @@ export function BudgetEventRow({ event, onOpen }: BudgetEventRowProps) {
   );
 
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(event)}
-      aria-label={`${summary.nome}, ${descriptor}, status ${statusMeta.label}, ${valueText}${
-        event.sobraAnterior
-          ? `, sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} ${formatCurrency(event.sobraAnterior.valor)}`
-          : ""
-      }`}
-      className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 pl-2.5 pr-0 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60"
-    >
-      <EntityTile
-        kind="orcamento"
-        entity={{
-          id: summary.id,
-          nome: summary.nome,
-          cor: summary.cor,
-          icone: summary.icone,
-        }}
-        dashed
-        plain
-        className="h-9 w-9 sm:h-10 sm:w-10"
+    <div className="list-row-cv-virtual group relative flex min-h-[72px] w-full items-center gap-2.5 pl-2.5 pr-0 text-left max-sm:py-1 sm:gap-3 lg:hover:bg-forest-container/60">
+      <button
+        type="button"
+        onClick={() => onOpen(event)}
+        aria-label={`${summary.nome}, ${descriptor}, status ${statusMeta.label}, ${valueText}${
+          event.sobraAnterior
+            ? `, sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} ${formatCurrency(event.sobraAnterior.valor)}`
+            : ""
+        }`}
+        className="absolute inset-0 z-0 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
       />
 
-      <span className="min-w-0 flex-1">
-        <span className="flex min-w-0 items-start justify-between gap-2">
-          <span className="row-title block min-w-0 flex-1">
-            {summary.nome}
-            {" · "}
-            <span className="text-xs font-normal text-muted-foreground">
-              {descriptor}
-            </span>
-          </span>
-          <span
-            className={cn(
-              "tabular shrink-0 whitespace-nowrap pt-0.5 text-right text-sm font-semibold leading-5 sm:text-lg",
-              valueTone,
-            )}
-          >
-            {valueText}
-          </span>
-        </span>
+      <div className="pointer-events-none relative z-10 flex w-full min-w-0 items-center gap-2.5 sm:gap-3">
+        <EntityTile
+          kind="orcamento"
+          entity={{
+            id: summary.id,
+            nome: summary.nome,
+            cor: summary.cor,
+            icone: summary.icone,
+          }}
+          dashed
+          plain
+          className="h-9 w-9 sm:h-10 sm:w-10"
+        />
 
-        <span className="mt-1.5 flex min-w-0 items-start justify-between gap-2">
-          <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1">
+          <span className="flex min-w-0 items-start justify-between gap-2">
+            <span className="row-title block min-w-0 flex-1">
+              {summary.nome}
+              {" · "}
+              <span className="text-xs font-normal text-muted-foreground">
+                {descriptor}
+              </span>
+            </span>
             <span
               className={cn(
-                "flex flex-wrap items-center text-xs text-muted-foreground sm:text-sm",
-                "gap-x-1 gap-y-0",
+                "tabular shrink-0 whitespace-nowrap pt-0.5 text-right text-sm font-semibold leading-5 sm:text-lg",
+                valueTone,
               )}
             >
-              {subline}
+              {valueText}
+            </span>
+          </span>
+
+          <span className="mt-1.5 flex min-w-0 items-start justify-between gap-2">
+            <span className="min-w-0 flex-1">
+              <span
+                className={cn(
+                  "flex flex-wrap items-center text-xs text-muted-foreground sm:text-sm",
+                  "gap-x-1 gap-y-0",
+                )}
+              >
+                {subline}
+              </span>
+
+              {event.sobraAnterior && (
+                <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                  <span>
+                    {event.sobraAnterior.realocadaPara
+                      ? `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} realocada para ${event.sobraAnterior.realocadaPara.nome}:`
+                      : `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)}${
+                          event.sobraAnterior.rolada ? " incluída:" : " livre:"
+                        }`}
+                  </span>
+                  <span className="tabular font-medium text-primary">
+                    +{formatCurrency(event.sobraAnterior.valor)}
+                  </span>
+                </span>
+              )}
+
+              {event.sobraRecebida?.map((item) => (
+                <span
+                  key={`${item.budgetId}:${item.ciclo}`}
+                  className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+                >
+                  <span>
+                    Inclui{" "}
+                    <span className="tabular font-medium text-primary">
+                      +{formatCurrency(item.valor)}
+                    </span>{" "}
+                    de {item.nome} ({formatMonthShort(item.ciclo)})
+                  </span>
+                </span>
+              ))}
             </span>
 
-            {event.sobraAnterior && (
-              <span className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
-                <span>
-                  {event.sobraAnterior.realocadaPara
-                    ? `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)} realocada para ${event.sobraAnterior.realocadaPara.nome}:`
-                    : `Sobra de ${formatMonthShort(event.sobraAnterior.ciclo)}${
-                        event.sobraAnterior.rolada ? " incluída:" : " livre:"
-                      }`}
-                </span>
-                <span className="tabular font-medium text-primary">
-                  +{formatCurrency(event.sobraAnterior.valor)}
-                </span>
-              </span>
-            )}
+            <span className="flex shrink-0 items-center gap-1">
+              {canToggleCycle && onToggleCycle && (
+                <button
+                  type="button"
+                  onClick={(clickEvent) => {
+                    clickEvent.stopPropagation();
+                    onToggleCycle(event);
+                  }}
+                  disabled={cyclePending}
+                  aria-label={
+                    summary.fechado
+                      ? `Reabrir o ciclo ${formatMonthTitle(summary.ciclo)} de ${summary.nome}`
+                      : `Fechar o ciclo ${formatMonthTitle(summary.ciclo)} de ${summary.nome}`
+                  }
+                  title={summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
+                  className="pointer-events-auto inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full border border-border bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:h-8 sm:min-w-0"
+                >
+                  {cyclePending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : summary.fechado ? (
+                    <Unlock className="h-3.5 w-3.5" aria-hidden="true" />
+                  ) : (
+                    <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  <span className="hidden sm:inline">
+                    {summary.fechado ? "Reabrir" : "Fechar"}
+                  </span>
+                </button>
+              )}
 
-            {event.sobraRecebida?.map((item) => (
               <span
-                key={`${item.budgetId}:${item.ciclo}`}
-                className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
+                className={cn(
+                  "flex shrink-0 whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
+                  statusMeta.tone,
+                )}
+                title={`Status: ${statusMeta.label}`}
+                aria-label={`Status: ${statusMeta.label}`}
               >
-                <span>
-                  Inclui{" "}
-                  <span className="tabular font-medium text-primary">
-                    +{formatCurrency(item.valor)}
-                  </span>{" "}
-                  de {item.nome} ({formatMonthShort(item.ciclo)})
-                </span>
+                <StatusIcon className="h-4 w-4" aria-hidden="true" />
+                {statusMeta.label}
               </span>
-            ))}
-          </span>
-
-          <span
-            className={cn(
-              "flex shrink-0 whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
-              statusMeta.tone,
-            )}
-            title={`Status: ${statusMeta.label}`}
-            aria-label={`Status: ${statusMeta.label}`}
-          >
-            <StatusIcon className="h-4 w-4" aria-hidden="true" />
-            {statusMeta.label}
+            </span>
           </span>
         </span>
-      </span>
-    </button>
+      </div>
+    </div>
   );
 }

@@ -98,6 +98,10 @@ import {
   duplicateTransactionAction,
   setTransactionPaidAction,
 } from "@/lib/actions/transactions";
+import {
+  closeBudgetCycleAction,
+  reopenBudgetCycleAction,
+} from "@/lib/actions/budgets";
 import type {
   TransactionDetail,
   TransactionFormData,
@@ -251,6 +255,9 @@ export function TransactionsPageClient({
   );
   const [isBulkPending, startBulkTransition] = useTransition();
   const [isNavigating, startNavigation] = useTransition();
+  const [budgetCyclePendingId, setBudgetCyclePendingId] = useState<
+    string | null
+  >(null);
   const [pendingMonth, setPendingMonth] = useState<string | null>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [stickyHeaderHeight, setStickyHeaderHeight] = useState(0);
@@ -772,6 +779,19 @@ export function TransactionsPageClient({
         pago,
       });
       if (!result.ok) setFlash(result.error);
+      router.refresh();
+    });
+  }
+
+  function handleToggleBudgetCycle(event: BudgetEventView) {
+    const input = { budgetId: event.resumo.id, ciclo: event.resumo.ciclo };
+    setBudgetCyclePendingId(event.id);
+    startBulkTransition(async () => {
+      const result = event.resumo.fechado
+        ? await reopenBudgetCycleAction(input)
+        : await closeBudgetCycleAction(input);
+      if (!result.ok) setFlash(result.error);
+      setBudgetCyclePendingId(null);
       router.refresh();
     });
   }
@@ -1503,6 +1523,8 @@ export function TransactionsPageClient({
                         budgetEventOriginScroll.current = window.scrollY;
                         setSelectedBudgetEvent(next);
                       }}
+                      onToggleCycle={handleToggleBudgetCycle}
+                      cyclePending={budgetCyclePendingId === event.id}
                     />
                   ))}
 

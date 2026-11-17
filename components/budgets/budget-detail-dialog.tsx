@@ -28,12 +28,15 @@ import { CurrencyInput } from "@/components/currency-input";
 import { FormError } from "@/components/form-feedback";
 import { useToast } from "@/components/ui/toast";
 import {
+  closeBudgetCycleAction,
   deleteBudgetAction,
+  reopenBudgetCycleAction,
   setBudgetArchivedAction,
   setBudgetOverrideAction,
 } from "@/lib/actions/budgets";
 import type { BudgetCycleDetail } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatDate, formatMonthTitle } from "@/lib/format";
+import { todayISO } from "@/lib/dates";
 import { EntityTile } from "@/components/entity-tile";
 import { cn } from "@/lib/utils";
 import { purchaseEditHref } from "@/lib/navigation/overlays";
@@ -93,6 +96,10 @@ export function BudgetDetailDialog({
       : summary.gasto > 0
         ? 100
         : 0;
+  const cycleEnded = summary.fechamento <= todayISO();
+  const automaticReleased =
+    !summary.fechado && !summary.sobraApenasAoFechar && cycleEnded;
+  const canCloseCycle = summary.fechado || summary.inicio <= todayISO();
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string }>,
@@ -110,6 +117,19 @@ export function BudgetDetailDialog({
       }
       if (options?.close) onOpenChange(false);
       router.refresh();
+    });
+  }
+
+  function toggleCycleClosure() {
+    const input = { budgetId: summary.id, ciclo: summary.ciclo };
+    if (summary.fechado) {
+      run(() => reopenBudgetCycleAction(input), {
+        success: "Ciclo reaberto: a sobra voltou a ficar reservada.",
+      });
+      return;
+    }
+    run(() => closeBudgetCycleAction(input), {
+      success: "Ciclo fechado: a sobra foi consolidada na previsão.",
     });
   }
 
@@ -208,6 +228,63 @@ export function BudgetDetailDialog({
               limite={summary.limite}
               label={`Consumo do orçamento ${summary.nome}`}
             />
+
+            <div className="rounded-lg border border-border p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-medium">Fechamento do ciclo</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {summary.fechado
+                      ? "Ciclo fechado: a sobra já entrou na previsão."
+                      : automaticReleased
+                        ? "Ciclo encerrado: a sobra já foi liberada automaticamente."
+                        : summary.sobraApenasAoFechar
+                          ? "Ciclo aberto: o restante fica reservado até você fechar. Você pode fechar antes do fim."
+                          : "Ciclo aberto: no fim, a sobra é liberada automaticamente. Você pode fechar antes para liberar agora."}
+                  </p>
+                </div>
+                <Badge variant={summary.fechado ? "secondary" : "outline"}>
+                  {summary.fechado ? "Fechado" : "Aberto"}
+                </Badge>
+              </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {summary.fechado
+                  ? "Restante consolidado"
+                  : automaticReleased
+                    ? "Sobra liberada"
+                    : summary.sobraApenasAoFechar
+                      ? "Reservado até o fechamento"
+                      : "Restante do ciclo"}
+                :{" "}
+                <span className="font-medium text-foreground">
+                  {formatCurrency(summary.restante)}
+                </span>
+              </p>
+              {canCloseCycle ? (
+                <Button
+                  type="button"
+                  variant={summary.fechado ? "outline" : "default"}
+                  className="mt-3 h-11 w-full sm:h-9"
+                  onClick={toggleCycleClosure}
+                  disabled={isPending}
+                >
+                  {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : summary.fechado ? (
+                    <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  )}
+                  {summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
+                </Button>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  {summary.inicio > todayISO()
+                    ? `Disponível a partir de ${formatDate(summary.inicio)}.`
+                    : "Este ciclo já foi encerrado e liberado automaticamente."}
+                </p>
+              )}
+            </div>
 
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">

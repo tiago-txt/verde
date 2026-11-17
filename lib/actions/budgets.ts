@@ -9,6 +9,7 @@ import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   budgetCategories,
+  budgetCycleClosures,
   budgetCycleExceptions,
   budgetOverrides,
   budgetVersions,
@@ -31,15 +32,18 @@ import {
   ciclosRelevantesParaMes,
   cicloDaData,
   expandirCategorias,
+  intervaloDoCiclo,
   resolverCiclo,
   transacaoConsomeOrcamento,
 } from "@/lib/finance/budgets";
 import { cicloCompetencia, faturaDaTransacao } from "@/lib/finance/competence";
 import { idSchema, isoDateSchema } from "@/lib/validation/common";
 import {
+  budgetCycleClosureSchema,
   budgetOverrideSchema,
   createBudgetSchema,
   updateBudgetSchema,
+  type BudgetCycleClosureInput,
   type BudgetFormValues,
   type UpdateBudgetInput,
 } from "@/lib/validation/budgets";
@@ -346,6 +350,7 @@ export async function createBudgetAction(
           antecedenciaCiclos: data.antecedenciaCiclos,
           origens: data.origens,
           sobraPolicy: data.sobraPolicy ?? "liberar",
+          sobraApenasAoFechar: data.sobraApenasAoFechar ?? false,
           sobraDestinoBudgetId:
             data.sobraPolicy === "realocar"
               ? (data.sobraDestinoBudgetId ?? null)
@@ -472,14 +477,24 @@ export async function updateBudgetAction(
 
   try {
     db.transaction((tx) => {
-      if (data.sobraPolicy !== undefined) {
+      if (
+        data.sobraPolicy !== undefined ||
+        data.sobraApenasAoFechar !== undefined
+      ) {
         tx.update(budgets)
           .set({
-            sobraPolicy: data.sobraPolicy,
-            sobraDestinoBudgetId:
-              data.sobraPolicy === "realocar"
-                ? (data.sobraDestinoBudgetId ?? null)
-                : null,
+            ...(data.sobraPolicy !== undefined
+              ? {
+                  sobraPolicy: data.sobraPolicy,
+                  sobraDestinoBudgetId:
+                    data.sobraPolicy === "realocar"
+                      ? (data.sobraDestinoBudgetId ?? null)
+                      : null,
+                }
+              : {}),
+            ...(data.sobraApenasAoFechar !== undefined
+              ? { sobraApenasAoFechar: data.sobraApenasAoFechar }
+              : {}),
             updatedAt: now,
           })
           .where(and(eq(budgets.id, series.id), ws(budgets.workspaceId)))
@@ -982,4 +997,68 @@ export async function getBudgetHintAction(input: {
   }
 
   return null;
+}
+
+export async function closeBudgetCycleAction(
+  input: BudgetCycleClosureInput,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const workspaceId = user.workspaceId;
+  const parsed = budgetCycleClosureSchema.safeParse(input);
+  if (!parsed.success) return fail("Ciclo inválido.");
+
+  const { db } = scopedDb(workspaceId);
+  const series = loadBudgetSeries(workspaceId, {
+    incluirArquivados: true,
+  }).find((row) => row.id === parsed.data.budgetId);
+  if (!series) return fail("Orçamento não encontrado.");
+
+  const resolved = resolverCiclo(series, parsed.data.ciclo);
+  if (!resolved) return fail("Ciclo não encontrado.");
+  const { inicio } = intervaloDoCiclo(
+    parsed.data.ciclo,
+    resolved.diaFechamento,
+  );
+  if (inicio > todayISO()) {
+    return fail("O ciclo ainda não começou.");
+  }
+
+  const now = new Date();
+  db.insert(budgetCycleClosures)
+    .values({
+      id: crypto.randomUUID(),
+      workspaceId,
+      budgetId: parsed.data.budgetId,
+      ciclo: parsed.data.ciclo,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .onConflictDoNothing()
+    .run();
+
+  revalidateBudgets();
+  return { ok: true };
+}
+
+export async function reopenBudgetCycleAction(
+  input: BudgetCycleClosureInput,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const workspaceId = user.workspaceId;
+  const parsed = budgetCycleClosureSchema.safeParse(input);
+  if (!parsed.success) return fail("Ciclo inválido.");
+
+  const { db, ws } = scopedDb(workspaceId);
+  db.delete(budgetCycleClosures)
+    .where(
+      and(
+        ws(budgetCycleClosures.workspaceId),
+        eq(budgetCycleClosures.budgetId, parsed.data.budgetId),
+        eq(budgetCycleClosures.ciclo, parsed.data.ciclo),
+      ),
+    )
+    .run();
+
+  revalidateBudgets();
+  return { ok: true };
 }

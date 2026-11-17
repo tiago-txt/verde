@@ -59,6 +59,7 @@ function defaultValues(
       origens: budget.origens,
       sobraPolicy: budget.sobraPolicy,
       sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
+      sobraApenasAoFechar: budget.sobraApenasAoFechar,
       cartaoId: budget.cartaoId,
       categoriaIds: budget.categories.map((category) => category.id),
       contaId: budget.contaId,
@@ -77,6 +78,7 @@ function defaultValues(
     origens: "todas",
     sobraPolicy: "liberar",
     sobraDestinoBudgetId: null,
+    sobraApenasAoFechar: false,
     cartaoId: null,
     categoriaIds: [],
     contaId: formData.defaultAccountId,
@@ -98,6 +100,12 @@ function relevantChange(
   if ((budget.cartaoId ?? null) !== (values.cartaoId ?? null)) return true;
   if (budget.origens !== values.origens) return true;
   if ((budget.sobraPolicy ?? "liberar") !== (values.sobraPolicy ?? "liberar")) {
+    return true;
+  }
+  if (
+    (budget.sobraApenasAoFechar ?? false) !==
+    (values.sobraApenasAoFechar ?? false)
+  ) {
     return true;
   }
   if (
@@ -534,6 +542,33 @@ export function BudgetFormDialog({
                     ? "A sobra não gasta vai para o orçamento escolhido no próximo ciclo."
                     : "A sobra não gasta volta para o saldo livre."}
               </p>
+
+              <div className="flex items-start justify-between gap-3 pt-1">
+                <div className="min-w-0">
+                  <Label
+                    htmlFor="budget-sobra-fechar"
+                    className="text-xs font-medium"
+                  >
+                    Só liberar a sobra ao fechar o ciclo
+                  </Label>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    Até você fechar, o restante fica reservado na previsão. A
+                    sobra só entra depois do fechamento manual.
+                  </p>
+                </div>
+                <Controller
+                  control={control}
+                  name="sobraApenasAoFechar"
+                  render={({ field }) => (
+                    <Switch
+                      id="budget-sobra-fechar"
+                      checked={field.value ?? false}
+                      onCheckedChange={field.onChange}
+                      aria-label="Só liberar a sobra ao fechar o ciclo"
+                    />
+                  )}
+                />
+              </div>
 
               {sobraPolicy === "realocar" && (
                 <div className="space-y-1 pt-1">

@@ -10,8 +10,10 @@ import {
 } from "./testing";
 import { transactions, users, type User } from "./schema";
 import {
+  closeBudgetCycleAction,
   createBudgetAction,
   deleteBudgetAction,
+  reopenBudgetCycleAction,
   restoreBudgetCycleAction,
   updateBudgetAction,
 } from "@/lib/actions/budgets";
@@ -24,7 +26,7 @@ import {
 import { listAllCategories } from "./queries/categories";
 import { getBudgetNoticeForTransactions } from "./queries/budgets";
 import { resolverCiclo } from "@/lib/finance/budgets";
-import { todayISO } from "@/lib/dates";
+import { addMonths, currentMonth, todayISO } from "@/lib/dates";
 
 const state = vi.hoisted(() => ({ user: null as User | null }));
 
@@ -350,5 +352,105 @@ describe("orçamento como série", () => {
         { categoriaId: mercado, data: todayISO() },
       ]),
     ).toBeNull();
+  });
+});
+
+describe("fechamento manual do ciclo", () => {
+  const filters = (mes: string) => ({
+    mes,
+    tipo: null,
+    contas: [] as string[],
+    categorias: [] as string[],
+    tags: [] as string[],
+    status: "todos" as const,
+    q: null,
+    dias: 31,
+    detalhe: null,
+    cartoes: [] as string[],
+    comprasCartao: false,
+    de: null,
+    ate: null,
+  });
+
+  it("só libera a sobra depois de fechar o ciclo", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      categoriaIds: [mercado],
+      dataInicio: "2026-01",
+      sobraApenasAoFechar: true,
+    });
+    addExpense(mercado, "2026-01-10", 10_000);
+
+    const antes = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2026-02",
+      filters("2026-02"),
+    ).filter((event) => event.resumo.id === id);
+    expect(antes.some((event) => event.tipoEvento === "sobra")).toBe(false);
+
+    const fechado = await closeBudgetCycleAction({
+      budgetId: id,
+      ciclo: "2026-01",
+    });
+    expect(fechado.ok).toBe(true);
+
+    const depois = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2026-02",
+      filters("2026-02"),
+    ).filter((event) => event.resumo.id === id);
+    const sobra = depois.find((event) => event.tipoEvento === "sobra");
+    expect(sobra).toMatchObject({ valor: 40_000, data: "2026-02-01" });
+
+    const reaberto = await reopenBudgetCycleAction({
+      budgetId: id,
+      ciclo: "2026-01",
+    });
+    expect(reaberto.ok).toBe(true);
+    const reabertoEventos = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2026-02",
+      filters("2026-02"),
+    ).filter((event) => event.resumo.id === id);
+    expect(reabertoEventos.some((event) => event.tipoEvento === "sobra")).toBe(
+      false,
+    );
+  });
+
+  it("fecha o ciclo em andamento e antecipa a sobra para hoje", async () => {
+    const mes = currentMonth();
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      categoriaIds: [mercado],
+      dataInicio: mes,
+      sobraApenasAoFechar: false,
+    });
+    addExpense(mercado, `${mes}-05`, 10_000);
+
+    const result = await closeBudgetCycleAction({ budgetId: id, ciclo: mes });
+    expect(result.ok).toBe(true);
+
+    const eventos = getBudgetEventsForMonth(
+      user.workspaceId,
+      mes,
+      filters(mes),
+    ).filter((event) => event.resumo.id === id);
+    const sobra = eventos.find((event) => event.tipoEvento === "sobra");
+    expect(sobra).toMatchObject({ valor: 40_000, data: todayISO() });
+  });
+
+  it("não fecha ciclo futuro", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      categoriaIds: [mercado],
+      dataInicio: "2026-01",
+      sobraApenasAoFechar: true,
+    });
+
+    const result = await closeBudgetCycleAction({
+      budgetId: id,
+      ciclo: addMonths(currentMonth(), 1),
+    });
+    expect(result.ok).toBe(false);
   });
 });

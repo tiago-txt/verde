@@ -12,6 +12,7 @@ import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
   budgetCategories,
+  budgetCycleClosures,
   budgetCycleExceptions,
   budgetVersions,
   budgets,
@@ -21,7 +22,7 @@ import {
   type BudgetOrigin,
   type BudgetVersionData,
 } from "@/lib/db/schema";
-import { addMonths, currentMonth, monthRange, todayISO } from "@/lib/dates";
+import { addMonths, currentMonth, isoDateOf, monthRange, todayISO } from "@/lib/dates";
 import {
   calcularCiclo,
   categoriasBloqueadas,
@@ -73,6 +74,9 @@ export type BudgetWithCategories = {
   origens: BudgetOrigin;
   sobraPolicy: "rolar" | "liberar" | "realocar";
   sobraDestinoBudgetId: string | null;
+  sobraApenasAoFechar: boolean;
+  fechado: boolean;
+  fechadoEm: string | null;
   contaId: string | null;
   cartaoId: string | null;
   dataInicio: string;
@@ -233,6 +237,9 @@ function cycleConfigFromBudget(budget: BudgetWithCategories) {
     origens: budget.origens,
     sobraPolicy: budget.sobraPolicy,
     sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
+    sobraApenasAoFechar: budget.sobraApenasAoFechar,
+    cicloFechado: budget.fechado,
+    fechadoEm: budget.fechadoEm,
   };
 }
 
@@ -282,6 +289,33 @@ export function loadBudgetSeries(
       ),
     )
     .all();
+
+  const closureRows = db
+    .select({
+      budgetId: budgetCycleClosures.budgetId,
+      ciclo: budgetCycleClosures.ciclo,
+      createdAt: budgetCycleClosures.createdAt,
+    })
+    .from(budgetCycleClosures)
+    .where(
+      and(
+        ws(budgetCycleClosures.workspaceId),
+        inArray(budgetCycleClosures.budgetId, ids),
+      ),
+    )
+    .all();
+  const closuresByBudget = new Map<
+    string,
+    Array<{ ciclo: string; data: string }>
+  >();
+  for (const closure of closureRows) {
+    const list = closuresByBudget.get(closure.budgetId) ?? [];
+    list.push({
+      ciclo: closure.ciclo,
+      data: isoDateOf(closure.createdAt),
+    });
+    closuresByBudget.set(closure.budgetId, list);
+  }
 
   const legacyCategoryRows = db
     .select({
@@ -394,6 +428,8 @@ export function loadBudgetSeries(
       arquivado: budget.arquivado,
       sobraPolicy: budget.sobraPolicy,
       sobraDestinoBudgetId: budget.sobraDestinoBudgetId,
+      sobraApenasAoFechar: budget.sobraApenasAoFechar ?? false,
+      closures: closuresByBudget.get(budget.id) ?? [],
       versions,
       exceptions: exceptionsByBudget.get(budget.id) ?? [],
       cor: budget.cor,

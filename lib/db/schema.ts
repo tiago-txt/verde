@@ -574,6 +574,13 @@ export const budgets = sqliteTable(
     sobraPolicy: text("sobra_policy", { enum: BUDGET_SOBRA_POLICIES })
       .notNull()
       .default("liberar"),
+    /**
+     * Quando ligado, a sobra do ciclo só entra na previsão depois que o ciclo
+     * for fechado manualmente. Até lá, o restante fica reservado (pior caso).
+     */
+    sobraApenasAoFechar: integer("sobra_apenas_ao_fechar", {
+      mode: "boolean",
+    }),
     /** Destino quando `sobraPolicy` é `realocar`. */
     sobraDestinoBudgetId: text("sobra_destino_budget_id").references(
       (): AnySQLiteColumn => budgets.id,
@@ -749,6 +756,30 @@ export const budgetCycleExceptions = sqliteTable(
   ],
 );
 
+/** Fechamento manual de um ciclo: libera a sobra somente a partir daqui. */
+export const budgetCycleClosures = sqliteTable(
+  "budget_cycle_closures",
+  {
+    id: id(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    budgetId: text("budget_id")
+      .notNull()
+      .references(() => budgets.id, { onDelete: "cascade" }),
+    ciclo: text("ciclo").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("budget_cycle_closures_workspace_idx").on(table.workspaceId),
+    index("budget_cycle_closures_budget_idx").on(table.budgetId),
+    uniqueIndex("budget_cycle_closures_budget_ciclo_unique").on(
+      table.budgetId,
+      table.ciclo,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Workspace = typeof workspaces.$inferSelect;
@@ -775,3 +806,5 @@ export type NewBudgetVersion = typeof budgetVersions.$inferInsert;
 export type BudgetCycleException = typeof budgetCycleExceptions.$inferSelect;
 export type NewBudgetCycleException =
   typeof budgetCycleExceptions.$inferInsert;
+export type BudgetCycleClosure = typeof budgetCycleClosures.$inferSelect;
+export type NewBudgetCycleClosure = typeof budgetCycleClosures.$inferInsert;

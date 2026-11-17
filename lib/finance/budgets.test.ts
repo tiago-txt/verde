@@ -187,6 +187,61 @@ describe("eventos de provisão e sobra", () => {
     ]);
   });
 
+  it("com fechamento manual, a sobra só aparece após fechar o ciclo", () => {
+    const aberto = eventosDoCiclo(
+      { ...budget, sobraApenasAoFechar: true, cicloFechado: false },
+      "2026-11",
+      30000,
+    );
+    expect(aberto).toEqual([
+      { tipo: "provisao", data: "2026-11-10", valor: 40000, ciclo: "2026-11" },
+    ]);
+
+    const fechado = eventosDoCiclo(
+      { ...budget, sobraApenasAoFechar: true, cicloFechado: true },
+      "2026-11",
+      30000,
+    );
+    expect(fechado).toEqual([
+      { tipo: "provisao", data: "2026-11-10", valor: 40000, ciclo: "2026-11" },
+      { tipo: "sobra", data: "2026-12-10", valor: 40000, ciclo: "2026-11" },
+    ]);
+  });
+
+  it("fechamento antecipado libera a sobra na data do fechamento", () => {
+    const events = eventosDoCiclo(
+      {
+        ...budget,
+        sobraApenasAoFechar: true,
+        cicloFechado: true,
+        fechadoEm: "2026-11-15",
+      },
+      "2026-11",
+      30000,
+    );
+    expect(events.find((event) => event.tipo === "sobra")).toMatchObject({
+      data: "2026-11-15",
+      valor: 40000,
+    });
+  });
+
+  it("fechamento antecipado também funciona no modo automático", () => {
+    const events = eventosDoCiclo(
+      {
+        ...budget,
+        sobraApenasAoFechar: false,
+        cicloFechado: true,
+        fechadoEm: "2026-11-15",
+      },
+      "2026-11",
+      30000,
+    );
+    expect(events.find((event) => event.tipo === "sobra")).toMatchObject({
+      data: "2026-11-15",
+      valor: 40000,
+    });
+  });
+
   it("com antecedência 1 a provisão cai no início do ciclo anterior", () => {
     const events = eventosDoCiclo(
       { ...budget, antecedenciaCiclos: 1 },

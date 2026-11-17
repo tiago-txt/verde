@@ -2,12 +2,17 @@ import { getAppTimeZone } from "@/lib/env";
 
 /** Data de hoje (fuso do app) no formato YYYY-MM-DD. */
 export function todayISO(): string {
+  return isoDateOf(new Date());
+}
+
+/** Converte uma data para YYYY-MM-DD no fuso do app. */
+export function isoDateOf(date: Date): string {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: getAppTimeZone(),
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).format(new Date());
+  }).format(date);
 }
 
 /** Mês atual no formato YYYY-MM. */

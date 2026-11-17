@@ -28,6 +28,8 @@ const budgetFields = z.object({
   origens: z.enum(BUDGET_ORIGINS).default("todas"),
   sobraPolicy: z.enum(BUDGET_SOBRA_POLICIES).optional(),
   sobraDestinoBudgetId: idSchema.nullable().optional(),
+  /** Só libera a sobra depois que o ciclo for fechado manualmente. */
+  sobraApenasAoFechar: z.boolean().optional(),
   categoriaIds: z
     .array(idSchema)
     .min(1, "Escolha pelo menos uma categoria")
@@ -108,6 +110,12 @@ export const budgetOverrideSchema = z.object({
     .positive("O valor deve ser maior que zero"),
 });
 
+export const budgetCycleClosureSchema = z.object({
+  budgetId: idSchema,
+  ciclo: monthKeySchema,
+});
+
 export type BudgetFormValues = z.infer<typeof budgetFields>;
 export type UpdateBudgetInput = z.infer<typeof updateBudgetSchema>;
 export type BudgetOverrideInput = z.infer<typeof budgetOverrideSchema>;
+export type BudgetCycleClosureInput = z.infer<typeof budgetCycleClosureSchema>;

@@ -35,6 +35,12 @@ export type BudgetCycleConfig = {
   sobraDestinoBudgetId?: string | null;
   /** Modo indicador: acompanha gasto sem gerar reserva/liberação. */
   modoIndicador?: boolean;
+  /** Só libera a sobra depois do fechamento manual do ciclo. */
+  sobraApenasAoFechar?: boolean;
+  /** O ciclo já foi fechado manualmente. */
+  cicloFechado?: boolean;
+  /** Data em que o ciclo foi fechado (YYYY-MM-DD), quando known. */
+  fechadoEm?: string | null;
 };
 
 export type BudgetCycleInfo = {
@@ -104,6 +110,10 @@ export type BudgetSeriesInput = {
   arquivado: boolean;
   sobraPolicy?: BudgetSobraPolicy;
   sobraDestinoBudgetId?: string | null;
+  /** Só libera a sobra após fechar o ciclo manualmente. */
+  sobraApenasAoFechar?: boolean;
+  /** Ciclos já fechados manualmente, com a data do fechamento. */
+  closures?: Array<{ ciclo: string; data: string }>;
   versions: BudgetVersionInput[];
   exceptions: BudgetCycleExceptionInput[];
 };
@@ -116,6 +126,9 @@ export type ResolvedBudgetCycle = BudgetVersionData & {
   arquivado: boolean;
   sobraPolicy: BudgetSobraPolicy;
   sobraDestinoBudgetId: string | null;
+  sobraApenasAoFechar: boolean;
+  fechado: boolean;
+  fechadoEm: string | null;
   exception: "excluido" | "ajustado" | null;
 };
 
@@ -140,6 +153,9 @@ export function resolverCiclo(
   const exception =
     series.exceptions.find((item) => item.ciclo === ciclo) ?? null;
   if (exception?.tipo === "excluido") return null;
+
+  const closure =
+    series.closures?.find((item) => item.ciclo === ciclo) ?? null;
 
   const version = [...series.versions]
     .filter((item) => item.vigenteApartir <= ciclo)
@@ -172,6 +188,9 @@ export function resolverCiclo(
     arquivado: series.arquivado,
     sobraPolicy: series.sobraPolicy ?? "liberar",
     sobraDestinoBudgetId: series.sobraDestinoBudgetId ?? null,
+    sobraApenasAoFechar: series.sobraApenasAoFechar ?? false,
+    fechado: Boolean(closure),
+    fechadoEm: closure?.data ?? null,
     exception: exception?.tipo ?? null,
   };
 }
@@ -423,11 +442,23 @@ export function eventosDoCiclo(
   const events: BudgetEvent[] = [
     { tipo: "provisao", data: provisionDate, valor: result.restante, ciclo },
   ];
-  // Sem linha de liberação com valor zero.
-  if (result.restante > 0) {
+  // Sem linha de liberação com valor zero. O fechamento manual pode antecipar
+  // a sobra; sem ele, o padrão continua liberando no fechamento do ciclo.
+  const fechamentoAntecipado =
+    budget.cicloFechado === true &&
+    Boolean(budget.fechadoEm) &&
+    (budget.fechadoEm as string) < result.fechamento;
+  const podeLiberarSobra =
+    fechamentoAntecipado ||
+    !budget.sobraApenasAoFechar ||
+    budget.cicloFechado === true;
+  if (result.restante > 0 && podeLiberarSobra) {
+    const sobraData = fechamentoAntecipado
+      ? (budget.fechadoEm as string)
+      : result.fechamento;
     events.push({
       tipo: "sobra",
-      data: result.fechamento,
+      data: sobraData,
       valor: result.restante,
       ciclo,
     });
