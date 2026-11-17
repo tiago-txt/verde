@@ -7,13 +7,11 @@ import {
   CircleAlert,
   Loader2,
   Lock,
-  Unlock,
 } from "lucide-react";
 import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatMonthShort, formatMonthTitle } from "@/lib/format";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
-import { todayISO } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
 type BudgetEventRowProps = {
@@ -72,9 +70,15 @@ export function BudgetEventRow({
       box: "border-primary/35 bg-primary/10",
     },
   }[projectionStatus];
-  const StatusIcon = statusMeta.icon;
-  const canToggleCycle =
-    isProvision && (summary.fechado || summary.inicio <= todayISO());
+  const closedMeta = {
+    label: "fechado",
+    icon: Lock,
+    tone: "text-primary",
+    box: "border-primary/35 bg-primary/10",
+  };
+  const displayMeta =
+    isProvision && summary.fechado ? closedMeta : statusMeta;
+  const DisplayIcon = displayMeta.icon;
 
   const sobraReference = formatMonthTitle(
     summary.inicio.slice(0, 7),
@@ -197,7 +201,7 @@ export function BudgetEventRow({
             </span>
 
             <span className="flex shrink-0 items-center gap-1">
-              {canToggleCycle && onToggleCycle && (
+              {isProvision && onToggleCycle ? (
                 <button
                   type="button"
                   onClick={(clickEvent) => {
@@ -211,32 +215,32 @@ export function BudgetEventRow({
                       : `Fechar o ciclo ${formatMonthTitle(summary.ciclo)} de ${summary.nome}`
                   }
                   title={summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
-                  className="pointer-events-auto inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-full border border-border bg-background px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50 sm:h-8 sm:min-w-0"
+                  className={cn(
+                    "pointer-events-auto flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium capitalize transition-colors hover:brightness-110 disabled:opacity-50",
+                    displayMeta.box,
+                    displayMeta.tone,
+                  )}
                 >
                   {cyclePending ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : summary.fechado ? (
-                    <Unlock className="h-3.5 w-3.5" aria-hidden="true" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+                    <DisplayIcon className="h-4 w-4" aria-hidden="true" />
                   )}
-                  <span className="hidden sm:inline">
-                    {summary.fechado ? "Reabrir" : "Fechar"}
-                  </span>
+                  {displayMeta.label}
                 </button>
+              ) : (
+                <span
+                  className={cn(
+                    "flex shrink-0 whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
+                    displayMeta.tone,
+                  )}
+                  title={`Status: ${displayMeta.label}`}
+                  aria-label={`Status: ${displayMeta.label}`}
+                >
+                  <DisplayIcon className="h-4 w-4" aria-hidden="true" />
+                  {displayMeta.label}
+                </span>
               )}
-
-              <span
-                className={cn(
-                  "flex shrink-0 whitespace-nowrap items-center gap-1 text-xs font-medium capitalize",
-                  statusMeta.tone,
-                )}
-                title={`Status: ${statusMeta.label}`}
-                aria-label={`Status: ${statusMeta.label}`}
-              >
-                <StatusIcon className="h-4 w-4" aria-hidden="true" />
-                {statusMeta.label}
-              </span>
             </span>
           </span>
         </span>

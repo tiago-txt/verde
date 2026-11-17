@@ -439,18 +439,24 @@ describe("fechamento manual do ciclo", () => {
     expect(sobra).toMatchObject({ valor: 40_000, data: todayISO() });
   });
 
-  it("não fecha ciclo futuro", async () => {
+  it("fecha ciclo futuro e agenda a sobra para o início", async () => {
+    const mes = addMonths(currentMonth(), 1);
     const mercado = categoryId("Mercado");
     const id = await createBudget({
       categoriaIds: [mercado],
-      dataInicio: "2026-01",
-      sobraApenasAoFechar: true,
+      dataInicio: mes,
+      diaFechamento: 10,
     });
 
-    const result = await closeBudgetCycleAction({
-      budgetId: id,
-      ciclo: addMonths(currentMonth(), 1),
-    });
-    expect(result.ok).toBe(false);
+    const result = await closeBudgetCycleAction({ budgetId: id, ciclo: mes });
+    expect(result.ok).toBe(true);
+
+    const eventos = getBudgetEventsForMonth(
+      user.workspaceId,
+      mes,
+      filters(mes),
+    ).filter((event) => event.resumo.id === id);
+    const sobra = eventos.find((event) => event.tipoEvento === "sobra");
+    expect(sobra).toMatchObject({ valor: 50_000, data: `${mes}-10` });
   });
 });

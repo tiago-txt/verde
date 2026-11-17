@@ -32,7 +32,6 @@ import {
   ciclosRelevantesParaMes,
   cicloDaData,
   expandirCategorias,
-  intervaloDoCiclo,
   resolverCiclo,
   transacaoConsomeOrcamento,
 } from "@/lib/finance/budgets";
@@ -1015,13 +1014,6 @@ export async function closeBudgetCycleAction(
 
   const resolved = resolverCiclo(series, parsed.data.ciclo);
   if (!resolved) return fail("Ciclo não encontrado.");
-  const { inicio } = intervaloDoCiclo(
-    parsed.data.ciclo,
-    resolved.diaFechamento,
-  );
-  if (inicio > todayISO()) {
-    return fail("O ciclo ainda não começou.");
-  }
 
   const now = new Date();
   db.insert(budgetCycleClosures)

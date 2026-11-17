@@ -99,7 +99,6 @@ export function BudgetDetailDialog({
   const cycleEnded = summary.fechamento <= todayISO();
   const automaticReleased =
     !summary.fechado && !summary.sobraApenasAoFechar && cycleEnded;
-  const canCloseCycle = summary.fechado || summary.inicio <= todayISO();
 
   function run(
     action: () => Promise<{ ok: boolean; error?: string }>,
@@ -260,28 +259,26 @@ export function BudgetDetailDialog({
                   {formatCurrency(summary.restante)}
                 </span>
               </p>
-              {canCloseCycle ? (
-                <Button
-                  type="button"
-                  variant={summary.fechado ? "outline" : "default"}
-                  className="mt-3 h-11 w-full sm:h-9"
-                  onClick={toggleCycleClosure}
-                  disabled={isPending}
-                >
-                  {isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : summary.fechado ? (
-                    <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
-                  ) : (
-                    <Check className="h-4 w-4" aria-hidden="true" />
-                  )}
-                  {summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
-                </Button>
-              ) : (
-                <p className="mt-3 text-xs text-muted-foreground">
-                  {summary.inicio > todayISO()
-                    ? `Disponível a partir de ${formatDate(summary.inicio)}.`
-                    : "Este ciclo já foi encerrado e liberado automaticamente."}
+              <Button
+                type="button"
+                variant={summary.fechado ? "outline" : "default"}
+                className="mt-3 h-11 w-full sm:h-9"
+                onClick={toggleCycleClosure}
+                disabled={isPending}
+              >
+                {isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : summary.fechado ? (
+                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                ) : (
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                )}
+                {summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
+              </Button>
+              {!summary.fechado && summary.inicio > todayISO() && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  O ciclo ainda não começou; a sobra será liberada em{" "}
+                  {formatDate(summary.inicio)}.
                 </p>
               )}
             </div>

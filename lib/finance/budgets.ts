@@ -454,7 +454,9 @@ export function eventosDoCiclo(
     budget.cicloFechado === true;
   if (result.restante > 0 && podeLiberarSobra) {
     const sobraData = fechamentoAntecipado
-      ? (budget.fechadoEm as string)
+      ? (budget.fechadoEm as string) < result.inicio
+        ? result.inicio
+        : (budget.fechadoEm as string)
       : result.fechamento;
     events.push({
       tipo: "sobra",
