@@ -437,6 +437,9 @@ export async function createTransactionAction(
             observacao,
             recorrenciaId: recurrenceId,
             orcamentoDeslocamento,
+            faturaChaveOverride: isCard
+              ? data.faturaChaveOverride ?? null
+              : null,
             ...cardSnapshot,
           })
           .run();
@@ -471,6 +474,10 @@ export async function createTransactionAction(
               parcelaAtual: item.numero,
               parcelaTotal: plan.length,
               orcamentoDeslocamento,
+              faturaChaveOverride:
+                isCard && data.faturaChaveOverride
+                  ? addMonths(data.faturaChaveOverride, item.numero - 1)
+                  : null,
               ...cardSnapshot,
             })
             .run();
@@ -493,6 +500,9 @@ export async function createTransactionAction(
             categoriaId,
             observacao,
             orcamentoDeslocamento,
+            faturaChaveOverride: isCard
+              ? data.faturaChaveOverride ?? null
+              : null,
             ...cardSnapshot,
           })
           .run();
@@ -572,9 +582,14 @@ export async function updateTransactionAction(
   }
 
   const isFixed = Boolean(existing.recorrenciaId);
-  const isInstallment = Boolean(existing.parcelaGrupoId);
+  const isInstallment =
+    Boolean(existing.parcelaGrupoId) && (existing.parcelaTotal ?? 0) > 1;
   const isGrouped = isFixed || isInstallment;
   const dateChanged = data.data !== existing.data;
+  const invoiceChanged =
+    data.faturaChaveOverride !== undefined &&
+    (data.faturaChaveOverride ?? null) !==
+      (existing.faturaChaveOverride ?? null);
 
   if (data.scope === "all") {
     return fail(
@@ -641,6 +656,11 @@ export async function updateTransactionAction(
     cartaoVencimento: card?.diaVencimento ?? null,
     cartaoFechamentoCompra: card?.fechamentoCompra ?? null,
   };
+  const overrideValue = isCard
+    ? data.faturaChaveOverride !== undefined
+      ? data.faturaChaveOverride
+      : existing.faturaChaveOverride
+    : null;
 
   const updateValues = {
     tipo: data.tipo,
@@ -661,6 +681,7 @@ export async function updateTransactionAction(
     ...updateValues,
     data: data.data,
     pago,
+    faturaChaveOverride: overrideValue,
   };
   // Ao editar vários lançamentos, preservamos o status de pagamento de cada
   // ocorrência (o usuário pode marcar pago individualmente ou em lote depois).
@@ -742,6 +763,7 @@ export async function updateTransactionAction(
               parcelaGrupoId: groupId,
               parcelaAtual: first.numero,
               parcelaTotal: plan.length,
+              faturaChaveOverride: overrideValue,
             })
             .where(
               and(
@@ -772,6 +794,9 @@ export async function updateTransactionAction(
                 parcelaAtual: item.numero,
                 parcelaTotal: plan.length,
                 orcamentoDeslocamento,
+                faturaChaveOverride: overrideValue
+                  ? addMonths(overrideValue, item.numero - 1)
+                  : null,
                 ...cardSnapshot,
               })
               .run();
@@ -1082,6 +1107,7 @@ export async function updateTransactionAction(
             parcelaGrupoId: groupId,
             parcelaAtual: first.numero,
             parcelaTotal: plan.length,
+            faturaChaveOverride: overrideValue,
           })
           .where(eq(transactions.id, data.id))
           .run();
@@ -1107,6 +1133,9 @@ export async function updateTransactionAction(
               parcelaAtual: item.numero,
               parcelaTotal: plan.length,
               orcamentoDeslocamento,
+              faturaChaveOverride: overrideValue
+                ? addMonths(overrideValue, item.numero - 1)
+                : null,
               ...cardSnapshot,
             })
             .run();
@@ -1168,6 +1197,7 @@ export async function updateTransactionAction(
             parcelaGrupoId: null,
             parcelaAtual: null,
             parcelaTotal: null,
+            faturaChaveOverride: overrideValue,
           })
           .where(eq(transactions.id, data.id))
           .run();
@@ -1454,6 +1484,38 @@ export async function updateTransactionAction(
             }
           }
 
+          if (invoiceChanged) {
+            const rows = tx
+              .select({
+                id: transactions.id,
+                parcelaAtual: transactions.parcelaAtual,
+              })
+              .from(transactions)
+              .where(inArray(transactions.id, ids))
+              .all()
+              .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+            const anchorNumber = existing.parcelaAtual ?? 1;
+            for (const row of rows) {
+              const offset = Math.max(
+                (row.parcelaAtual ?? anchorNumber) - anchorNumber,
+                0,
+              );
+              const override =
+                row.id === data.id
+                  ? data.faturaChaveOverride ?? null
+                  : data.faturaChaveOverride
+                    ? addMonths(data.faturaChaveOverride, offset)
+                    : null;
+              tx.update(transactions)
+                .set({
+                  faturaChaveOverride: override,
+                  updatedAt: new Date(),
+                })
+                .where(eq(transactions.id, row.id))
+                .run();
+            }
+          }
+
           for (const transactionId of ids) {
             replaceTags(tx, workspaceId, transactionId, data.tagIds);
           }
@@ -1697,10 +1759,10 @@ export async function normalizeOrphanInstallmentsAction(): Promise<
         const sorted = [...items].sort(
           (a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0),
         );
+        // Um grupo com uma única linha não é parcelamento: volta a avulsa.
         const needs =
           sorted.length === 1
-            ? (sorted[0]?.parcelaTotal ?? 1) !== 1 ||
-              (sorted[0]?.parcelaAtual ?? 0) !== 1
+            ? true
             : sorted.some(
                 (row, index) =>
                   row.parcelaAtual !== index + 1 ||

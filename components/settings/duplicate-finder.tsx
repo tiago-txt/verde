@@ -45,7 +45,7 @@ function typeLabel(tipo: string): string {
 function itemMeta(item: DuplicateItemView): string {
   const parts = [item.pago ? "Pago" : "Não pago"];
   if (item.recorrenciaId) parts.push("recorrente");
-  if (item.parcelaGrupoId) {
+  if (item.parcelaGrupoId && (item.parcelaTotal ?? 0) > 1) {
     parts.push(`parcela ${item.parcelaAtual}/${item.parcelaTotal}`);
   }
   parts.push(`criado em ${formatDateTime(new Date(item.createdAt))}`);

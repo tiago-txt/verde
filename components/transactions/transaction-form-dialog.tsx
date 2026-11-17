@@ -67,7 +67,7 @@ import { createTagAction } from "@/lib/actions/tags";import type {
   TransactionListItem,
 } from "@/lib/db/queries/transactions";
 import type { TransactionType } from "@/lib/db/schema";
-import { todayISO } from "@/lib/dates";
+import { addMonths, todayISO } from "@/lib/dates";
 import {
   buildInstallmentPlan,
   installmentTotal,
@@ -129,13 +129,14 @@ function buildDefaults(
       observacao: transaction.observacao ?? "",
       repeticao: transaction.recorrenciaId
         ? "fixa"
-        : transaction.parcelaGrupoId
+        : transaction.parcelaGrupoId && (transaction.parcelaTotal ?? 0) > 1
           ? "parcelada"
           : "nenhuma",
       frequencia: "mensal",
       dataFim: null,
       parcelas: 2,
       baseValor: transaction.recorrenciaId ? "parcela" : "total",
+      faturaChaveOverride: transaction.faturaChaveOverride ?? null,
       orcamentoDeslocamento: transaction.orcamentoDeslocamento ?? 0,
     };
   }
@@ -172,6 +173,7 @@ function buildDefaults(
     dataFim: null,
     parcelas: 2,
     baseValor: "total",
+    faturaChaveOverride: null,
     orcamentoDeslocamento: 0,
   };
 }
@@ -347,6 +349,7 @@ export function TransactionFormDialog({
   const frequencia = watch("frequencia");
   const contaId = watch("contaId");
   const cartaoId = watch("cartaoId");
+  const faturaChaveOverride = watch("faturaChaveOverride");
   const categoriaId = watch("categoriaId");
   const tagIds = watch("tagIds");
   const observacao = watch("observacao");
@@ -364,12 +367,32 @@ export function TransactionFormDialog({
   const cardInvoiceDates = selectedCard && cardInvoiceKey
     ? datasDaFatura(cardInvoiceKey, selectedCard)
     : null;
+  const effectiveInvoiceKey = faturaChaveOverride ?? cardInvoiceKey;
+  const effectiveInvoiceDates =
+    selectedCard && effectiveInvoiceKey
+      ? datasDaFatura(effectiveInvoiceKey, selectedCard)
+      : null;
+  const fixedSeries = repeticao === "fixa";
+  const invoiceOptions = useMemo(() => {
+    if (!cardInvoiceKey) return [] as string[];
+    const purchaseMonth = data.slice(0, 7);
+    const keys = new Set<string>([
+      purchaseMonth,
+      addMonths(purchaseMonth, 1),
+      addMonths(purchaseMonth, 2),
+      cardInvoiceKey,
+    ]);
+    if (faturaChaveOverride) keys.add(faturaChaveOverride);
+    return [...keys].sort();
+  }, [cardInvoiceKey, data, faturaChaveOverride]);
 
-  const isGrouped = Boolean(
-    transaction?.recorrenciaId || transaction?.parcelaGrupoId,
-  );
   const isFixed = Boolean(transaction?.recorrenciaId);
-  const isInstallment = Boolean(transaction?.parcelaGrupoId);
+  const isInstallment =
+    Boolean(transaction?.parcelaGrupoId) &&
+    (transaction?.parcelaTotal ?? 0) > 1;
+  const isGrouped = isFixed || isInstallment;
+  const showInvoicePicker =
+    !fixedSeries && (!isInstallment || (transaction?.parcelaAtual ?? 1) <= 1);
   const isConversion =
     mode === "edit" &&
     ((isFixed && repeticao === "parcelada") ||
@@ -381,11 +404,13 @@ export function TransactionFormDialog({
   const canChangeDate = true;
   const dateChanged =
     mode === "edit" && Boolean(transaction) && data !== transaction?.data;
-  const dateScopes: Scope[] | undefined = dateChanged
-    ? isFixed
-      ? ["future"]
-      : ["single", "future"]
-    : undefined;
+  const invoiceChanged =
+    mode === "edit" &&
+    Boolean(transaction) &&
+    (faturaChaveOverride ?? null) !==
+      (transaction?.faturaChaveOverride ?? null);
+  const dateScopes: Scope[] | undefined =
+    dateChanged || invoiceChanged ? ["future"] : undefined;
   const paidLocked = mode === "edit" && isGrouped && scope !== "single";
 
   useEffect(() => {
@@ -594,6 +619,7 @@ export function TransactionFormDialog({
         shouldDirty: true,
         shouldValidate: false,
       });
+      setValue("faturaChaveOverride", null, { shouldDirty: true });
       setValue("pago", false);
       if (tipo === "transferencia") {
         setValue("tipo", "despesa");
@@ -603,6 +629,7 @@ export function TransactionFormDialog({
     }
 
     setValue("cartaoId", null, { shouldDirty: true, shouldValidate: false });
+    setValue("faturaChaveOverride", null, { shouldDirty: true });
     setValue("contaId", value.slice("conta:".length) || null, {
       shouldDirty: true,
       shouldValidate: false,
@@ -1445,22 +1472,70 @@ export function TransactionFormDialog({
                     <FieldError message={formState.errors.cartaoId?.message} />
 
                     {selectedCard && cardInvoiceKey && cardInvoiceDates && (
-                      <p className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
-                        <CreditCard
-                          className="h-3.5 w-3.5 shrink-0"
-                          style={{ color: selectedCard.cor }}
-                          aria-hidden="true"
-                        />
-                        <span>
-                          Fatura de {formatMonthTitle(cardInvoiceKey)} · vence{" "}
-                          {formatDate(cardInvoiceDates.vencimento).slice(0, 5)}
-                        </span>
-                        {tipo === "receita" && (
-                          <Badge variant="success" className="px-1.5 py-0 text-xs">
-                            Estorno/crédito
-                          </Badge>
-                        )}
-                      </p>
+                      !showInvoicePicker ? (
+                        <p className="flex flex-wrap items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1.5 text-xs text-muted-foreground">
+                          <CreditCard
+                            className="h-3.5 w-3.5 shrink-0"
+                            style={{ color: selectedCard.cor }}
+                            aria-hidden="true"
+                          />
+                          <span>
+                            Fatura de{" "}
+                            {formatMonthTitle(effectiveInvoiceKey ?? cardInvoiceKey)}{" "}
+                            · vence{" "}
+                            {formatDate(
+                              (
+                                effectiveInvoiceDates ?? cardInvoiceDates
+                              ).vencimento,
+                            ).slice(0, 5)}
+                          </span>
+                          {tipo === "receita" && (
+                            <Badge variant="success" className="px-1.5 py-0 text-xs">
+                              Estorno/crédito
+                            </Badge>
+                          )}
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          <FieldLabel htmlFor="transaction-fatura">
+                            Fatura
+                          </FieldLabel>
+                          <NativeSelect
+                            id="transaction-fatura"
+                            value={effectiveInvoiceKey ?? cardInvoiceKey}
+                            onChange={(event) => {
+                              const next = event.target.value;
+                              setValue(
+                                "faturaChaveOverride",
+                                next === cardInvoiceKey ? null : next,
+                                {
+                                  shouldDirty: true,
+                                  shouldValidate: true,
+                                },
+                              );
+                            }}
+                          >
+                            {invoiceOptions.map((key) => {
+                              const dates = datasDaFatura(key, selectedCard);
+                              return (
+                                <option key={key} value={key}>
+                                  {formatMonthTitle(key)} · vence{" "}
+                                  {formatDate(dates.vencimento).slice(0, 5)}
+                                </option>
+                              );
+                            })}
+                          </NativeSelect>
+                          <p className="text-xs text-muted-foreground">
+                            O cartão pode processar a compra depois do
+                            fechamento; escolha a fatura correta.
+                          </p>
+                          {tipo === "receita" && (
+                            <Badge variant="success" className="px-1.5 py-0 text-xs">
+                              Estorno/crédito
+                            </Badge>
+                          )}
+                        </div>
+                      )
                     )}
                   </div>
 
@@ -1531,7 +1606,8 @@ export function TransactionFormDialog({
                                 forecastHint.periodo.inicio.slice(0, 7),
                               )}
                             </span>
-                            {forecastHint.periodo.eventoInicial?.parcelaAtual
+                            {forecastHint.periodo.eventoInicial?.parcelaAtual &&
+                            (forecastHint.periodo.eventoInicial.parcelaTotal ?? 0) > 1
                               ? ` (parcela ${forecastHint.periodo.eventoInicial.parcelaAtual}/${forecastHint.periodo.eventoInicial.parcelaTotal})`
                               : ""}
                             . Menor saldo:{" "}
@@ -2117,11 +2193,13 @@ export function TransactionFormDialog({
             transaction={transaction}
             scopes={isConversion ? ["future"] : dateScopes}
             note={
-              dateChanged
-                ? isFixed
-                  ? "A data desta ocorrência mudou. As próximas ocorrências serão deslocadas; as passadas não serão alteradas."
-                  : "A data desta parcela mudou. “Esta e as próximas” desloca o restante do parcelamento; “Só esta parcela” muda apenas esta."
-                : undefined
+              invoiceChanged
+                ? "A fatura desta parcela mudou. As próximas parcelas acompanham; as anteriores não serão alteradas."
+                : dateChanged
+                  ? isFixed
+                    ? "A data desta ocorrência mudou. As próximas ocorrências serão deslocadas; as passadas não serão alteradas."
+                    : "A data desta parcela mudou. As próximas parcelas acompanham; as anteriores não serão alteradas."
+                  : undefined
             }
             onSelect={handleSaveScope}
           />

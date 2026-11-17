@@ -39,7 +39,9 @@ export function ScopeDialog({
 }: ScopeDialogProps) {
   if (!transaction) return null;
 
-  const isInstallment = Boolean(transaction.parcelaGrupoId);
+  const isInstallment =
+    Boolean(transaction.parcelaGrupoId) &&
+    (transaction.parcelaTotal ?? 0) > 1;
   const singleLabel = isInstallment ? "Só esta parcela" : "Só este lançamento";
   const futureLabel = isInstallment
     ? "Esta e as próximas parcelas"
@@ -60,7 +62,9 @@ export function ScopeDialog({
             {formatDate(transaction.data)}
             {isInstallment
               ? ` · Parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
-              : " · lançamento recorrente"}
+              : transaction.recorrenciaId
+                ? " · lançamento recorrente"
+                : ""}
             <span className="mt-2 block">
               {mode === "edit"
                 ? "Escolha o alcance da alteração."

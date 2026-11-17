@@ -3,7 +3,7 @@ import {
   RECURRENCE_FREQUENCIES,
   TRANSACTION_TYPES,
 } from "@/lib/db/schema";
-import { idSchema, isoDateSchema } from "./common";
+import { idSchema, isoDateSchema, monthKeySchema } from "./common";
 
 const transactionFields = z.object({
   tipo: z.enum(TRANSACTION_TYPES),
@@ -43,6 +43,8 @@ const transactionFields = z.object({
     .min(2, "O número de parcelas deve estar entre 2 e 60")
     .max(60, "O número de parcelas deve estar entre 2 e 60"),
   baseValor: z.enum(["total", "parcela"]),
+  /** Fatura escolhida manualmente para compras no cartão (YYYY-MM). */
+  faturaChaveOverride: monthKeySchema.nullable().optional(),
 });
 
 export type TransactionFormValues = z.infer<typeof transactionFields>;

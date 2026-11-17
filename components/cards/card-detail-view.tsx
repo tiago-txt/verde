@@ -99,7 +99,7 @@ function PurchaseLinkContent({ purchase }: { purchase: CardPurchaseItem }) {
           <span className="truncate text-sm font-medium">
             {purchase.descricao}
           </span>
-          {purchase.parcelaAtual && purchase.parcelaTotal && (
+          {(purchase.parcelaTotal ?? 0) > 1 && (
             <Badge variant="secondary" className="px-1.5 py-0 text-xs">
               {purchase.parcelaAtual}/{purchase.parcelaTotal}
             </Badge>

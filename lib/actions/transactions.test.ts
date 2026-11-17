@@ -11,6 +11,7 @@ import {
 import {
   accounts,
   categories,
+  creditCards,
   recurrences,
   transactions,
   users,
@@ -18,6 +19,7 @@ import {
 } from "@/lib/db/schema";
 import { createRecurrenceFromTransactionsAction } from "@/lib/actions/transactions";
 import {
+  createTransactionAction,
   deleteTransactionAction,
   normalizeOrphanInstallmentsAction,
   updateTransactionAction,
@@ -927,7 +929,31 @@ describe("edição da série: destacar, converter e encerrar", () => {
     });
   });
 
-  it("volta a avulsa quando sobra só uma parcela", async () => {    const { id, groupId } = await createInstallmentSeries(2);
+  it("trata grupo com uma única parcela como avulsa", async () => {
+    const groupId = crypto.randomUUID();
+    const id = insertTransaction({
+      parcelaGrupoId: groupId,
+      parcelaAtual: 1,
+      parcelaTotal: 1,
+    });
+
+    const result = await normalizeOrphanInstallmentsAction();
+    expect(result).toMatchObject({ ok: true, fixed: 1 });
+
+    const row = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, id))
+      .get();
+    expect(row).toMatchObject({
+      parcelaGrupoId: null,
+      parcelaAtual: null,
+      parcelaTotal: null,
+    });
+  });
+
+  it("volta a avulsa quando sobra só uma parcela", async () => {
+    const { id, groupId } = await createInstallmentSeries(2);
     const second = testDb.db
       .select()
       .from(transactions)
@@ -1065,6 +1091,94 @@ describe("edição da série: destacar, converter e encerrar", () => {
       "2024-02",
       "2024-05",
       "2024-06",
+    ]);
+  });
+
+  it("move a fatura desta e das próximas parcelas", async () => {
+    const { groupId } = await createInstallmentSeries(3);
+    const second = testDb.db
+      .select()
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.parcelaGrupoId, groupId),
+          eq(transactions.parcelaAtual, 2),
+          isNull(transactions.deletedAt),
+        ),
+      )
+      .get();
+
+    const result = await updateTransactionAction(
+      updateInput(second!.id, {
+        data: second!.data,
+        descricao: second!.descricao,
+        valor: second!.valor,
+        pago: second!.pago,
+        repeticao: "parcelada",
+        scope: "future",
+        faturaChaveOverride: "2024-05",
+      }),
+    );
+    expect(result.ok).toBe(true);
+
+    const after = selectedTransactions()
+      .filter((row) => row.parcelaGrupoId === groupId)
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(after.map((row) => row.faturaChaveOverride)).toEqual([
+      null,
+      "2024-05",
+      "2024-06",
+    ]);
+  });
+
+  it("cria parcelas já na fatura escolhida", async () => {
+    const cardId = crypto.randomUUID();
+    testDb.db
+      .insert(creditCards)
+      .values({
+        id: cardId,
+        workspaceId: user.workspaceId,
+        nome: "Cartão teste",
+        bandeira: "visa",
+        cor: "#22c55e",
+        icone: "cartao",
+        limite: 500_000,
+        diaFechamento: 10,
+        diaVencimento: 15,
+        fechamentoCompra: "proxima_fatura",
+        arquivado: false,
+      })
+      .run();
+
+    const result = await createTransactionAction({
+      tipo: "despesa",
+      descricao: "Compra teste",
+      valor: 90_000,
+      data: "2024-01-10",
+      pago: true,
+      contaId: null,
+      cartaoId: cardId,
+      contaDestinoId: null,
+      categoriaId,
+      tagIds: [],
+      observacao: null,
+      orcamentoDeslocamento: 0,
+      repeticao: "parcelada",
+      frequencia: "mensal",
+      dataFim: null,
+      parcelas: 3,
+      baseValor: "total",
+      faturaChaveOverride: "2024-05",
+    });
+    expect(result.ok).toBe(true);
+
+    const group = selectedTransactions()
+      .filter((row) => row.descricao === "Compra teste")
+      .sort((a, b) => (a.parcelaAtual ?? 0) - (b.parcelaAtual ?? 0));
+    expect(group.map((row) => row.faturaChaveOverride)).toEqual([
+      "2024-05",
+      "2024-06",
+      "2024-07",
     ]);
   });
 

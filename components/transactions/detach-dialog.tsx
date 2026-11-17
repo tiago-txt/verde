@@ -37,7 +37,9 @@ export function DetachDialog({
 
   if (!transaction) return null;
 
-  const isInstallment = Boolean(transaction.parcelaGrupoId);
+  const isInstallment =
+    Boolean(transaction.parcelaGrupoId) &&
+    (transaction.parcelaTotal ?? 0) > 1;
   const previous = isInstallment
     ? Math.max((transaction.parcelaAtual ?? 1) - 1, 0)
     : 0;
@@ -84,7 +86,9 @@ export function DetachDialog({
             {formatDate(transaction.data)}
             {isInstallment
               ? ` · Parcela ${transaction.parcelaAtual}/${transaction.parcelaTotal}`
-              : " · lançamento recorrente"}
+              : transaction.recorrenciaId
+                ? " · lançamento recorrente"
+                : ""}
             {!choice && (
               <span className="mt-2 block">
                 Como você quer separar esta ocorrência?

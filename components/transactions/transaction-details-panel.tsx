@@ -143,13 +143,14 @@ export function TransactionDetailsPanel({
       : detail.tipo === "receita"
         ? "Receita"
         : "Transferência";
-  const recurrenceTitle = detail.parcelaGrupoId
-    ? `Parcela ${detail.parcelaAtual}/${detail.parcelaTotal}`
-    : `${fixedTypeLabel} fixa · ${
-        detail.recorrenciaFrequencia
-          ? FREQUENCY_LABELS[detail.recorrenciaFrequencia]
-          : "recorrente"
-      }`;
+  const recurrenceTitle =
+    detail.parcelaGrupoId && (detail.parcelaTotal ?? 0) > 1
+      ? `Parcela ${detail.parcelaAtual}/${detail.parcelaTotal}`
+      : `${fixedTypeLabel} fixa · ${
+          detail.recorrenciaFrequencia
+            ? FREQUENCY_LABELS[detail.recorrenciaFrequencia]
+            : "recorrente"
+        }`;
 
   function togglePaid() {
     const next = !paid;
@@ -211,7 +212,8 @@ export function TransactionDetailsPanel({
               {formatCurrency(detail.valor)}
             </p>
 
-            {(detail.recorrenciaId || detail.parcelaGrupoId) && (
+            {(detail.recorrenciaId ||
+              (detail.parcelaGrupoId && (detail.parcelaTotal ?? 0) > 1)) && (
               <div className="rounded-lg border border-border bg-muted/30 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <div>

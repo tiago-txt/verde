@@ -177,7 +177,7 @@ export const TransactionRow = memo(function TransactionRow({
           aria-label="Lançamento recorrente"
         />
       )}
-      {transaction.parcelaGrupoId && (
+      {(transaction.parcelaTotal ?? 0) > 1 && (
         <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-xs">
           {transaction.parcelaAtual}/{transaction.parcelaTotal}
         </Badge>
