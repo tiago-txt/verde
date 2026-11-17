@@ -294,6 +294,7 @@ export function loadBudgetSeries(
     .select({
       budgetId: budgetCycleClosures.budgetId,
       ciclo: budgetCycleClosures.ciclo,
+      dataFechamento: budgetCycleClosures.dataFechamento,
       createdAt: budgetCycleClosures.createdAt,
     })
     .from(budgetCycleClosures)
@@ -312,7 +313,7 @@ export function loadBudgetSeries(
     const list = closuresByBudget.get(closure.budgetId) ?? [];
     list.push({
       ciclo: closure.ciclo,
-      data: isoDateOf(closure.createdAt),
+      data: closure.dataFechamento ?? isoDateOf(closure.createdAt),
     });
     closuresByBudget.set(closure.budgetId, list);
   }

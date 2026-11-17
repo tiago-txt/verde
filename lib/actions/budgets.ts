@@ -4,7 +4,7 @@ import { and, eq, gte, isNull } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUser } from "@/lib/auth/current-user";
-import { addMonths, currentMonth, todayISO } from "@/lib/dates";
+import { addDaysISO, addMonths, currentMonth, todayISO } from "@/lib/dates";
 import { scopedDb } from "@/lib/db/scoped";
 import {
   accounts,
@@ -55,8 +55,8 @@ function fail(error: string): ActionResult {
   return { ok: false, error };
 }
 
-function revalidateBudgets() {
-  invalidateForecastCache();
+function revalidateBudgets(workspaceId: string) {
+  invalidateForecastCache(workspaceId);
   revalidatePath("/limite-de-gastos");
   revalidatePath("/lancamentos");
   revalidatePath("/");
@@ -381,7 +381,7 @@ export async function createBudgetAction(
     );
   }
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true, id };
 }
 
@@ -622,7 +622,7 @@ export async function updateBudgetAction(
     );
   }
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true, id: series.id };
 }
 
@@ -687,7 +687,7 @@ export async function setBudgetOverrideAction(input: {
     return fail("Não foi possível ajustar o valor deste ciclo.");
   }
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true, id: series.id };
 }
 
@@ -696,7 +696,8 @@ export async function setBudgetArchivedAction(input: {
   arquivado: boolean;
 }): Promise<ActionResult> {
   const user = await requireUser();
-  const { db, ws } = scopedDb(user.workspaceId);
+  const workspaceId = user.workspaceId;
+  const { db, ws } = scopedDb(workspaceId);
 
   const parsed = z
     .object({ id: idSchema, arquivado: z.boolean() })
@@ -713,7 +714,7 @@ export async function setBudgetArchivedAction(input: {
 
   if (result.changes === 0) return fail("Orçamento não encontrado.");
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true, id: parsed.data.id };
 }
 
@@ -805,7 +806,7 @@ export async function deleteBudgetAction(input: {
     );
   }
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true };
 }
 
@@ -852,7 +853,7 @@ export async function restoreBudgetCycleAction(input: {
 
   if (result.changes === 0) return fail("Ciclo excluído não encontrado.");
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true, id: parsed.data.id };
 }
 
@@ -1015,6 +1016,22 @@ export async function closeBudgetCycleAction(
   const resolved = resolverCiclo(series, parsed.data.ciclo);
   if (!resolved) return fail("Ciclo não encontrado.");
 
+  const detail = getBudgetCycleDetail(
+    workspaceId,
+    parsed.data.budgetId,
+    parsed.data.ciclo,
+  );
+  if (!detail) return fail("Ciclo não encontrado.");
+  const lastPurchase = detail.transactions.reduce<string | null>(
+    (latest, transaction) =>
+      !latest || transaction.data > latest ? transaction.data : latest,
+    null,
+  );
+  const dataFechamento =
+    lastPurchase && lastPurchase > detail.resumo.inicio
+      ? lastPurchase
+      : addDaysISO(detail.resumo.inicio, 1);
+
   const now = new Date();
   db.insert(budgetCycleClosures)
     .values({
@@ -1022,13 +1039,14 @@ export async function closeBudgetCycleAction(
       workspaceId,
       budgetId: parsed.data.budgetId,
       ciclo: parsed.data.ciclo,
+      dataFechamento,
       createdAt: now,
       updatedAt: now,
     })
     .onConflictDoNothing()
     .run();
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true };
 }
 
@@ -1051,6 +1069,7 @@ export async function reopenBudgetCycleAction(
     )
     .run();
 
-  revalidateBudgets();
+  revalidateBudgets(workspaceId);
   return { ok: true };
 }
+

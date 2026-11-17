@@ -259,6 +259,11 @@ export function BudgetDetailDialog({
                   {formatCurrency(summary.restante)}
                 </span>
               </p>
+              {summary.fechado && summary.fechadoEm && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Consolidado em {formatDate(summary.fechadoEm)}.
+                </p>
+              )}
               <Button
                 type="button"
                 variant={summary.fechado ? "outline" : "default"}

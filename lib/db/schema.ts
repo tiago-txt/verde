@@ -768,6 +768,8 @@ export const budgetCycleClosures = sqliteTable(
       .notNull()
       .references(() => budgets.id, { onDelete: "cascade" }),
     ciclo: text("ciclo").notNull(),
+    /** Data usada para reconhecer a sobra (última compra ou início + 1). */
+    dataFechamento: text("data_fechamento"),
     ...timestamps,
   },
   (table) => [

@@ -1,0 +1,1 @@
+ALTER TABLE `budget_cycle_closures` ADD `data_fechamento` text;

@@ -198,7 +198,12 @@ describe("eventos de provisão e sobra", () => {
     ]);
 
     const fechado = eventosDoCiclo(
-      { ...budget, sobraApenasAoFechar: true, cicloFechado: true },
+      {
+        ...budget,
+        sobraApenasAoFechar: true,
+        cicloFechado: true,
+        fechadoEm: "2026-12-10",
+      },
       "2026-11",
       30000,
     );

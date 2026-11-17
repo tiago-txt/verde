@@ -442,18 +442,13 @@ export function eventosDoCiclo(
   const events: BudgetEvent[] = [
     { tipo: "provisao", data: provisionDate, valor: result.restante, ciclo },
   ];
-  // Sem linha de liberação com valor zero. O fechamento manual pode antecipar
-  // a sobra; sem ele, o padrão continua liberando no fechamento do ciclo.
-  const fechamentoAntecipado =
-    budget.cicloFechado === true &&
-    Boolean(budget.fechadoEm) &&
-    (budget.fechadoEm as string) < result.fechamento;
-  const podeLiberarSobra =
-    fechamentoAntecipado ||
-    !budget.sobraApenasAoFechar ||
-    budget.cicloFechado === true;
+  // Sem linha de liberação com valor zero. O fechamento manual usa a data
+  // consolidada no próprio fechamento; sem ele, o padrão é o fim do ciclo.
+  const fechamentoManual =
+    budget.cicloFechado === true && Boolean(budget.fechadoEm);
+  const podeLiberarSobra = fechamentoManual || !budget.sobraApenasAoFechar;
   if (result.restante > 0 && podeLiberarSobra) {
-    const sobraData = fechamentoAntecipado
+    const sobraData = fechamentoManual
       ? (budget.fechadoEm as string) < result.inicio
         ? result.inicio
         : (budget.fechadoEm as string)

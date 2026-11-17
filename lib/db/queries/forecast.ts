@@ -94,15 +94,36 @@ export type ForecastDraftInput = {
 };
 
 const CACHE_TTL_MS = 30_000;
-const cache = new Map<string, { expires: number; data: ForecastData }>();
-const budgetForecastCache = new Map<
-  string,
-  { expires: number; data: ReturnType<typeof listBudgetForecastEvents> }
->();
-const budgetDetailCache = new Map<
-  string,
-  { expires: number; data: ReturnType<typeof getBudgetCycleDetail> }
->();
+type ForecastCacheEntry = { expires: number; data: ForecastData };
+type BudgetForecastCacheEntry = {
+  expires: number;
+  data: ReturnType<typeof listBudgetForecastEvents>;
+};
+type BudgetDetailCacheEntry = {
+  expires: number;
+  data: ReturnType<typeof getBudgetCycleDetail>;
+};
+type ForecastCacheGlobal = typeof globalThis & {
+  __verdeForecastCache?: Map<string, ForecastCacheEntry>;
+  __verdeBudgetForecastCache?: Map<string, BudgetForecastCacheEntry>;
+  __verdeBudgetDetailCache?: Map<string, BudgetDetailCacheEntry>;
+};
+// O cache precisa ser o mesmo entre a página (RSC) e as server actions; em
+// alguns bundles o módulo é avaliado separadamente. `globalThis` compartilha o
+// processo e garante que a invalidação feita pela ação chegue na renderização.
+const forecastGlobal = globalThis as ForecastCacheGlobal;
+const cache =
+  forecastGlobal.__verdeForecastCache ??
+  new Map<string, ForecastCacheEntry>();
+forecastGlobal.__verdeForecastCache = cache;
+const budgetForecastCache =
+  forecastGlobal.__verdeBudgetForecastCache ??
+  new Map<string, BudgetForecastCacheEntry>();
+forecastGlobal.__verdeBudgetForecastCache = budgetForecastCache;
+const budgetDetailCache =
+  forecastGlobal.__verdeBudgetDetailCache ??
+  new Map<string, BudgetDetailCacheEntry>();
+forecastGlobal.__verdeBudgetDetailCache = budgetDetailCache;
 
 export function invalidateForecastCache(workspaceId?: string): void {
   if (!workspaceId) {

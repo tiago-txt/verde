@@ -396,11 +396,11 @@ describe("fechamento manual do ciclo", () => {
 
     const depois = getBudgetEventsForMonth(
       user.workspaceId,
-      "2026-02",
-      filters("2026-02"),
+      "2026-01",
+      filters("2026-01"),
     ).filter((event) => event.resumo.id === id);
     const sobra = depois.find((event) => event.tipoEvento === "sobra");
-    expect(sobra).toMatchObject({ valor: 40_000, data: "2026-02-01" });
+    expect(sobra).toMatchObject({ valor: 40_000, data: "2026-01-10" });
 
     const reaberto = await reopenBudgetCycleAction({
       budgetId: id,
@@ -409,15 +409,15 @@ describe("fechamento manual do ciclo", () => {
     expect(reaberto.ok).toBe(true);
     const reabertoEventos = getBudgetEventsForMonth(
       user.workspaceId,
-      "2026-02",
-      filters("2026-02"),
+      "2026-01",
+      filters("2026-01"),
     ).filter((event) => event.resumo.id === id);
     expect(reabertoEventos.some((event) => event.tipoEvento === "sobra")).toBe(
       false,
     );
   });
 
-  it("fecha o ciclo em andamento e antecipa a sobra para hoje", async () => {
+  it("fecha o ciclo em andamento e usa a última compra como data da sobra", async () => {
     const mes = currentMonth();
     const mercado = categoryId("Mercado");
     const id = await createBudget({
@@ -436,7 +436,7 @@ describe("fechamento manual do ciclo", () => {
       filters(mes),
     ).filter((event) => event.resumo.id === id);
     const sobra = eventos.find((event) => event.tipoEvento === "sobra");
-    expect(sobra).toMatchObject({ valor: 40_000, data: todayISO() });
+    expect(sobra).toMatchObject({ valor: 40_000, data: `${mes}-05` });
   });
 
   it("fecha ciclo futuro e agenda a sobra para o início", async () => {
@@ -457,6 +457,6 @@ describe("fechamento manual do ciclo", () => {
       filters(mes),
     ).filter((event) => event.resumo.id === id);
     const sobra = eventos.find((event) => event.tipoEvento === "sobra");
-    expect(sobra).toMatchObject({ valor: 50_000, data: `${mes}-10` });
+    expect(sobra).toMatchObject({ valor: 50_000, data: `${mes}-11` });
   });
 });
