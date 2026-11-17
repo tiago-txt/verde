@@ -1136,10 +1136,15 @@ function mergeSobrasNasProvisoes(
   events: BudgetEventView[],
 ): BudgetEventView[] {
   const provisionByBudgetAndDate = new Map<string, BudgetEventView>();
+  const provisionByBudgetAndCycle = new Map<string, BudgetEventView>();
   for (const event of events) {
     if (event.tipoEvento !== "provisao") continue;
     provisionByBudgetAndDate.set(
       `${event.resumo.budgetId}:${event.data}`,
+      event,
+    );
+    provisionByBudgetAndCycle.set(
+      `${event.resumo.budgetId}:${event.ciclo}`,
       event,
     );
   }
@@ -1147,9 +1152,21 @@ function mergeSobrasNasProvisoes(
   const merged: BudgetEventView[] = [];
   for (const event of events) {
     if (event.tipoEvento === "sobra") {
-      const provision = provisionByBudgetAndDate.get(
-        `${event.resumo.budgetId}:${event.data}`,
-      );
+      let provision =
+        provisionByBudgetAndDate.get(
+          `${event.resumo.budgetId}:${event.data}`,
+        ) ??
+        (event.resumo.fechado
+          ? provisionByBudgetAndCycle.get(
+              `${event.resumo.budgetId}:${event.ciclo}`,
+            )
+          : undefined);
+      if (!provision && event.resumo.fechado) {
+        const next = provisionByBudgetAndCycle.get(
+          `${event.resumo.budgetId}:${addMonths(event.ciclo, 1)}`,
+        );
+        if (next && next.valor === event.valor) provision = next;
+      }
       if (provision) {
         provision.sobraAnterior = {
           valor: event.valor,

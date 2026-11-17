@@ -27,7 +27,7 @@ import {
   type RecurrenceTemplate,
   type TransactionType,
 } from "@/lib/db/schema";
-import { eachDayOfMonth, addMonths, currentMonth, monthRange, todayISO } from "@/lib/dates";
+import { eachDayOfMonth, addMonths, monthRange, todayISO } from "@/lib/dates";
 import { resolveCategoryId } from "@/lib/finance/categories";
 import {
   cicloCompetencia,
@@ -46,7 +46,7 @@ import {
   recurrenceHorizon,
 } from "@/lib/finance/recurrence";
 import { listAllAccounts } from "./accounts";
-import { listBudgetsWithCategories, loadBudgetSeries } from "./budgets";
+import { loadBudgetSeries } from "./budgets";
 import { listCardsForFilter, type CardOption } from "./cards";
 import {
   getSystemCategoryIds,
@@ -660,16 +660,16 @@ export function getTransactionFormData(workspaceId: string): TransactionFormData
     cards: listCardsForFilter(workspaceId),
     categories: listAllCategories(workspaceId),
     tags: listTags(workspaceId),
-    budgets: listBudgetsWithCategories(workspaceId, currentMonth()).map(
-      (budget) => ({
+    budgets: loadBudgetSeries(workspaceId)
+      .filter((budget) => !budget.arquivado)
+      .map((budget) => ({
         id: budget.id,
         nome: budget.nome,
         cor: budget.cor,
         icone: budget.icone,
         dataInicio: budget.dataInicio,
         dataFim: budget.dataFim,
-      }),
-    ),
+      })),
     lastAccountId: lastTransaction?.contaId ?? null,
     lastCardId: lastTransaction?.cartaoId ?? null,
     recentDescriptions,
