@@ -71,7 +71,7 @@ export function BudgetEventRow({
     },
   }[projectionStatus];
   const closedMeta = {
-    label: "fechado",
+    label: "Fechado",
     icon: Lock,
     tone: "text-primary",
     box: "border-primary/35 bg-primary/10",
@@ -216,8 +216,7 @@ export function BudgetEventRow({
                   }
                   title={summary.fechado ? "Reabrir ciclo" : "Fechar ciclo"}
                   className={cn(
-                    "pointer-events-auto flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium capitalize transition-colors hover:brightness-110 disabled:opacity-50",
-                    displayMeta.box,
+                    "pointer-events-auto relative flex h-7 shrink-0 items-center gap-1 text-xs font-medium capitalize transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
                     displayMeta.tone,
                   )}
                 >
