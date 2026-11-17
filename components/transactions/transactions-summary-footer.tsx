@@ -18,7 +18,6 @@ import {
   type FooterBreakdownItem,
 } from "@/lib/finance/summary-display";
 import {
-  CARD_BASIS_HELP,
   CARD_BASIS_LABELS,
   type CardBasis,
   type ResultSummary,
@@ -181,12 +180,13 @@ export function TransactionsSummaryFooter({
   result,
 }: TransactionsSummaryFooterProps) {
   const [expanded, setExpanded] = useState(false);
-  const [summaryOpen, setSummaryOpen] = useState(false);
   const [breakdownKind, setBreakdownKind] = useState<
     "despesa" | "receita" | null
   >(null);
   const desktopFooterRef = useRef<HTMLDivElement>(null);
   const [desktopFooterHeight, setDesktopFooterHeight] = useState(0);
+  const mobileFooterRef = useRef<HTMLDivElement>(null);
+  const [mobileFooterHeight, setMobileFooterHeight] = useState(0);
 
   useEffect(() => {
     const element = desktopFooterRef.current;
@@ -194,6 +194,19 @@ export function TransactionsSummaryFooter({
 
     const update = () =>
       setDesktopFooterHeight(element.getBoundingClientRect().height);
+    update();
+
+    const observer = new ResizeObserver(update);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = mobileFooterRef.current;
+    if (!element) return;
+
+    const update = () =>
+      setMobileFooterHeight(element.getBoundingClientRect().height);
     update();
 
     const observer = new ResizeObserver(update);
@@ -314,7 +327,21 @@ export function TransactionsSummaryFooter({
         />
       )}
 
-      <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden">
+      <div
+        ref={mobileFooterRef}
+        className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 overflow-hidden rounded-t-2xl border-t border-border bg-card shadow-[0_-6px_18px_rgba(0,0,0,0.18)] lg:hidden"
+      >
+        {expanded && (
+          <div className="max-h-[60dvh] overflow-y-auto border-b border-border px-4 pb-3 pt-3">
+            <p className="mb-2 text-xs text-muted-foreground">
+              Base do resultado:{" "}
+              <span className="font-medium text-foreground">
+                {CARD_BASIS_LABELS[basis]}
+              </span>
+            </p>
+            <Statement values={values} onOpen={setBreakdownKind} />
+          </div>
+        )}
         <div className="flex h-[52px] items-center gap-2 pl-4 pr-2">
           <div className="grid min-w-0 flex-1 grid-cols-2 gap-2">
             <div className="min-w-0 text-right">
@@ -349,33 +376,25 @@ export function TransactionsSummaryFooter({
             variant="ghost"
             size="icon"
             className="h-12 w-12 shrink-0"
-            onClick={() => setSummaryOpen(true)}
-            aria-label="Ver resumo do mês"
+            onClick={() => setExpanded((current) => !current)}
+            aria-expanded={expanded}
+            aria-label={expanded ? "Recolher resumo" : "Expandir resumo"}
           >
-            <ChevronUp className="h-5 w-5" />
+            <ChevronUp
+              className={cn(
+                "h-5 w-5 transition-transform",
+                expanded && "rotate-180",
+              )}
+            />
           </Button>
         </div>
       </div>
 
-      <Dialog open={summaryOpen} onOpenChange={setSummaryOpen}>
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Resumo do mês</DialogTitle>
-            <DialogDescription>
-              Saldo, receitas e despesas usados no rodapé. Base do resultado:{" "}
-              {CARD_BASIS_LABELS[basis].toLowerCase()}.{" "}
-              {CARD_BASIS_HELP[basis]}
-            </DialogDescription>
-          </DialogHeader>
-          <Statement
-            values={values}
-            onOpen={(kind) => {
-              setSummaryOpen(false);
-              setBreakdownKind(kind);
-            }}
-          />
-        </DialogContent>
-      </Dialog>
+      <div
+        aria-hidden="true"
+        className="lg:hidden"
+        style={{ height: mobileFooterHeight }}
+      />
 
       <Dialog
         open={breakdownKind !== null}

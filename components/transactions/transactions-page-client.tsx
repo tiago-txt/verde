@@ -1407,11 +1407,11 @@ export function TransactionsPageClient({
               <div
                 key={group.day}
                 id={`day-${group.day}`}
-                className="scroll-mt-32 border-b border-border/40 pb-3 last:border-b-0 last:pb-0"
+                className="scroll-mt-32 mx-1 border-b border-border/40 pb-3 last:border-b-0 last:pb-0 sm:mx-0"
               >
                 <div
                   className={cn(
-                    "transactions-day-header flex flex-wrap items-center justify-between gap-2 border-b border-grout px-0 py-2.5 sm:px-4",
+                    "transactions-day-header flex flex-wrap items-center justify-between gap-2 rounded-lg border-b border-grout px-2 py-2.5 sm:rounded-none sm:px-4",
                     group.day === today && "transactions-day-header-today",
                   )}
                 >
