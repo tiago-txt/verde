@@ -20,6 +20,7 @@ import {
 import { createTransactionAction } from "@/lib/actions/transactions";
 import { deleteTransactionAction } from "@/lib/actions/transactions";
 import {
+  getCardDebtSnapshot,
   getCardInvoiceAccountDeltas,
   getCardInvoiceDetail,
   listCardInvoiceEventsForMonth,
@@ -860,5 +861,121 @@ describe("fatura como evento único", () => {
       cutoffInvoice: "2025-02",
     });
     expect(idempotent).toMatchObject({ ok: true, count: 0 });
+  });
+});
+
+describe("cobrança recorrente e limite do cartão", () => {
+  /**
+   * Mensalidade/assinatura não compromete o limite inteiro: só a fatura em que
+   * a cobrança cai. Parcelamento continua comprometendo todas as parcelas.
+   */
+  it("mensalidade usa o limite só na fatura vigente", async () => {
+    setCurrent(user);
+    const account = await createAccountAction({
+      nome: "Conta",
+      tipo: "corrente",
+      saldoInicial: 500_000,
+      cor: "#34d399",
+      icone: "Wallet",
+    });
+    if (!account.ok || !account.id) throw new Error("conta");
+
+    const card = await createCardAction({
+      nome: "Cartão",
+      bandeira: "visa",
+      limite: 100_000,
+      diaFechamento: 10,
+      diaVencimento: 17,
+      contaPagamentoId: account.id,
+      cor: "#818cf8",
+      icone: "CreditCard",
+    });
+    if (!card.ok || !card.id) throw new Error("cartão");
+
+    const limiteUsadoDe = () =>
+      listCards(user.workspaceId).find((item) => item.id === card.id)!
+        .limiteUsado;
+
+    expect(limiteUsadoDe()).toBe(0);
+
+    const hoje = todayISO();
+    const mensalidade = await createTransactionAction({
+      tipo: "despesa",
+      descricao: "Faculdade",
+      valor: 5_000,
+      data: hoje,
+      pago: false,
+      contaId: null,
+      cartaoId: card.id,
+      contaDestinoId: null,
+      categoriaId: null,
+      tagIds: [],
+      observacao: null,
+      repeticao: "fixa",
+      frequencia: "mensal",
+      dataFim: null,
+      parcelas: 2,
+      baseValor: "total",
+    });
+    expect(mensalidade.ok).toBe(true);
+
+    // Só a fatura vigente (onde a cobrança deste mês caiu) usa o limite.
+    expect(limiteUsadoDe()).toBe(5_000);
+
+    // O que ainda está por vir continua aparecendo como compromisso futuro,
+    // mas sem consumir o limite de hoje.
+    const debt = getCardDebtSnapshot(user.workspaceId, hoje);
+    expect(debt.future).toBeGreaterThan(0);
+    expect(limiteUsadoDe()).toBe(5_000);
+  });
+
+  it("parcelamento continua comprometendo todas as parcelas", async () => {
+    setCurrent(user);
+    const account = await createAccountAction({
+      nome: "Conta",
+      tipo: "corrente",
+      saldoInicial: 500_000,
+      cor: "#34d399",
+      icone: "Wallet",
+    });
+    if (!account.ok || !account.id) throw new Error("conta");
+
+    const card = await createCardAction({
+      nome: "Cartão",
+      bandeira: "visa",
+      limite: 100_000,
+      diaFechamento: 10,
+      diaVencimento: 17,
+      contaPagamentoId: account.id,
+      cor: "#818cf8",
+      icone: "CreditCard",
+    });
+    if (!card.ok || !card.id) throw new Error("cartão");
+
+    const compra = await createTransactionAction({
+      tipo: "despesa",
+      descricao: "Notebook",
+      valor: 30_000,
+      data: todayISO(),
+      pago: false,
+      contaId: null,
+      cartaoId: card.id,
+      contaDestinoId: null,
+      categoriaId: null,
+      tagIds: [],
+      observacao: null,
+      repeticao: "parcelada",
+      frequencia: "mensal",
+      dataFim: null,
+      parcelas: 3,
+      baseValor: "total",
+    });
+    expect(compra.ok).toBe(true);
+
+    // 3 parcelas de 100,00: o total é dívida desde a compra.
+    expect(
+      listCards(user.workspaceId).find((item) => item.id === card.id)!
+        .limiteUsado,
+    ).toBe(30_000);
   });
 });

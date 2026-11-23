@@ -95,6 +95,10 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   pagamentos e Pagar) e as transferências vinculadas ficam ocultas por padrão,
   aparecendo no filtro Tipo = Transferência e no painel. Os cálculos usam
   apenas o restante da fatura + as transferências reais, sem dupla contagem.
+  No limite usado, uma **cobrança recorrente** (lançamento “Fixa”: mensalidade,
+  assinatura, faculdade) pesa só na fatura em que cai — as próximas não são
+  dívida hoje e dependem de haver saldo na data da cobrança. Um
+  **parcelamento** continua comprometendo o valor inteiro desde a compra.
 - **Performance**: lista paginada por dias visíveis (`dias` na URL), saldo do dia
   calculado por uma query agregada; faturas e orçamentos agregados em uma única
   consulta por página, com índices por cartão/data e fatura.

@@ -131,6 +131,8 @@ type MovementRow = {
   valor: number;
   data: string;
   faturaChaveOverride: string | null;
+  /** Veio de uma recorrência ativa (cobrança recorrente, não parcelamento). */
+  recorrente?: boolean;
 };
 
 type PaymentRow = {
@@ -166,6 +168,7 @@ function loadLedger(workspaceId: string): {
       valor: transactions.valor,
       data: transactions.data,
       faturaChaveOverride: transactions.faturaChaveOverride,
+      recorrenciaId: transactions.recorrenciaId,
     })
     .from(transactions)
     .where(
@@ -175,7 +178,15 @@ function loadLedger(workspaceId: string): {
         isNotNull(transactions.cartaoId),
       ),
     )
-    .all();
+    .all()
+    .map((row) => ({
+      cartaoId: row.cartaoId,
+      tipo: row.tipo,
+      valor: row.valor,
+      data: row.data,
+      faturaChaveOverride: row.faturaChaveOverride,
+      recorrente: Boolean(row.recorrenciaId),
+    }));
 
   const payments = db
     .select({
@@ -307,6 +318,50 @@ function invoicesForCard(
 
 function emptyInvoice(card: CreditCard, chave: string, hoje: string) {
   return montarResumoFatura(chave, cardConfig(card), 0, 0, hoje);
+}
+
+/**
+ * Limite usado de um cartão na data de hoje.
+ *
+ * Parcelamentos e compras já feitas comprometem o limite inteiro (o total é
+ * dívida). Já as **cobranças recorrentes** (mensalidade, assinatura) só usam o
+ * limite na fatura em que caem: as ocorrências futuras não são dívida hoje,
+ * pois dependem de haver saldo na data da cobrança. Por isso, nas faturas
+ * posteriores à fatura corrente, apenas a parte vinda de recorrências é
+ * descontada do limite usado — o resto (compras e parcelas) continua contando.
+ */
+function limiteUsadoDoCartao(
+  card: CreditCard,
+  invoices: InvoiceWithPayers[],
+  movements: MovementRow[],
+  hoje: string,
+): number {
+  const config = cardConfig(card);
+  const referencia = faturaDaCompra(hoje, config);
+  const recorrrentePorFatura = new Map<string, number>();
+
+  for (const movement of movements) {
+    if (movement.cartaoId !== card.id) continue;
+    if (movement.tipo === "transferencia") continue;
+    if (!movement.recorrente) continue;
+    const chave = chaveDaFatura(movement, config);
+    if (chave <= referencia) continue;
+    recorrrentePorFatura.set(
+      chave,
+      (recorrrentePorFatura.get(chave) ?? 0) + movement.valor,
+    );
+  }
+
+  const base = calcularLimiteUsado(invoices);
+  // Só abate o que essa fatura futura de fato carrega de recorrência, sem
+  // deixar o acumulado ficar negativo.
+  let abatimento = 0;
+  for (const invoice of invoices) {
+    if (invoice.chave <= referencia) continue;
+    const recorrente = recorrrentePorFatura.get(invoice.chave) ?? 0;
+    abatimento += Math.min(Math.max(0, invoice.restante), recorrente);
+  }
+  return Math.max(0, base - abatimento);
 }
 
 export type ForecastCardInvoice = {
@@ -517,7 +572,7 @@ export function listCards(workspaceId: string): CardWithInvoice[] {
     const currentInvoice =
       invoices.find((invoice) => invoice.chave === currentKey) ??
       emptyInvoice(card, currentKey, hoje);
-    const limiteUsado = calcularLimiteUsado(invoices);
+    const limiteUsado = limiteUsadoDoCartao(card, invoices, movements, hoje);
 
     return {
       ...card,
@@ -655,7 +710,7 @@ export function getCardInvoiceDetail(
     .orderBy(asc(transactions.data), asc(transactions.createdAt))
     .all();
 
-  const used = calcularLimiteUsado(invoices);
+  const used = limiteUsadoDoCartao(card.card, invoices, movements, hoje);
   const contaPagamento = card.card.contaPagamentoId
     ? (db
         .select({
