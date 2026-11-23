@@ -11,6 +11,10 @@ import {
 import { EntityTile } from "@/components/entity-tile";
 import type { BudgetEventView } from "@/lib/db/queries/budgets";
 import { formatCurrency, formatMonthShort, formatMonthTitle } from "@/lib/format";
+import {
+  descreverProvisao,
+  detalharLimite,
+} from "@/lib/finance/budget-row-text";
 import { budgetProjectionStatus } from "@/lib/design/row-status";
 import { cn } from "@/lib/utils";
 
@@ -97,6 +101,13 @@ export function BudgetEventRow({
   const valueText = isAlert
     ? formatCurrency(0)
     : `${isProvision ? "" : "+"}${formatCurrency(event.valor)}`;
+  const descricaoProvisao = descreverProvisao({
+    sobraRolada: event.sobraRolada,
+    sobraRecebida: event.sobraRecebida,
+  });
+  const detalheLimite = detalharLimite({
+    sobraRecebida: event.sobraRecebida,
+  });
   const subline = isOverspent ? (
     <span>
       Estourado em{" "}
@@ -107,7 +118,7 @@ export function BudgetEventRow({
   ) : isConsumed ? (
     <span className="text-amber">Limite consumido</span>
   ) : isProvision ? (
-    <span>Disponível para gastar</span>
+    <span>{descricaoProvisao}</span>
   ) : (
     <span>referente a {sobraReference}</span>
   );
@@ -184,20 +195,11 @@ export function BudgetEventRow({
                 </span>
               )}
 
-              {event.sobraRecebida?.map((item) => (
-                <span
-                  key={`${item.budgetId}:${item.ciclo}`}
-                  className="mt-0.5 flex flex-wrap items-center gap-1 text-xs text-muted-foreground"
-                >
-                  <span>
-                    Inclui{" "}
-                    <span className="tabular font-medium text-primary">
-                      +{formatCurrency(item.valor)}
-                    </span>{" "}
-                    de {item.nome} ({formatMonthShort(item.ciclo)})
-                  </span>
+              {detalheLimite && (
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {detalheLimite}
                 </span>
-              ))}
+              )}
             </span>
 
             <span className="flex shrink-0 items-center gap-1">

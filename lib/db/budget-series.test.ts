@@ -627,6 +627,113 @@ describe("orçamento com recorrência", () => {
     ).toBe(30_000);
     expect(getBudgetCycleDetail(user.workspaceId, id, "2027-03")).toBeNull();
   });
+
+  it("com 'só liberar ao fechar', a rolagem espera o fechamento do ciclo", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Mercado",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+    // Sobra de 200,00 no ciclo de janeiro.
+    addExpense(mercado, "2027-01-15", 10_000);
+
+    // Ciclo aberto: nada é rolado ainda.
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
+    ).toBe(30_000);
+    expect(
+      getBudgetEventsForMonth(user.workspaceId, "2027-01", filters("2027-01"))
+        .filter((event) => event.resumo.id === id)
+        .map((event) => event.tipoEvento),
+    ).toEqual(["provisao"]);
+
+    await closeBudgetCycleAction({ budgetId: id, ciclo: "2027-01" });
+
+    // Fechado: a sobra liberada entra no ciclo seguinte.
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
+    ).toBe(50_000);
+
+    // E o mês seguinte sabe explicar de onde veio o valor.
+    const fevereiro = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2027-02",
+      filters("2027-02"),
+    ).filter((event) => event.resumo.id === id);
+    expect(fevereiro).toHaveLength(1);
+    expect(fevereiro[0]?.sobraRolada).toEqual({
+      valor: 20_000,
+      ciclo: "2027-01",
+    });
+
+    // Reabrir volta a reservar: a sobra sai do ciclo seguinte.
+    await reopenBudgetCycleAction({ budgetId: id, ciclo: "2027-01" });
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
+    ).toBe(30_000);
+    expect(
+      getBudgetEventsForMonth(user.workspaceId, "2027-02", filters("2027-02"))
+        .filter((event) => event.resumo.id === id)
+        .map((event) => event.sobraRolada ?? null),
+    ).toEqual([null]);
+  });
+
+  it("sem 'só liberar ao fechar', a rolagem acontece no fechamento do ciclo", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Mercado",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: false,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+    addExpense(mercado, "2027-01-15", 10_000);
+
+    // Sem a opção, a sobra já é liberada no fechamento do ciclo.
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
+    ).toBe(50_000);
+  });
+
+  it("com 'só liberar ao fechar', a realocação também espera o fechamento", async () => {
+    const mercado = categoryId("Mercado");
+    const lazer = categoryId("Lazer");
+    const destino = await createBudget({
+      nome: "Lazer",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      categoriaIds: [lazer],
+      dataInicio: "2027-01",
+    });
+    const origem = await createBudget({
+      nome: "Mercado",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "realocar",
+      sobraDestinoBudgetId: destino,
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+    addExpense(mercado, "2027-01-15", 10_000);
+
+    const destinoFev = () =>
+      listBudgetCycleDetails(user.workspaceId, "2027-02").find(
+        (detail) => detail.resumo.id === destino,
+      )?.resumo.limite;
+
+    expect(destinoFev()).toBe(30_000);
+
+    await closeBudgetCycleAction({ budgetId: origem, ciclo: "2027-01" });
+    expect(destinoFev()).toBe(50_000);
+  });
 });
 
 describe("orçamento manual por lançamento", () => {

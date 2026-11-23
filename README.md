@@ -80,8 +80,12 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   `liberar` (padrão) devolve ao saldo livre, `rolar` soma ao limite do próximo
   ciclo **do próprio orçamento** (atravessando meses sem ciclo, como os de um
   orçamento bimestral, ou um ciclo excluído) e `realocar` envia ao orçamento de
-  destino no ciclo seguinte. O rótulo visual atual é “Sobra do orçamento
-  anterior” em verde.
+  destino no ciclo seguinte. Com **“Só liberar a sobra ao fechar o ciclo”**
+  ligado, rolar e realocar também esperam o fechamento manual do ciclo; enquanto
+  ele estiver aberto, o restante continua reservado. No ciclo que recebe a
+  sobra, a linha informa de onde veio o valor (“Inclui R$ X de sobra de set/26,
+  rolada para este ciclo”). O rótulo da linha de sobra continua “Sobra do
+  orçamento anterior” em verde.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
   pagamento de fatura por transferência (parcial ou total, com desfazer). Na

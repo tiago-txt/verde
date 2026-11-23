@@ -38,6 +38,7 @@ import {
   limiteDoCiclo,
   orcamentoVigenteNoCiclo,
   resolverCiclo,
+  sobraPodeSerLiberada,
   transacaoConsomeOrcamento,
   type BudgetCategoryUsage,
   type BudgetCycleInfo,
@@ -149,6 +150,11 @@ export type BudgetEventView = {
     valor: number;
     ciclo: string;
   }>;
+  /**
+   * Sobra do próprio orçamento que entrou neste limite (rolagem). Permite a
+   * linha do mês seguinte explicar de onde veio o valor.
+   */
+  sobraRolada?: { valor: number; ciclo: string } | null;
   /** Destino da sobra deste ciclo (evento de sobra). */
   sobraDestino?: { budgetId: string; nome: string } | null;
   /** Compatibilidade com o formato puro de eventos. */
@@ -225,6 +231,12 @@ type SpendingResult = {
     valor: number;
     ciclo: string;
   }>;
+  /** Sobra do próprio ciclo anterior que entrou neste limite. */
+  sobraRolada?: {
+    valor: number;
+    /** Ciclo de origem da sobra (pode não ser o mês imediatamente anterior). */
+    ciclo: string;
+  } | null;
 };
 
 function pairKey(budgetId: string, ciclo: string): string {
@@ -658,6 +670,14 @@ function applySobraPolicy(
 
   const cycles = [...byCycle.keys()].sort();
   const restanteByBudget = new Map<string, number>();
+  // Apenas a sobra que já pode sair do envelope fica guardada para o próximo
+  // ciclo. Com "só liberar ao fechar", o ciclo aberto continua reservando e
+  // nada é rolado nem realocado até o fechamento manual. Guarda também o ciclo
+  // de origem para a linha do mês seguinte explicar de onde vem o valor.
+  const sobraRolavelByBudget = new Map<
+    string,
+    { valor: number; ciclo: string }
+  >();
 
   for (const cycle of cycles) {
     const cyclePairs = byCycle.get(cycle) ?? [];
@@ -677,7 +697,10 @@ function applySobraPolicy(
       const encerrado =
         series.arquivado ||
         (Boolean(series.dataFim) && (series.dataFim as string) < cycle);
-      if (encerrado) restanteByBudget.delete(budgetId);
+      if (encerrado) {
+        restanteByBudget.delete(budgetId);
+        sobraRolavelByBudget.delete(budgetId);
+      }
     }
 
     for (const pair of cyclePairs) {
@@ -688,8 +711,14 @@ function applySobraPolicy(
       const policy = pair.budget.sobraPolicy ?? "liberar";
       const ownRollover =
         policy === "rolar"
-          ? (restanteByBudget.get(pair.budget.budgetId) ?? 0)
+          ? (sobraRolavelByBudget.get(pair.budget.budgetId)?.valor ?? 0)
           : 0;
+      if (ownRollover > 0) {
+        const origem = sobraRolavelByBudget.get(pair.budget.budgetId);
+        entry.sobraRolada = origem
+          ? { valor: ownRollover, ciclo: origem.ciclo }
+          : null;
+      }
       const incoming = (entry.sobraRecebida ?? []).reduce(
         (sum, item) => sum + item.valor,
         0,
@@ -706,6 +735,21 @@ function applySobraPolicy(
             ? 100
             : 0;
       restanteByBudget.set(pair.budget.budgetId, info.restante);
+      // Só a sobra já liberada pelo ciclo pode sair dele. Com "só liberar ao
+      // fechar", o ciclo aberto continua reservando até o fechamento manual.
+      const liberavel = sobraPodeSerLiberada({
+        sobraApenasAoFechar: pair.budget.sobraApenasAoFechar,
+        cicloFechado: pair.budget.fechado,
+        fechadoEm: pair.budget.fechadoEm,
+      });
+      if (liberavel && info.restante > 0) {
+        sobraRolavelByBudget.set(pair.budget.budgetId, {
+          valor: info.restante,
+          ciclo: cycle,
+        });
+      } else {
+        sobraRolavelByBudget.delete(pair.budget.budgetId);
+      }
     }
 
     for (const pair of cyclePairs) {
@@ -723,7 +767,9 @@ function applySobraPolicy(
         (nextPair) => nextPair.budget.budgetId === destinationId,
       );
       if (!destinationActive) continue;
-      const amount = restanteByBudget.get(pair.budget.budgetId) ?? 0;
+      // Mesma condição da rolagem: a origem só entrega a sobra depois de
+      // liberá-la (respeitando "só liberar ao fechar").
+      const amount = sobraRolavelByBudget.get(pair.budget.budgetId)?.valor ?? 0;
       if (amount <= 0) continue;
 
       const sourceEntry = spending.get(
@@ -1162,6 +1208,7 @@ export function getBudgetEventsForMonth(
         resumo: summary,
         transactions: data.transactions,
         sobraRecebida: data.sobraRecebida,
+        sobraRolada: data.sobraRolada ?? null,
         sobraDestino:
           event.tipo === "sobra" ? (data.sobraTransferida ?? null) : null,
       };

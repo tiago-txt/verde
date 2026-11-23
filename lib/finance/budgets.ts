@@ -500,6 +500,27 @@ export function calcularCiclo(
   };
 }
 
+/**
+ * A sobra do ciclo já pode sair do envelope? É a mesma condição usada pela
+ * linha de sobra (`eventosDoCiclo`) e pela rolagem/realocação
+ * (`applySobraPolicy` no banco), para as duas vias nunca divergirem.
+ *
+ * - modo indicador não movimenta dinheiro;
+ * - com `sobraApenasAoFechar`, só depois do fechamento manual do ciclo;
+ * - sem a opção, a sobra sai no fechamento do ciclo (ou já na data em que o
+ *   ciclo foi fechado manualmente).
+ */
+export function sobraPodeSerLiberada(
+  budget: Pick<
+    BudgetCycleConfig,
+    "sobraApenasAoFechar" | "cicloFechado" | "fechadoEm" | "modoIndicador"
+  >,
+): boolean {
+  if (budget.modoIndicador) return false;
+  if (!budget.sobraApenasAoFechar) return true;
+  return budget.cicloFechado === true && Boolean(budget.fechadoEm);
+}
+
 /** Eventos virtuais do ciclo (nunca gravados como lançamentos). */
 export function eventosDoCiclo(
   budget: BudgetCycleConfig,
@@ -531,8 +552,7 @@ export function eventosDoCiclo(
   // consolidada no próprio fechamento; sem ele, o padrão é o fim do ciclo.
   const fechamentoManual =
     budget.cicloFechado === true && Boolean(budget.fechadoEm);
-  const podeLiberarSobra = fechamentoManual || !budget.sobraApenasAoFechar;
-  if (result.restante > 0 && podeLiberarSobra) {
+  if (result.restante > 0 && sobraPodeSerLiberada(budget)) {
     const sobraData = fechamentoManual
       ? (budget.fechadoEm as string) < result.inicio
         ? result.inicio
