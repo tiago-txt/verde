@@ -82,10 +82,14 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   orçamento bimestral, ou um ciclo excluído) e `realocar` envia ao orçamento de
   destino no ciclo seguinte. Com **“Só liberar a sobra ao fechar o ciclo”**
   ligado, rolar e realocar também esperam o fechamento manual do ciclo; enquanto
-  ele estiver aberto, o restante continua reservado. No ciclo que recebe a
-  sobra, a linha informa de onde veio o valor (“Inclui R$ X de sobra de set/26,
-  rolada para este ciclo”). O rótulo da linha de sobra continua “Sobra do
-  orçamento anterior” em verde.
+  ele estiver aberto, o restante continua reservado. Fechar o ciclo **não
+  devolve dinheiro ao saldo livre** quando a política é `rolar` ou `realocar`:
+  a sobra é datada no fechamento natural do ciclo, junto com a reserva do ciclo
+  seguinte, então o valor apenas muda de envelope. Só `liberar` aumenta o
+  disponível para gastar fora do orçamento. No ciclo que recebe a sobra, a linha
+  informa de onde veio o valor (“Inclui R$ X de sobra de set/26, rolada para
+  este ciclo”). O rótulo da linha de sobra continua “Sobra do orçamento
+  anterior” em verde.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
   pagamento de fatura por transferência (parcial ou total, com desfazer). Na

@@ -659,11 +659,20 @@ describe("orçamento com recorrência", () => {
       getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
     ).toBe(50_000);
 
-    // E o mês seguinte sabe explicar de onde veio o valor.
+    // A sobra sai do ciclo de janeiro e entra no de fevereiro no mesmo
+    // instante (fechamento natural), sem passar pelo saldo livre.
+    const janeiro = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2027-01",
+      filters("2027-01"),
+    ).filter((event) => event.resumo.id === id);
+    expect(janeiro.map((event) => event.tipoEvento)).toEqual(["provisao"]);
+
     const fevereiro = getBudgetEventsForMonth(
       user.workspaceId,
       "2027-02",
       filters("2027-02"),
+      { mergeSobras: true },
     ).filter((event) => event.resumo.id === id);
     expect(fevereiro).toHaveLength(1);
     expect(fevereiro[0]?.sobraRolada).toEqual({
@@ -677,10 +686,46 @@ describe("orçamento com recorrência", () => {
       getBudgetCycleDetail(user.workspaceId, id, "2027-02")?.resumo.limite,
     ).toBe(30_000);
     expect(
-      getBudgetEventsForMonth(user.workspaceId, "2027-02", filters("2027-02"))
+      getBudgetEventsForMonth(
+        user.workspaceId,
+        "2027-02",
+        filters("2027-02"),
+        { mergeSobras: true },
+      )
         .filter((event) => event.resumo.id === id)
         .map((event) => event.sobraRolada ?? null),
     ).toEqual([null]);
+  });
+
+  it("fechar antes do fim não devolve a sobra rolada ao saldo livre", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Mercado",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+
+    const liquidoDeFevereiro = () =>
+      getBudgetEventsForMonth(
+        user.workspaceId,
+        "2027-02",
+        filters("2027-02"),
+      ).filter((event) => event.resumo.id === id);
+
+    // A sobra é datada no fechamento natural do ciclo, junto com a reserva
+    // do ciclo seguinte: o líquido do mês não muda ao fechar antecipadamente.
+    await closeBudgetCycleAction({ budgetId: id, ciclo: "2027-01" });
+    const fevereiro = liquidoDeFevereiro();
+    const provisao = fevereiro.find((event) => event.tipoEvento === "provisao");
+    const sobra = fevereiro.find((event) => event.tipoEvento === "sobra");
+    expect(provisao?.valor).toBe(60_000);
+    expect(sobra).toMatchObject({ valor: 30_000, data: "2027-02-10" });
+    // Provisão − sobra = 30.000: nada foi liberado para gastar fora do envelope.
+    expect((provisao?.valor ?? 0) - (sobra?.valor ?? 0)).toBe(30_000);
   });
 
   it("sem 'só liberar ao fechar', a rolagem acontece no fechamento do ciclo", async () => {

@@ -553,11 +553,21 @@ export function eventosDoCiclo(
   const fechamentoManual =
     budget.cicloFechado === true && Boolean(budget.fechadoEm);
   if (result.restante > 0 && sobraPodeSerLiberada(budget)) {
-    const sobraData = fechamentoManual
-      ? (budget.fechadoEm as string) < result.inicio
-        ? result.inicio
-        : (budget.fechadoEm as string)
-      : result.fechamento;
+    // `rolar`/`realocar` não devolvem dinheiro ao saldo livre: a sobra sai de
+    // um envelope e entra no seguinte. Por isso ela só é registrada no
+    // fechamento natural do ciclo — a mesma data em que o próximo ciclo
+    // reserva (já com a sobra embutida) —, e não na data de um fechamento
+    // antecipado. Assim o valor nunca aparece como dinheiro livre antes de o
+    // envelope seguinte começar. Quem libera de fato é o `liberar`.
+    const mantemReserva =
+      (budget.sobraPolicy ?? "liberar") !== "liberar";
+    const sobraData = mantemReserva
+      ? result.fechamento
+      : fechamentoManual
+        ? (budget.fechadoEm as string) < result.inicio
+          ? result.inicio
+          : (budget.fechadoEm as string)
+        : result.fechamento;
     events.push({
       tipo: "sobra",
       data: sobraData,

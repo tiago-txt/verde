@@ -340,6 +340,44 @@ describe("eventos de provisão e sobra", () => {
     });
   });
 
+  it("rolar não libera a sobra na data do fechamento antecipado", () => {
+    // A sobra sai de um envelope e entra no seguinte: datá-la no fechamento
+    // antecipado a faria aparecer como saldo livre antes do próximo ciclo.
+    const events = eventosDoCiclo(
+      {
+        ...budget,
+        sobraPolicy: "rolar",
+        sobraApenasAoFechar: true,
+        cicloFechado: true,
+        fechadoEm: "2026-11-15",
+      },
+      "2026-11",
+      30000,
+    );
+    expect(events.find((event) => event.tipo === "sobra")).toMatchObject({
+      data: "2026-12-10",
+      valor: 40000,
+    });
+  });
+
+  it("realocar também espera o fechamento natural do ciclo", () => {
+    const events = eventosDoCiclo(
+      {
+        ...budget,
+        sobraPolicy: "realocar",
+        sobraApenasAoFechar: true,
+        cicloFechado: true,
+        fechadoEm: "2026-11-15",
+      },
+      "2026-11",
+      30000,
+    );
+    expect(events.find((event) => event.tipo === "sobra")).toMatchObject({
+      data: "2026-12-10",
+      valor: 40000,
+    });
+  });
+
   it("com antecedência 1 a provisão cai no início do ciclo anterior", () => {
     const events = eventosDoCiclo(
       { ...budget, antecedenciaCiclos: 1 },
