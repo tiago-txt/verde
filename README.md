@@ -236,6 +236,10 @@ Os recortes de conta diferem de propósito entre telas:
   Aparência (padrão Sutis); os três níveis usam tokens CSS de opacidade para
   glifo de canto, emblema e padrão. Pastilhas continuam, com emblema a 0% quando
   desligadas.
+- Paletas **Verde | Rosa pastel** em Configurações > Aparência (padrão Verde).
+  O rosa sobrepõe os tokens de superfície e destaque por cima do tema claro ou
+  escuro (`data-palette` no `<html>`), sem trocar as cores semânticas nem os
+  modos de decoração.
 - `lib/design-guard.test.ts` falha se voltarem dependências externas
   (`fonts.googleapis`, `cdn.tailwindcss`, `googleusercontent`,
   `material-symbols`) ou texto abaixo de 12px.

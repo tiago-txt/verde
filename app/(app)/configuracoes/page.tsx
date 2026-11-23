@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/page-header";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { PaletteToggle } from "@/components/palette-toggle";
 import { DecorationsToggle } from "@/components/decorations-toggle";
 import { SecondaryInfoToggle } from "@/components/settings/secondary-info-toggle";
 import { PwaInstallCard } from "@/components/pwa-install-card";
@@ -131,6 +132,9 @@ export default async function ConfiguracoesPage() {
           </CardHeader>
           <CardContent>
             <ThemeToggle withLabel />
+            <div className="mt-3">
+              <PaletteToggle />
+            </div>
             <div className="mt-3">
               <DecorationsToggle />
             </div>

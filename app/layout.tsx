@@ -79,6 +79,12 @@ const themeScript = `
     }
     root.classList.toggle("dark", dark);
     root.classList.toggle("light", !dark);
+    var palette = localStorage.getItem("verde-palette");
+    if (palette === "rosa") {
+      root.dataset.palette = "rosa";
+    } else {
+      delete root.dataset.palette;
+    }
     var decorations = localStorage.getItem("verde-decorations");
     if (decorations === "on") decorations = "sutis";
     root.dataset.decorations = decorations === "off" || decorations === "normais" ? decorations : "sutis";

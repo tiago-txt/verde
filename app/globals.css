@@ -149,6 +149,108 @@
     --deco-hero-pattern-opacity: 0;
   }
 
+  /* Paleta rosa pastel: sobreposição opcional por cima do tema claro/escuro.
+     Não redefine os tokens de decoração (--deco-*) para não anular os modos
+     Desligadas/Sutis/Normais; as cores semânticas seguem esmeralda/terracota/
+     cobalto/âmbar. */
+  :root[data-palette="rosa"]:not(.dark) {
+    --background: 348 45% 97%;
+    --foreground: 345 28% 18%;
+    --card: 348 60% 99%;
+    --card-foreground: 345 28% 18%;
+    --popover: 348 60% 99%;
+    --popover-foreground: 345 28% 18%;
+    --primary: 345 30% 38%;
+    --primary-foreground: 348 100% 99%;
+    --primary-fill: 347 45% 72%;
+    --primary-fill-foreground: 345 38% 16%;
+    --secondary: 348 25% 94%;
+    --secondary-foreground: 345 25% 20%;
+    --muted: 348 25% 94%;
+    --muted-foreground: 345 10% 36%;
+    --accent: 348 30% 95%;
+    --accent-foreground: 345 25% 20%;
+    --destructive: 8 62% 40%;
+    --destructive-foreground: 0 100% 99%;
+    --success: 158 55% 26%;
+    --success-foreground: 0 100% 99%;
+    --warning: 34 80% 31%;
+    --warning-foreground: 0 100% 99%;
+    --info: 214 65% 40%;
+    --info-foreground: 0 100% 99%;
+    --gold: 36 55% 34%;
+    --gold-foreground: 345 30% 10%;
+    --border: 348 20% 88%;
+    --input: 348 18% 82%;
+    --ring: 345 32% 45%;
+    --sidebar: 348 30% 97%;
+    --sidebar-foreground: 345 28% 18%;
+    --surface-lowest: 348 60% 99%;
+    --surface-low: 348 40% 98%;
+    --surface: 348 60% 99%;
+    --forest-container: 348 28% 96%;
+    --forest-high: 348 25% 94%;
+    --forest-highest: 348 22% 91%;
+    --grout: 348 20% 88%;
+    --on-surface: 345 25% 20%;
+    --outline: 345 8% 42%;
+    --emerald: 160 84% 30%;
+    --clay: 8 62% 40%;
+    --terracotta: 12 58% 40%;
+    --amber: 34 80% 31%;
+    --error-text: 8 70% 34%;
+    --tile-surface: 345 16% 32%;
+  }
+
+  :root.dark[data-palette="rosa"] {
+    --background: 340 14% 9%;
+    --foreground: 345 22% 93%;
+    --card: 340 12% 12%;
+    --card-foreground: 345 20% 90%;
+    --popover: 340 13% 11%;
+    --popover-foreground: 345 20% 90%;
+    --primary: 345 55% 80%;
+    --primary-foreground: 345 40% 10%;
+    --primary-fill: 345 40% 70%;
+    --primary-fill-foreground: 345 40% 10%;
+    --secondary: 340 12% 14%;
+    --secondary-foreground: 345 20% 90%;
+    --muted: 340 12% 13%;
+    --muted-foreground: 340 10% 64%;
+    --accent: 345 14% 18%;
+    --accent-foreground: 345 22% 93%;
+    --destructive: 5 72% 68%;
+    --destructive-foreground: 340 40% 8%;
+    --success: 155 55% 58%;
+    --success-foreground: 340 40% 8%;
+    --warning: 38 72% 58%;
+    --warning-foreground: 30 40% 8%;
+    --info: 214 68% 66%;
+    --info-foreground: 340 40% 8%;
+    --gold: 38 65% 58%;
+    --gold-foreground: 340 40% 8%;
+    --border: 340 14% 21%;
+    --input: 340 12% 24%;
+    --ring: 345 55% 80%;
+    --sidebar: 340 16% 6%;
+    --sidebar-foreground: 345 20% 90%;
+    --surface-lowest: 340 16% 6%;
+    --surface-low: 340 12% 12%;
+    --surface: 340 12% 12%;
+    --forest-container: 340 12% 13%;
+    --forest-high: 345 14% 17%;
+    --forest-highest: 340 11% 23%;
+    --grout: 340 14% 21%;
+    --on-surface: 345 20% 90%;
+    --outline: 340 8% 58%;
+    --emerald: 160 60% 45%;
+    --clay: 5 72% 68%;
+    --terracotta: 8 58% 60%;
+    --amber: 38 72% 58%;
+    --error-text: 5 100% 86%;
+    --tile-surface: 345 14% 18%;
+  }
+
   * {
     @apply border-border;
   }
@@ -263,6 +365,12 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg fill='none' stroke='%234ae087' stroke-width='1.1'%3E%3Cpath d='M36 0 72 36 36 72 0 36Z'/%3E%3Cpath d='M0 0 16 16M72 0 56 16M72 72 56 56M0 72 16 56'/%3E%3C/g%3E%3Ccircle cx='36' cy='36' r='9' fill='none' stroke='%2310b981' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='2.5' fill='%234ae087'/%3E%3Crect x='30' y='30' width='12' height='12' fill='none' stroke='%23d99b26' stroke-width='.8' transform='rotate(45 36 36)'/%3E%3Cg fill='none' stroke='%23d99b26' stroke-width='.8'%3E%3Ccircle cx='0' cy='0' r='6'/%3E%3Ccircle cx='72' cy='0' r='6'/%3E%3Ccircle cx='72' cy='72' r='6'/%3E%3Ccircle cx='0' cy='72' r='6'/%3E%3C/g%3E%3C/svg%3E");
     background-size: 72px 72px;
   }
+  /* Na paleta rosa o padrão troca o esmalte verde pelo rosa, mantendo a
+     opacidade das decorações. */
+  [data-palette="rosa"] .azulejo,
+  [data-palette="rosa"] .deco-surface::before {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='72' height='72' viewBox='0 0 72 72'%3E%3Cg fill='none' stroke='%23edc4d2' stroke-width='1.1'%3E%3Cpath d='M36 0 72 36 36 72 0 36Z'/%3E%3Cpath d='M0 0 16 16M72 0 56 16M72 72 56 56M0 72 16 56'/%3E%3C/g%3E%3Ccircle cx='36' cy='36' r='9' fill='none' stroke='%23d9a6b8' stroke-width='1'/%3E%3Ccircle cx='36' cy='36' r='2.5' fill='%23edc4d2'/%3E%3Crect x='30' y='30' width='12' height='12' fill='none' stroke='%23cfa77a' stroke-width='.8' transform='rotate(45 36 36)'/%3E%3Cg fill='none' stroke='%23cfa77a' stroke-width='.8'%3E%3Ccircle cx='0' cy='0' r='6'/%3E%3Ccircle cx='72' cy='0' r='6'/%3E%3Ccircle cx='72' cy='72' r='6'/%3E%3Ccircle cx='0' cy='72' r='6'/%3E%3C/g%3E%3C/svg%3E");
+  }
   .deco-surface {
     position: relative;
     isolation: isolate;
@@ -373,6 +481,10 @@
     mask-image: linear-gradient(135deg, black 0%, transparent 72%);
     -webkit-mask-image: linear-gradient(135deg, black 0%, transparent 72%);
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,0 61,39 100,50 61,61 50,100 39,61 0,50 39,39' fill='%234ae087'/%3E%3Ccircle cx='50' cy='50' r='15' fill='none' stroke='%234ae087' stroke-width='4'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+  }
+  [data-palette="rosa"] .card-glyph::after {
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Cpolygon points='50,0 61,39 100,50 61,61 50,100 39,61 0,50 39,39' fill='%23edc4d2'/%3E%3Ccircle cx='50' cy='50' r='15' fill='none' stroke='%23edc4d2' stroke-width='4'/%3E%3C/svg%3E")
       center / contain no-repeat;
   }
   .enamel {
