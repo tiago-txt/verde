@@ -3,6 +3,7 @@ import {
   buildTransactionSearchParams,
   countActiveFilters,
   hasActiveFilters,
+  hasProjectionFilters,
   parseTransactionFilters,
 } from "./filters";
 
@@ -123,5 +124,18 @@ describe("URL de filtros", () => {
     );
     expect(hasActiveFilters(active)).toBe(true);
     expect(countActiveFilters(active)).toBe(4);
+  });
+
+  it("compras no cartão não desliga a projeção encadeada", () => {
+    const comCompras = parseTransactionFilters({ compras: "1" }, "2026-11");
+    expect(hasActiveFilters(comCompras)).toBe(true);
+    // Só o switch: a compra não entra no resumo, então a projeção continua.
+    expect(hasProjectionFilters(comCompras)).toBe(false);
+
+    const comCartao = parseTransactionFilters(
+      { compras: "1", cartoes: cartao1 },
+      "2026-11",
+    );
+    expect(hasProjectionFilters(comCartao)).toBe(true);
   });
 });

@@ -555,6 +555,32 @@ function CategoryFilterButton({
   );
 }
 
+/** Botão de exibir/ocultar compras no cartão (mesma aparência em desktop e mobile). */
+export function ComprasCartaoButton({
+  active,
+  onToggle,
+  className,
+}: {
+  active: boolean;
+  onToggle: () => void;
+  className?: string;
+}) {
+  return (
+    <Button
+      type="button"
+      variant={active ? "default" : "outline"}
+      size="icon"
+      className={cn("h-10 w-10 shrink-0 rounded-full", className)}
+      aria-pressed={active}
+      aria-label={active ? "Ocultar compras no cartão" : "Mostrar compras no cartão"}
+      title={active ? "Compras no cartão visíveis" : "Mostrar compras no cartão"}
+      onClick={onToggle}
+    >
+      <CreditCard className="h-4 w-4" />
+    </Button>
+  );
+}
+
 export function FilterBar({
   filters,
   options,
@@ -643,26 +669,10 @@ export function FilterBar({
           />
         </FilterButton>
 
-        <Button
-          type="button"
-          variant={filters.comprasCartao ? "default" : "outline"}
-          size="icon"
-          className="h-10 w-10 rounded-full"
-          aria-pressed={filters.comprasCartao}
-          aria-label={
-            filters.comprasCartao
-              ? "Ocultar compras no cartão"
-              : "Mostrar compras no cartão"
-          }
-          title={
-            filters.comprasCartao
-              ? "Compras no cartão visíveis"
-              : "Mostrar compras no cartão"
-          }
-          onClick={() => onChange({ comprasCartao: !filters.comprasCartao })}
-        >
-          <CreditCard className="h-4 w-4" />
-        </Button>
+        <ComprasCartaoButton
+          active={filters.comprasCartao}
+          onToggle={() => onChange({ comprasCartao: !filters.comprasCartao })}
+        />
 
         {active && (
           <Button

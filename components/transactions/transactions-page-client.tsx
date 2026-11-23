@@ -55,7 +55,7 @@ import {
   BulkTagDialog,
   QuickCategoryDialog,
 } from "./bulk-actions";
-import { FilterBar } from "./filter-bar";
+import { ComprasCartaoButton, FilterBar } from "./filter-bar";
 import { ScopeDialog } from "./scope-dialog";
 import { TransactionRow } from "./transaction-row";
 import { BudgetEventRow } from "./budget-event-row";
@@ -1146,7 +1146,7 @@ export function TransactionsPageClient({
         ref={stickyHeaderRef}
         className="transactions-sticky-header -mx-4 px-4 py-2 lg:-mx-8 lg:px-8"
       >
-      <div className="flex items-center gap-1 max-[379px]:flex-wrap lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
+      <div className="flex items-center gap-1 max-[419px]:flex-wrap lg:grid lg:grid-cols-[1fr_auto_1fr] lg:gap-3">
         <div className="hidden min-w-0 lg:block">
           <h2 className="text-2xl font-semibold tracking-tight">Lançamentos</h2>
           <p className="text-sm text-muted-foreground">
@@ -1154,7 +1154,7 @@ export function TransactionsPageClient({
           </p>
         </div>
 
-        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border border-grout bg-forest-container/90 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] max-[379px]:w-full max-[379px]:flex-none lg:flex-none lg:gap-1 lg:p-1">
+        <div className="flex min-w-0 flex-1 items-center justify-center gap-0.5 rounded-lg border border-grout bg-forest-container/90 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.35)] max-[419px]:w-full max-[419px]:flex-none lg:flex-none lg:gap-1 lg:p-1">
           <Button
             type="button"
             variant="ghost"
@@ -1190,7 +1190,13 @@ export function TransactionsPageClient({
           </Button>
         </div>
 
-        <div className="flex items-center gap-1 max-[379px]:ml-auto lg:justify-end">
+        <div className="flex flex-wrap items-center justify-end gap-1 max-[419px]:ml-auto lg:flex-nowrap lg:justify-end">
+          <ComprasCartaoButton
+            active={filters.comprasCartao}
+            onToggle={() => changeFilters({ comprasCartao: !filters.comprasCartao })}
+            className="compact-44 tap-48 h-11 w-11 lg:hidden"
+          />
+
           <Button
             type="button"
             variant="outline"

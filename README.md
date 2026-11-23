@@ -77,9 +77,11 @@ Sem Redis, sem Postgres, sem serviços externos. Tudo em um container.
   `restante <= 0`. A reserva é o **restante** do ciclo (`limite − gasto`) na
   data de início (ou um ciclo antes, com antecedência); a sobra é o mesmo
   restante no fechamento, quando maior que zero. `sobra_policy` define o destino:
-  `liberar` (padrão) devolve ao saldo livre, `rolar` soma ao limite do ciclo
-  seguinte e `realocar` envia ao orçamento de destino no ciclo seguinte. O
-  rótulo visual atual é “Sobra do orçamento anterior” em verde.
+  `liberar` (padrão) devolve ao saldo livre, `rolar` soma ao limite do próximo
+  ciclo **do próprio orçamento** (atravessando meses sem ciclo, como os de um
+  orçamento bimestral, ou um ciclo excluído) e `realocar` envia ao orçamento de
+  destino no ciclo seguinte. O rótulo visual atual é “Sobra do orçamento
+  anterior” em verde.
 - **Cartões e faturas** (`/cartoes`): limite, fechamento, vencimento, fatura
   calculada por ciclo, compras/estornos, parcelas, limite usado/disponível e
   pagamento de fatura por transferência (parcial ou total, com desfazer). Na

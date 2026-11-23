@@ -16,7 +16,7 @@ import { getCardBasis } from "@/lib/db/queries/finance-preferences";
 import { listResultRows } from "@/lib/db/queries/reports";
 import { monthRange, todayISO } from "@/lib/dates";
 import { aplicarEventosAoSalsoDia } from "@/lib/finance/budgets";
-import { parseTransactionFilters } from "@/lib/finance/filters";
+import { parseTransactionFilters, hasProjectionFilters } from "@/lib/finance/filters";
 import { sanitizeReturnTo } from "@/lib/navigation/last-screen";
 import { parseBudgetEventOverlay, parseInvoiceOverlay } from "@/lib/navigation/overlays";
 import { summarizeResult } from "@/lib/finance/result";
@@ -47,17 +47,10 @@ export default async function LancamentosPage({
   const transactions = listMonthTransactions(workspaceId, filters);
   const formData = getTransactionFormData(workspaceId);
   const customRange = Boolean(filters.de && filters.ate);
-  const hasActiveFilters =
-    Boolean(filters.tipo) ||
-    filters.contas.length > 0 ||
-    filters.cartoes.length > 0 ||
-    filters.categorias.length > 0 ||
-    filters.tags.length > 0 ||
-    filters.status !== "todos" ||
-    Boolean(filters.q) ||
-    filters.comprasCartao;
+  // "Mostrar compras no cartão" só muda a lista: a compra não entra no resumo
+  // (a saída é a fatura), então o previsto segue a projeção encadeada.
   const projectedBalance =
-    customRange || hasActiveFilters
+    customRange || hasProjectionFilters(filters)
       ? null
       : getMonthProjection(workspaceId, filters.mes).saldo;
   const budgetEvents = customRange

@@ -462,6 +462,22 @@ describe("fechamento manual do ciclo", () => {
 });
 
 describe("orçamento com recorrência", () => {
+  const filters = (mes: string) => ({
+    mes,
+    tipo: null,
+    contas: [] as string[],
+    categorias: [] as string[],
+    tags: [] as string[],
+    status: "todos" as const,
+    q: null,
+    dias: 31,
+    detalhe: null,
+    cartoes: [] as string[],
+    comprasCartao: false,
+    de: null,
+    ate: null,
+  });
+
   it("bimestral aparece em novembro, some em dezembro e volta em janeiro", async () => {
     const mercado = categoryId("Mercado");
     const id = await createBudget({
@@ -538,6 +554,78 @@ describe("orçamento com recorrência", () => {
     expect(
       getBudgetCycleDetail(user.workspaceId, id, "2027-01")?.resumo.limite,
     ).toBe(60_000);
+  });
+
+  it("rola a sobra por cima do mês em que o orçamento não tem ciclo", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Bimestral",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      periodicidadeMeses: 2,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+
+    await closeBudgetCycleAction({ budgetId: id, ciclo: "2027-01" });
+
+    // Fevereiro é intervalo (sem ciclo próprio); a sobra precisa chegar em março.
+    expect(resolved(id, "2027-02")).toBeNull();
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-03")?.resumo.limite,
+    ).toBe(60_000);
+
+    const marco = getBudgetEventsForMonth(
+      user.workspaceId,
+      "2027-03",
+      filters("2027-03"),
+    ).filter((event) => event.resumo.id === id);
+    expect(marco.map((event) => [event.tipoEvento, event.valor])).toEqual([
+      ["provisao", 60_000],
+    ]);
+  });
+
+  it("rola a sobra por cima de um ciclo excluído do próprio orçamento", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Mensal",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+    });
+
+    await closeBudgetCycleAction({ budgetId: id, ciclo: "2027-01" });
+    await deleteBudgetAction({ id, ciclo: "2027-02", scope: "single" });
+
+    expect(resolved(id, "2027-02")).toBeNull();
+    // A sobra do ciclo fechado atravessa o ciclo excluído.
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-03")?.resumo.limite,
+    ).toBe(60_000);
+  });
+
+  it("não carrega a sobra depois do fim da vigência", async () => {
+    const mercado = categoryId("Mercado");
+    const id = await createBudget({
+      nome: "Temporário",
+      valorPadrao: 30_000,
+      diaFechamento: 10,
+      sobraPolicy: "rolar",
+      sobraApenasAoFechar: true,
+      categoriaIds: [mercado],
+      dataInicio: "2027-01",
+      dataFim: "2027-01",
+    });
+
+    expect(
+      getBudgetCycleDetail(user.workspaceId, id, "2027-01")?.resumo.limite,
+    ).toBe(30_000);
+    expect(getBudgetCycleDetail(user.workspaceId, id, "2027-03")).toBeNull();
   });
 });
 

@@ -132,6 +132,24 @@ export function hasActiveFilters(filters: TransactionFilters): boolean {
   );
 }
 
+/**
+ * O filtro muda o recorte contábil do mês? "Mostrar compras no cartão" é só
+ * exibição: a compra nunca entra no resumo (a saída é a fatura), então a
+ * projeção encadeada continua válida com o botão ligado.
+ */
+export function hasProjectionFilters(filters: TransactionFilters): boolean {
+  return Boolean(
+    filters.tipo ||
+      filters.contas.length ||
+      filters.cartoes.length ||
+      filters.categorias.length ||
+      filters.tags.length ||
+      filters.status !== "todos" ||
+      filters.q ||
+      (filters.de && filters.ate),
+  );
+}
+
 export function countActiveFilters(filters: TransactionFilters): number {
   let count = 0;
   if (filters.tipo) count += 1;

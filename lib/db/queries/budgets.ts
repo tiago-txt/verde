@@ -665,9 +665,19 @@ function applySobraPolicy(
       cyclePairs.map((pair) => pair.budget.budgetId),
     );
 
-    // Um orçamento inativo no ciclo não carrega sobra para o ciclo seguinte.
+    // A sobra só deixa de carregar quando o orçamento acabou (vigência
+    // encerrada/arquivado). Um ciclo ausente no meio do caminho — orçamento
+    // com periodicidade maior que 1 mês ou ciclo excluído — é um intervalo,
+    // não o fim da série: a sobra precisa atravessá-lo e entrar no próximo
+    // ciclo do próprio orçamento.
     for (const budgetId of allBudgetIds) {
-      if (!activeIds.has(budgetId)) restanteByBudget.delete(budgetId);
+      if (activeIds.has(budgetId)) continue;
+      const series = context?.seriesByBudgetId.get(budgetId);
+      if (!series) continue;
+      const encerrado =
+        series.arquivado ||
+        (Boolean(series.dataFim) && (series.dataFim as string) < cycle);
+      if (encerrado) restanteByBudget.delete(budgetId);
     }
 
     for (const pair of cyclePairs) {
