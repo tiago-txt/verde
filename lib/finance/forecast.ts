@@ -672,6 +672,56 @@ export function menorSaldoDaSerie(projection: ForecastProjection): {
   );
 }
 
+export type ForecastChartPoint = {
+  data: string;
+  /** Pior caso: com reservas de orçamento e estimativas. */
+  pior: number;
+  /** Melhor caso: só eventos certos. */
+  melhor: number;
+  /** Distância entre o melhor e o pior caso (nunca negativa). */
+  faixa: number;
+};
+
+/** Saldo da projeção na data, no total ou em uma conta específica. */
+export function saldoNaData(
+  projection: ForecastProjection,
+  date: string,
+  accountId?: string | null,
+): number {
+  let saldo = accountId
+    ? (projection.pontos[0]?.porConta[accountId] ?? 0)
+    : projection.saldoInicial;
+  for (const point of projection.pontos) {
+    if (point.data > date) break;
+    saldo = accountId ? (point.porConta[accountId] ?? 0) : point.saldo;
+  }
+  return saldo;
+}
+
+/**
+ * Série do gráfico: pior caso (com reservas/estimativas) embaixo, melhor caso
+ * (só eventos certos) em cima e a faixa entre os dois.
+ */
+export function serieDoGrafico(
+  pior: ForecastProjection,
+  melhor: ForecastProjection,
+  accountId?: string | null,
+): ForecastChartPoint[] {
+  const dates = new Set<string>();
+  for (const point of pior.pontos) dates.add(point.data);
+  for (const point of melhor.pontos) dates.add(point.data);
+  return [...dates].sort().map((data) => {
+    const saldoPior = saldoNaData(pior, data, accountId);
+    const saldoMelhor = saldoNaData(melhor, data, accountId);
+    return {
+      data,
+      pior: saldoPior,
+      melhor: saldoMelhor,
+      faixa: Math.max(0, saldoMelhor - saldoPior),
+    };
+  });
+}
+
 /** Atalho para o horizonte em meses a partir de hoje. */
 export function fimDoHorizonte(hoje: string, meses: number): string {
   const end = addMonths(hoje.slice(0, 7), meses);

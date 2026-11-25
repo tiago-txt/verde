@@ -7,6 +7,8 @@ import {
   encontrarRecuperacao,
   parcelaMaximaSegura,
   resumoMensal,
+  saldoNaData,
+  serieDoGrafico,
   simular,
   type ForecastAccount,
   type ForecastEvent,
@@ -379,5 +381,72 @@ describe("previsão de saldo", () => {
       "2027-03",
     ]);
     expect(projection.pontos.at(-1)?.saldo).toBe(80_000);
+  });
+});
+
+describe("série do gráfico", () => {
+  it("põe o pior caso embaixo e mede a faixa até o melhor caso", () => {
+    const certo = evento({ data: "2026-11-20", tipo: "saida", valor: 20_000 });
+    const estimado = evento({
+      data: "2026-11-25",
+      tipo: "saida",
+      valor: 10_000,
+      certeza: "estimado",
+    });
+    const pior = construirProjecao(input([certo, estimado]));
+    const melhor = construirProjecao(
+      input([certo, estimado], { incluirEstimativas: false }),
+    );
+
+    const serie = serieDoGrafico(pior, melhor);
+
+    expect(serie.find((point) => point.data === "2026-11-20")?.faixa).toBe(0);
+    const depois = serie.find((point) => point.data === "2026-11-25");
+    expect(depois?.pior).toBe(70_000);
+    expect(depois?.melhor).toBe(80_000);
+    expect(depois?.faixa).toBe(10_000);
+  });
+
+  it("nunca produz faixa negativa", () => {
+    const certo = evento({ data: "2026-11-20", tipo: "saida", valor: 20_000 });
+    const estimado = evento({
+      data: "2026-11-25",
+      tipo: "saida",
+      valor: 10_000,
+      certeza: "estimado",
+    });
+    const pior = construirProjecao(input([certo, estimado]));
+    const melhor = construirProjecao(
+      input([certo, estimado], { incluirEstimativas: false }),
+    );
+
+    const serie = serieDoGrafico(melhor, pior);
+
+    expect(serie.every((point) => point.faixa === 0)).toBe(true);
+  });
+
+  it("calcula o saldo por conta", () => {
+    const reserva: ForecastAccount = {
+      ...conta,
+      id: "conta-2",
+      nome: "Reserva",
+      saldoAtual: 0,
+    };
+    const projection = construirProjecao({
+      ...input([
+        evento({
+          data: "2026-11-20",
+          tipo: "transferencia",
+          valor: 30_000,
+          contaDestinoId: reserva.id,
+        }),
+      ]),
+      contas: [conta, reserva],
+    });
+
+    const serie = serieDoGrafico(projection, projection, reserva.id);
+
+    expect(serie.at(-1)?.pior).toBe(30_000);
+    expect(saldoNaData(projection, "2026-11-19", reserva.id)).toBe(0);
   });
 });

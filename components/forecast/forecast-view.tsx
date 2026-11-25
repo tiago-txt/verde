@@ -100,7 +100,6 @@ export function ForecastView({ data }: { data: ForecastData }) {
           </p>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          Linha cheia: somente eventos certos. Linha tracejada: com estimativas.
           Área vermelha: abaixo da margem de segurança.
         </p>
       </section>
